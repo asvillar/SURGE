@@ -13,9 +13,44 @@
 
 ## 🚀 Getting Started
 
-Clone the repository and install dependencies:
+### Installation
+
+#### From PyPI (when published)
+```bash
+pip install surge-surrogate
+```
+
+#### For Development
+Clone the repository and install in development mode:
 
 ```bash
 git clone https://github.com/your-username/SURGE.git
 cd SURGE
-pip install -r requirements.txt
+pip install -e .
+```
+
+Or install with development dependencies:
+```bash
+pip install -e ".[dev]"
+```
+
+### Quick Usage
+
+```python
+from surge import SurrogateTrainer
+import numpy as np
+
+# Generate sample data
+X = np.random.random((100, 5))
+y = np.sum(X, axis=1) + 0.1 * np.random.randn(100)
+
+# Create and train a surrogate model
+trainer = SurrogateTrainer(model_type='rfr', n_estimators=100)
+trainer.fit(X, y)
+
+# Perform cross-validation
+results = trainer.cross_validate(n_splits=5)
+print(f"Average R² score: {results['r2_mean']:.3f}")
+
+# Save the model
+trainer.save('my_model')

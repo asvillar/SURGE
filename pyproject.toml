@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "surge-surrogate"
+version = "0.1.0"
+description = "Surrogate Unified Robust Generation Engine - A modular AI/ML framework for building fast, accurate, and uncertainty-aware surrogate models"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Álvaro Sánchez Villar", email = "your.email@example.com"}
+]
+maintainers = [
+    {name = "Álvaro Sánchez Villar", email = "your.email@example.com"}
+]
+keywords = ["machine learning", "surrogate models", "scientific computing", "neural networks", "gaussian processes"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.20.0",
+    "scikit-learn>=1.0.0",
+    "torch>=1.9.0",
+    "joblib>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+    "jupyter",
+    "matplotlib",
+    "pandas",
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "numpydoc",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-username/SURGE"
+Documentation = "https://surge-surrogate.readthedocs.io/"
+Repository = "https://github.com/your-username/SURGE.git"
+"Bug Tracker" = "https://github.com/your-username/SURGE/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["surge*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

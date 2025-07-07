@@ -1,0 +1,11 @@
+include README.md
+include LICENSE
+include requirements.txt
+include pyproject.toml
+recursive-include surge *.py
+recursive-include tests *.py
+recursive-include examples *.py *.ipynb
+recursive-include docs *.rst *.md
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude *~
