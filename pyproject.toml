@@ -31,11 +31,22 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy>=1.20.0",
     "scikit-learn>=1.0.0",
-    "torch>=1.9.0",
     "joblib>=1.0.0",
 ]
 
 [project.optional-dependencies]
+pytorch = [
+    "torch>=1.9.0",
+]
+gpflow = [
+    "tensorflow>=2.8.0",
+    "gpflow>=2.5.0",
+]
+all = [
+    "torch>=1.9.0",
+    "tensorflow>=2.8.0", 
+    "gpflow>=2.5.0",
+]
 dev = [
     "pytest>=6.0",
     "pytest-cov",

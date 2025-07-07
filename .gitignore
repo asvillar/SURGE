@@ -190,3 +190,6 @@ Temporary Items
 models/
 *.joblib
 results.json
+
+# Specific notebook files
+notebooks/Test_Botorch_Pe_Compare.ipynb
