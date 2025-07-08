@@ -1,0 +1,12 @@
+# Documentation build requirements
+sphinx>=7.0.0
+sphinx-rtd-theme>=2.0.0
+myst-parser>=3.0.0
+sphinx-autodoc-typehints>=2.0.0
+sphinxcontrib-bibtex>=2.0.0
+
+# For API documentation generation
+numpydoc>=1.5.0
+
+# Optional: for better code syntax highlighting
+pygments>=2.14.0
