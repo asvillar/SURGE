@@ -82,12 +82,12 @@ pytest tests/test_enhanced_models.py -v
 
 ### Continuous Integration
 
-The project uses GitHub Actions for automated testing across multiple Python versions (3.8-3.11). The CI pipeline includes:
+SURGE includes comprehensive testing infrastructure:
 
 - **Testing**: Full test suite with pytest and coverage reporting
-- **Linting**: Code quality checks with ruff, black, and isort
-- **Type Checking**: Static type analysis with mypy
-- **Documentation**: Automated docs building and validation
+- **Code Quality**: Manual code quality checks with ruff, black, and isort
+- **Type Checking**: Static type analysis with mypy available
+- **Documentation**: Automated docs building with Sphinx
 
 ### Development Setup
 
@@ -99,10 +99,7 @@ git clone https://github.com/your-username/SURGE.git
 cd SURGE
 pip install -e ".[dev]"
 
-# Install pre-commit hooks for code quality
-pre-commit install
-
-# Run the full development check
+# Run development quality checks
 black surge/ tests/     # Format code
 isort surge/ tests/     # Sort imports  
 ruff check surge/ tests/ # Lint code
