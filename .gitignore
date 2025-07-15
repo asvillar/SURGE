@@ -197,5 +197,10 @@ results.json
 !data/logos/surge_logo_panoramic.png
 !data/logos/SURGE_logo_cropped.png
 
+# Include specific datasets for demos and testing
+# Note: These are relatively large files (~41MB each) but essential for examples
+!data/datasets/example-data/target_.pkl
+!data/datasets/example-data/PwIF_.pkl
+
 # Specific notebook files
 notebooks/Test_Botorch_Pe_Compare.ipynb

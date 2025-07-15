@@ -169,10 +169,34 @@ best_params = trainer.tune(
 
 Check the `notebooks/` directory for comprehensive examples:
 
-- **RF_Heating_Surrogate_Demo.ipynb**: Complete workflow for RF heating data
+- **RF_Heating_Surrogate_Demo.ipynb**: Complete workflow for RF heating data using included datasets
 - **Demo1.ipynb**: Basic usage and model comparison
 
 Example scripts in `examples/`:
+
+- **simple_optuna_demo.py**: Hyperparameter optimization
+- **comprehensive_optimization_demo.py**: Multi-method comparison
+- **bayesian_optimization_demo.py**: Advanced Bayesian techniques
+
+## 📊 Datasets
+
+SURGE includes real-world datasets for immediate experimentation:
+
+### RF Heating Data (data/datasets/)
+- **`example-data/target_.pkl`**: Electron heating power profiles from Reference simulations (~41MB)
+- **`example-data/PwIF_.pkl`**: Ion/fast particle heating profiles (~41MB)
+
+Perfect for:
+```python
+from surge import SurrogateTrainer
+
+# Load RF heating dataset
+trainer = SurrogateTrainer()
+inputs, outputs = trainer.load_dataset_pickle('data/datasets/example-data/target_.pkl')
+# Automatically identifies 100+ input parameters → 60+ output power profiles
+```
+
+See `data/datasets/README.md` for detailed dataset documentation.
 
 - **simple_optuna_demo.py**: Hyperparameter optimization
 - **comprehensive_optimization_demo.py**: Multi-method comparison
