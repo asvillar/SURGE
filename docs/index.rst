@@ -1,4 +1,4 @@
-.. image:: ../surge_logo_panoramic.png
+.. image:: ../data/logos/surge_logo_panoramic.png
    :align: center
    :alt: SURGE Logo
    :width: 400px

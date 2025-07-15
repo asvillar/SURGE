@@ -193,8 +193,9 @@ results.json
 
 # Exclude all PNG files except the main logos
 *.png
-!SURGE.png
-!surge_logo_panoramic.png
+!data/logos/SURGE.png
+!data/logos/surge_logo_panoramic.png
+!data/logos/SURGE_logo_cropped.png
 
 # Specific notebook files
 notebooks/Test_Botorch_Pe_Compare.ipynb
