@@ -1,4 +1,7 @@
-import joblib, json, torch
+import json
+
+import joblib
+import torch
 
 
 def get_device():

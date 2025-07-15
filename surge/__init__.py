@@ -1,14 +1,10 @@
 # surge/src/__init__.py
 
 __version__ = "0.1.0"
-__author__ = "Álvaro Sánchez Villar"
-
-# Expose the core classes/functions at package level
-from .trainer import MLTrainer, SurrogateTrainer
+__author__ = "Álvaro Sánchez Villar"  # Expose the core classes/functions at package level
 from .metrics import summarize
-
-# Import model availability information
-from .models import PYTORCH_AVAILABLE, GPFLOW_AVAILABLE
+from .models import GPFLOW_AVAILABLE, PYTORCH_AVAILABLE
+from .trainer import MLTrainer, SurrogateTrainer
 
 __all__ = [
     "MLTrainer",
@@ -28,7 +24,7 @@ def _print_availability():
     print(f"👨‍💻 Author: {__author__}")
     print()
     print("Available Model Backends:")
-    print(f"  🔹 Scikit-learn: ✅ (RFR, MLP, GPR)")
+    print("  🔹 Scikit-learn: ✅ (RFR, MLP, GPR)")
     print(f"  🔹 PyTorch: {'✅' if PYTORCH_AVAILABLE else '❌'} (Enhanced MLP)")
     print(f"  🔹 GPflow: {'✅' if GPFLOW_AVAILABLE else '❌'} (Advanced GP)")
     print()
