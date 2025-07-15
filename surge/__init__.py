@@ -4,13 +4,14 @@ __version__ = "0.1.0"
 __author__ = "Álvaro Sánchez Villar"
 
 # Expose the core classes/functions at package level
-from .trainer import SurrogateTrainer
+from .trainer import MLTrainer, SurrogateTrainer
 from .metrics import summarize
 
 # Import model availability information
 from .models import PYTORCH_AVAILABLE, GPFLOW_AVAILABLE
 
 __all__ = [
+    "MLTrainer",
     "SurrogateTrainer",
     "summarize",
     "__version__",

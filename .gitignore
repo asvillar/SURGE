@@ -191,5 +191,10 @@ models/
 *.joblib
 results.json
 
+# Exclude all PNG files except the main logos
+*.png
+!SURGE.png
+!surge_logo_panoramic.png
+
 # Specific notebook files
 notebooks/Test_Botorch_Pe_Compare.ipynb

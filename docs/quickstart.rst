@@ -1,12 +1,37 @@
 Quick Start Guide
-================
+=================
 
 This guide will get you up and running with SURGE in just a few minutes.
 
-Basic Example
--------------
+Basic Usage
+-----------
 
-Here's a simple example demonstrating hyperparameter optimization for a RandomForest model:
+Here's a simple example using SURGE's SurrogateTrainer:
+
+.. code-block:: python
+
+   from surge import SurrogateTrainer
+   import numpy as np
+
+   # Generate sample data
+   X = np.random.random((100, 5))
+   y = np.sum(X, axis=1) + 0.1 * np.random.randn(100)
+
+   # Create and train a surrogate model
+   trainer = SurrogateTrainer(model_type='rfr', n_estimators=100)
+   trainer.fit(X, y)
+
+   # Perform cross-validation
+   results = trainer.cross_validate(n_splits=5)
+   print(f"Average R² score: {results['r2_mean']:.3f}")
+
+   # Save the model
+   trainer.save('my_model')
+
+Advanced Example: Hyperparameter Optimization
+----------------------------------------------
+
+SURGE integrates seamlessly with Optuna for hyperparameter optimization:
 
 .. code-block:: python
 
@@ -38,15 +63,15 @@ Here's a simple example demonstrating hyperparameter optimization for a RandomFo
        
        return r2_score(y_test, predictions)
    
-   # Run optimization
+   # Run optimization with TPE sampler
    study = optuna.create_study(direction='maximize')
    study.optimize(objective, n_trials=100)
    
    print(f"Best R² score: {study.best_value:.4f}")
    print(f"Best parameters: {study.best_params}")
 
-Using SURGE Models
-------------------
+Model Types
+-----------
 
 SURGE provides pre-built model classes for common use cases:
 

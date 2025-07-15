@@ -1,7 +1,79 @@
-Welcome to SURGE Documentation
-==============================
+.. image:: ../surge_logo_panoramic.png
+   :align: center
+   :alt: SURGE Logo
+   :width: 400px
 
-SURGE (Surrogate Models for Understanding and Rapid Generation of Experiments) is a Python library for surrogate modeling and machine learning applications in scientific computing.
+SURGE
+=====
+
+*A Surrogate Unified Robust Generation Engine*
+
+**SURGE** is a modular AI/ML framework for building fast, accurate, and uncertainty-aware 
+surrogate models that emulate complex scientific simulations. Designed for flexibility and 
+scientific rigor, it supports ensemble regressors, neural networks, and Gaussian processes, 
+streamlining the development and deployment of surrogates for inference, optimization, and control.
+
+.. _surge-pipeline:
+
+End-to-End Surrogate Modeling Pipeline
+======================================
+
+SURGE provides a fully automated AI/ML-powered pipeline for surrogate generation:
+
+- **Data Collection (Sampling)**  
+  Integrate with any simulator or experiment to gather parameter–output pairs.
+
+- **Model Selection**  
+  Choose among ensemble regressors (RFR), neural networks (MLP), and Gaussian processes (GPR) via a unified API.
+
+- **Hyperparameter Tuning**  
+  Automate Bayesian or random search over model hyperparameters to find optimal architectures.
+
+- **Training & Testing (Verification, Validation & UQ)**  
+  Run configurable training loops with cross-validation, track mean squared error and R², and quantify uncertainty (via GPR).
+
+- **Performance Evaluation**  
+  Measure inference time, statistical metrics, and generate comprehensive reports.
+
+- **Uncertainty Quantification**  
+  Provide principled error bounds on predictions using built-in GPR support.
+
+- **Data & Model I/O**  
+  Save and load data and trained models in ONNX, HDF5, NPZ, PTH, or joblib formats.
+
+- **Model Import & Inference**  
+  Deploy surrogates in Python scripts, services, or embedded workflows for real-time or batch inference.
+
+This vertical "code → automation → surrogate inference" flow means you can move from raw simulation code to deployable, uncertainty-aware surrogate models with minimal boilerplate.
+
+Main Applications
+-----------------
+
+SURGE has been designed to support a wide range of scientific and engineering use cases:
+
+- **Real-time Control & Monitoring**  
+  Replace expensive physics solvers with fast surrogates for in-shot decision making.
+
+- **Design Optimization**  
+  Embed surrogate models into optimization loops (e.g., Bayesian, genetic) for rapid parameter sweeps.
+
+- **Uncertainty-Aware Prediction**  
+  Leverage Gaussian Process Regressors to get both point estimates and confidence bounds.
+
+- **Digital Twin Integration**  
+  Seamlessly integrate surrogates into digital-twin frameworks for what-if analyses.
+
+- **High-Performance Computing (HPC)**  
+  Streamline training and inference workflows on clusters using standard ML libraries.
+
+Core Functionalities
+--------------------
+
+- **Unified API** for RFR, MLP, and GPR, with identical calls for training, evaluation, and prediction.  
+- **Configurable Pipelines** via YAML/JSON, enabling reproducible workflows and easy parameter sweeps.  
+- **Automated Cross-Validation** with built-in reporting of MSE, R², mean/std inference time.  
+- **Hyperparameter Optimization** wrappers for both random and Bayesian search (Optuna, BoTorch, GPflow).  
+- **Pluggable I/O** for common formats (ONNX, HDF5, NPZ, joblib), easing model exchange and deployment.  
 
 .. toctree::
    :maxdepth: 2
@@ -9,23 +81,11 @@ SURGE (Surrogate Models for Understanding and Rapid Generation of Experiments) i
 
    installation
    quickstart
-   user_guide/index
    api_reference/index
    examples/index
-   contributing
-   changelog
 
-Features
---------
-
-* **Machine Learning Models**: Support for various ML models including GPflow, PyTorch, and scikit-learn
-* **Hyperparameter Optimization**: Integration with Optuna for Bayesian optimization
-* **Preprocessing Utilities**: Data preprocessing and feature engineering tools
-* **Metrics and Evaluation**: Comprehensive model evaluation metrics
-* **Extensible Architecture**: Easy to extend with custom models and methods
-
-Quick Start
------------
+🚀 Quick Start
+--------------
 
 Install SURGE:
 
@@ -33,38 +93,17 @@ Install SURGE:
 
    pip install surge-surrogate
 
-Basic usage:
+You can see examples of SURGE in action in the :doc:`examples/index` section and get started with just a few lines of code:
 
 .. code-block:: python
 
-   import surge
-   from surge.models import RandomForestModel
-   
-   # Create and train a model
-   model = RandomForestModel()
-   model.fit(X_train, y_train)
-   
-   # Make predictions
-   predictions = model.predict(X_test)
+   from surge import SurrogateTrainer
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`on master file, created by
-   sphinx-quickstart on Mon Jul  7 16:44:20 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-Welcome to SURGE's documentation!
-=================================
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
-
+   # train a GPR surrogate on your data
+   trainer = SurrogateTrainer(model_type="gpr", optimizer="bayesian", n_trials=30)
+   trainer.fit(X, y, test_size=0.2)
+   results = trainer.cross_validate(n_splits=5)
+   predictions = trainer.predict(X_new)
 
 Indices and tables
 ==================
