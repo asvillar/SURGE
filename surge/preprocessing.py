@@ -5,8 +5,10 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, train_test_split
+from sklearn.preprocessing import StandardScaler
 
 # Re-export StandardScaler for convenience
+__all__ = ['StandardScaler', 'train_test_split_data', 'make_cv_splits', 'analyze_dataset_structure']
 
 
 def train_test_split_data(X, y, test_size=0.2, random_state=42):

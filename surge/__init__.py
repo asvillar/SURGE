@@ -5,11 +5,14 @@ __author__ = "Álvaro Sánchez Villar"  # Expose the core classes/functions at p
 from .metrics import summarize
 from .models import GPFLOW_AVAILABLE, PYTORCH_AVAILABLE
 from .trainer import MLTrainer, SurrogateTrainer
+from .utils import setup_surge_path, get_data_path
 
 __all__ = [
     "MLTrainer",
     "SurrogateTrainer",
     "summarize",
+    "setup_surge_path",
+    "get_data_path",
     "__version__",
     "__author__",
     "PYTORCH_AVAILABLE",
