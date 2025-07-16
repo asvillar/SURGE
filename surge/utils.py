@@ -15,6 +15,97 @@ try:
 except ImportError:
     psutil = None
 
+# Try to import matplotlib for plotting
+try:
+    import matplotlib.pyplot as plt
+    import numpy as np
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    # Still need numpy for resource summary calculations
+    try:
+        import numpy as np
+    except ImportError:
+        raise ImportError("numpy is required for SURGE. Install with: pip install numpy")
+
+
+class ResourceMonitor:
+    """Monitor system resources during training and hyperparameter tuning"""
+    
+    def __init__(self):
+        if psutil is None:
+            raise ImportError("psutil is required for resource monitoring. Install with: pip install psutil")
+        self.reset()
+    
+    def reset(self):
+        """Reset monitoring data"""
+        self.timestamps = []
+        self.ram_usage = []
+        self.cpu_usage = []
+        self.peak_ram = 0
+        self.start_time = time.time()
+        
+    def update(self):
+        """Update resource metrics and return current values"""
+        # Get current metrics
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        ram_mb = memory_info.rss / 1024 / 1024  # Convert to MB
+        cpu_percent = process.cpu_percent()
+        
+        # Update peak RAM
+        self.peak_ram = max(self.peak_ram, ram_mb)
+        
+        # Store metrics
+        self.timestamps.append(time.time() - self.start_time)
+        self.ram_usage.append(ram_mb)
+        self.cpu_usage.append(cpu_percent)
+        
+        return ram_mb, cpu_percent
+    
+    def get_summary(self):
+        """Get resource usage summary statistics"""
+        if not self.ram_usage:
+            return "No data collected"
+        
+        return {
+            'peak_ram_mb': self.peak_ram,
+            'avg_ram_mb': np.mean(self.ram_usage) if self.ram_usage else 0,
+            'avg_cpu_percent': np.mean(self.cpu_usage) if self.cpu_usage else 0,
+            'duration_sec': self.timestamps[-1] if self.timestamps else 0
+        }
+    
+    def plot_resources(self, title="System Resource Monitoring"):
+        """Plot resource usage over time"""
+        if not MATPLOTLIB_AVAILABLE:
+            print("⚠️ Matplotlib not available for plotting. Install with: pip install matplotlib")
+            return
+            
+        if len(self.timestamps) < 2:
+            print("Insufficient data for plotting")
+            return
+            
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+        
+        # RAM usage plot
+        ax1.plot(self.timestamps, self.ram_usage, 'b-', linewidth=2, label='RAM Usage')
+        ax1.axhline(y=self.peak_ram, color='r', linestyle='--', alpha=0.7, 
+                   label=f'Peak: {self.peak_ram:.1f} MB')
+        ax1.set_ylabel('RAM Usage (MB)')
+        ax1.set_title(title)
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
+        
+        # CPU usage plot
+        ax2.plot(self.timestamps, self.cpu_usage, 'g-', linewidth=2, label='CPU Usage')
+        ax2.set_xlabel('Time (seconds)')
+        ax2.set_ylabel('CPU Usage (%)')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
+        
+        plt.tight_layout()
+        plt.show()
+
 
 def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
