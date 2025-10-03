@@ -385,3 +385,153 @@ def run_compute_resource_analysis():
     print("=" * 80)
     
     return system_info, cpu_detected
+
+
+def inspect_surge(module_names=None, verbose=0):
+    """
+    Inspect SURGE modules for quick health checks.
+
+    Args:
+        module_names (list[str] | None): List of module names to check. If None,
+            a sensible default set is used.
+        verbose (int): Verbosity level. 0 => concise summary per module.
+                       1 => print short details while running.
+
+    Returns:
+        dict: Mapping module name -> info dict with keys: loaded (bool),
+              traceback (str|None), summary (short str), classes, functions,
+              variables, top (list of top public names).
+    """
+    import importlib
+    import inspect
+    import traceback
+
+    # If module_names provided, we'll inspect those too, but we'll always
+    # scan the package directory to enumerate all .py files under `surge`.
+    pkg_dir = Path(__file__).resolve().parent
+
+    results = {}
+
+    # First, scan the package directory for .py files and derive module names
+    py_files = [p for p in pkg_dir.iterdir() if p.suffix == '.py']
+    file_module_names = [f"surge.{p.stem}" for p in py_files]
+
+    # Merge requested module_names if given
+    if module_names:
+        # ensure unique, preserve order
+        for m in module_names:
+            if m not in file_module_names:
+                file_module_names.append(m)
+
+    for mod_name in file_module_names:
+        try:
+            mod = importlib.import_module(mod_name)
+            loaded = True
+            tb = None
+        except Exception:
+            mod = None
+            loaded = False
+            tb = traceback.format_exc()
+
+        info = {'loaded': loaded, 'traceback': tb}
+
+        if loaded and mod is not None:
+            # List functions defined in this module (not imported)
+            all_funcs = inspect.getmembers(mod, inspect.isfunction)
+            funcs_defined_here = [name for name, fn in all_funcs if getattr(fn, '__module__', '') == mod.__name__]
+
+            # List classes defined here
+            all_classes = inspect.getmembers(mod, inspect.isclass)
+            classes_defined_here = [name for name, cls in all_classes if getattr(cls, '__module__', '') == mod.__name__]
+
+            # For convenience also show top-level public names
+            public = [a for a in dir(mod) if not a.startswith('_')]
+
+            info.update({
+                'functions_list': funcs_defined_here,
+                'functions_count': len(funcs_defined_here),
+                'classes_list': classes_defined_here,
+                'classes_count': len(classes_defined_here),
+                'top_public': public[:12],
+            })
+
+            # Print according to verbosity: verbose=0 -> concise per module
+            if verbose:
+                # Nicely formatted verbose block for each module
+                import textwrap
+
+                def wrap(s, width=78, indent=4):
+                    return textwrap.fill(s, width=width, subsequent_indent=' ' * indent)
+
+                header = f"Module: {mod_name}"
+                print('\n' + header)
+                print('-' * len(header))
+
+                # Summary short line
+                short = f"{len(classes_defined_here)} classes, {len(funcs_defined_here)} functions"
+                print('  Summary: ' + short)
+
+                # Functions (truncate long lists but show count)
+                if funcs_defined_here:
+                    funcs_str = ', '.join(funcs_defined_here)
+                    print('  Functions ({0}):'.format(len(funcs_defined_here)))
+                    print('    ' + wrap(funcs_str, indent=6))
+                else:
+                    print('  Functions (0): -')
+
+                # Classes (truncate/wrap)
+                if classes_defined_here:
+                    cls_str = ', '.join(classes_defined_here)
+                    print('  Classes ({0}):'.format(len(classes_defined_here)))
+                    print('    ' + wrap(cls_str, indent=6))
+                else:
+                    print('  Classes (0): -')
+
+                # Top public names (short)
+                if info.get('top_public'):
+                    tp = ', '.join(info.get('top_public', []))
+                    print('  Top public:')
+                    print('    ' + wrap(tp, indent=6))
+
+                # Blank line after module block
+                print()
+
+        results[mod_name] = info
+
+    if verbose:
+        print('inspect_surge: scan complete')
+
+    # Print a neat ASCII table per module (always print the compact summary).
+    # For verbose>=1 this will appear after the detailed per-module output.
+    # For verbose==0 this is the only printed output.
+    if True:
+        # Collect rows
+        rows = []
+        for mod_name, info in results.items():
+            loaded = bool(info.get('loaded', False))
+            cls = info.get('classes_count', None)
+            funcs = info.get('functions_count', None)
+            cls_display = str(cls) if cls is not None else '?'
+            funcs_display = str(funcs) if funcs is not None else '?'
+            status = 'OK' if loaded else 'FAILED'
+            rows.append((mod_name, status, cls_display, funcs_display))
+
+        # Compute column widths
+        col_mod = max(len(r[0]) for r in rows) if rows else 10
+        col_status = max(len('Status'), max(len(r[1]) for r in rows))
+        col_cls = max(len('Classes'), max(len(r[2]) for r in rows))
+        col_funcs = max(len('Functions'), max(len(r[3]) for r in rows))
+
+        # Header
+        header = f"{ 'Module'.ljust(col_mod) }  { 'Status'.ljust(col_status) }  { 'Classes'.rjust(col_cls) }  { 'Functions'.rjust(col_funcs) }"
+        sep = '-' * len(header)
+        print(header)
+        print(sep)
+
+        # Rows
+        for mod_name, status, cls_display, funcs_display in rows:
+            print(f"{mod_name.ljust(col_mod)}  {status.ljust(col_status)}  {cls_display.rjust(col_cls)}  {funcs_display.rjust(col_funcs)}")
+
+        print(sep)
+
+    return results
