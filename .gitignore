@@ -204,3 +204,13 @@ results.json
 
 # Specific notebook files
 notebooks/Test_Botorch_Pe_Compare.ipynb
+# Ignore HPO result pickles (heavy)
+data/datasets/example-data/hpo_results
+
+# Notebook outputs and checkpoints
+.ipynb_checkpoints/
+notebooks/*.ipynb
+notebooks/*.csv
+
+# OS files
+.DS_Store
