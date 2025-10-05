@@ -8,6 +8,7 @@ from pathlib import Path
 
 import joblib
 import torch
+from typing import Optional
 
 # Try to import psutil with fallback for compute resource analysis
 try:
@@ -297,19 +298,43 @@ def detect_compute_resources():
         print(f"\n🔥 PyTorch: Not installed")
         device = "cpu"
     
-    # Check sklearn n_jobs usage
-    print(f"\n⚙️ Current Model Configuration:")
-    print(f"   Random Forest: Using CPU (sklearn)")
-    print(f"   n_jobs: -1 (all available cores: {cpu_count_logical})")
-    print(f"   Training Device: CPU")
-    
+    # Detect common cluster/job scheduler environment variables to support
+    # multi-node workstation and cluster detection (SLURM, PBS, LSF, Cobalt)
+    job_info = None
+    try:
+        if 'SLURM_JOB_NODELIST' in os.environ:
+            job_info = {
+                'scheduler': 'slurm',
+                'nodelist': os.environ.get('SLURM_JOB_NODELIST'),
+                'nnodes': int(os.environ.get('SLURM_NNODES', '1')),
+            }
+        elif 'PBS_NODEFILE' in os.environ:
+            nodefile = os.environ.get('PBS_NODEFILE')
+            job_info = {'scheduler': 'pbs', 'nodefile': nodefile}
+            # Attempt to count nodes if file exists
+            try:
+                if nodefile and os.path.exists(nodefile):
+                    with open(nodefile, 'r') as fh:
+                        job_info['nnodes'] = sum(1 for _ in fh)
+                else:
+                    job_info['nnodes'] = None
+            except Exception:
+                job_info['nnodes'] = None
+        elif 'LSB_JOBID' in os.environ or 'LSB_HOSTS' in os.environ:
+            job_info = {'scheduler': 'lsf'}
+        elif 'COBALT_JOBID' in os.environ:
+            job_info = {'scheduler': 'cobalt'}
+    except Exception:
+        job_info = None
+
     return {
         'cpu_cores_physical': cpu_count_physical,
         'cpu_cores_logical': cpu_count_logical,
         'total_ram_gb': memory.total / (1024**3),
         'gpu_available': gpu_available,
         'gpu_info': gpu_info,
-        'device': device if 'device' in locals() else 'cpu'
+        'device': device if 'device' in locals() else 'cpu',
+        'job_info': job_info,
     }
 
 
@@ -321,70 +346,636 @@ def enhanced_cpu_monitoring():
     
     if psutil is None:
         print("⚠️ Warning: psutil not available. Cannot monitor CPU usage.")
-        return False
+        return {'ok': False, 'reason': 'psutil unavailable'}
     
     # Baseline CPU usage
     baseline_cpu = psutil.cpu_percent(interval=1)
-    print(f"Baseline CPU usage: {baseline_cpu:.1f}%")
-    
     # Per-core CPU usage
     per_core_cpu = psutil.cpu_percent(interval=1, percpu=True)
-    print(f"Per-core usage: {[f'{cpu:.1f}%' for cpu in per_core_cpu]}")
-    
+
     # Test with a brief computation
     print("\nTesting CPU monitoring during computation...")
     import numpy as np
     from sklearn.ensemble import RandomForestRegressor
-    
+
     # Create dummy data for CPU test
-    X_test = np.random.random((1000, 10))
-    y_test = np.random.random(1000)
-    
+    X_test = np.random.random((500, 8))
+    y_test = np.random.random(500)
+
     # Monitor CPU during training
     start_time = time.time()
-    model = RandomForestRegressor(n_estimators=50, n_jobs=-1, random_state=42)
-    
-    # Get CPU usage during fit
-    pre_fit_cpu = psutil.cpu_percent()
+    model = RandomForestRegressor(n_estimators=40, n_jobs=-1, random_state=42)
+
+    pre_fit_cpu = psutil.cpu_percent(interval=None)
     model.fit(X_test, y_test)
-    post_fit_cpu = psutil.cpu_percent(interval=0.5)  # 0.5 second interval
-    
+    post_fit_cpu = psutil.cpu_percent(interval=0.5)
+
     training_time = time.time() - start_time
-    
-    print(f"CPU usage: {pre_fit_cpu:.1f}% → {post_fit_cpu:.1f}%")
+
+    cpu_metrics = {
+        'ok': True,
+        'baseline_cpu_percent': float(baseline_cpu),
+        'per_core_cpu_percent': [float(x) for x in per_core_cpu],
+        'pre_fit_cpu_percent': float(pre_fit_cpu),
+        'post_fit_cpu_percent': float(post_fit_cpu),
+        'training_time_sec': float(training_time),
+        'utilization_detected': bool(post_fit_cpu > pre_fit_cpu + 5)
+    }
+
+    print(f"Baseline CPU usage: {baseline_cpu:.1f}%")
+    print(f"Per-core sample: {[f'{cpu:.1f}%' for cpu in per_core_cpu]}")
+    print(f"CPU usage during test: {pre_fit_cpu:.1f}% → {post_fit_cpu:.1f}%")
     print(f"Training time: {training_time:.3f} seconds")
-    print(f"CPU utilization detected: {'Yes' if post_fit_cpu > pre_fit_cpu + 5 else 'Low/Variable'}")
-    
-    return post_fit_cpu > baseline_cpu
+
+    return cpu_metrics
 
 
-def run_compute_resource_analysis():
-    """Run complete enhanced compute resource analysis"""
-    
-    print("🚀 ENHANCED COMPUTE RESOURCE ANALYSIS")
-    print("=" * 80)
+def run_compute_resource_analysis(verbose=1):
+    """Run complete enhanced compute resource analysis.
+
+    Args:
+        verbose (int): 0 for compact summary, 1 for detailed tables (default).
+
+    Returns:
+        tuple: (system_info, cpu_metrics)
+    """
 
     system_info = detect_compute_resources()
-    cpu_detected = enhanced_cpu_monitoring()
+    cpu_metrics = enhanced_cpu_monitoring()
 
-    print(f"\n📊 SUMMARY:")
-    print(f"   Training Method: CPU-based (sklearn RandomForest)")
-    print(f"   Available Cores: {system_info['cpu_cores_logical']} logical")
-    print(f"   RAM Available: {system_info['total_ram_gb']:.1f} GB")
-    print(f"   GPU Available: {system_info['gpu_available']}")
-    print(f"   CPU Monitoring: {'Working' if cpu_detected else 'Requires longer training for detection'}")
+    # Build a richer summary dict
+    summary = {
+        'system_info': system_info,
+        'cpu_metrics': cpu_metrics,
+        'timestamp': time.time()
+    }
 
-    print(f"\n💡 RECOMMENDATIONS:")
-    if system_info['gpu_available'] and 'device' in system_info and system_info['device'] != 'cpu':
-        print(f"   ✅ GPU detected - consider PyTorch models for GPU acceleration")
-    else:
-        print(f"   ✅ CPU training optimal for RandomForest (sklearn)")
-    print(f"   ✅ Use n_jobs=-1 to utilize all {system_info['cpu_cores_logical']} cores")
-    print(f"   ✅ Current memory is sufficient for large models")
+    if verbose <= 0:
+        # Compact single-line/table summary: cores, RAM, GPU, device, baseline/post-fit
+        try:
+            mod = system_info
+            baseline = cpu_metrics.get('baseline_cpu_percent') if isinstance(cpu_metrics, dict) else None
+            post = cpu_metrics.get('post_fit_cpu_percent') if isinstance(cpu_metrics, dict) else None
+            gpu = mod.get('gpu_available')
+            device = mod.get('device')
+            cores = mod.get('cpu_cores_logical')
+            ram = mod.get('total_ram_gb')
+            # Print compact table with labeled sections
+            print('\nCOMPUTE SUMMARY (compact)')
+            print('----------------------------------------')
+            # System & architecture
+            print('System & Architecture:')
+            print(f"  OS: {platform.system()} {platform.release()} | Arch: {platform.machine()} | Python: {sys.version.split()[0]}")
+            print('')
+            # CPU
+            phys = mod.get('cpu_cores_physical')
+            print('CPU:')
+            print(f"  Logical cores: {cores} | Physical cores: {phys}")
+            if baseline is not None:
+                print(f"  Baseline CPU %: {baseline:.1f}% | Post-fit CPU %: {post:.1f}%")
+            print('')
+            # GPU
+            print('GPU:')
+            print(f"  Available: {gpu} | Info: {mod.get('gpu_info')} | Recommended device: {device}")
+            print('')
+            # Memory
+            print('Memory (RAM):')
+            try:
+                print(f"  Total: {ram:.2f} GB | Available: {mod.get('total_ram_gb'):.2f} GB")
+            except Exception:
+                print(f"  Total: {ram} GB")
+            # If job_info present, print short cluster info
+            ji = mod.get('job_info')
+            if ji:
+                print('')
+                print('Cluster/Job info:')
+                print(f"  Scheduler: {ji.get('scheduler')} | nodes: {ji.get('nnodes')}")
+        except Exception:
+            print('Failed to print compact compute summary')
+        return system_info, cpu_metrics
 
+    # verbose >=1 => detailed printing
+    print("🚀 ENHANCED COMPUTE RESOURCE ANALYSIS")
     print("=" * 80)
-    
-    return system_info, cpu_detected
+    try:
+        pretty_print_resource_summary(system_info, cpu_metrics)
+    except Exception:
+        print('\nSummary:')
+        print(system_info)
+        print(cpu_metrics)
+
+    # Model recommendations (experimental)
+    print('\nMODEL RECOMMENDATIONS (experimental - under construction)')
+    print('-' * 60)
+    try:
+        if system_info.get('gpu_available') and system_info.get('device') and system_info.get('device') != 'cpu':
+            print(' - GPU present: prefer PyTorch models to leverage GPU acceleration (MPS/CUDA).')
+            print('   Example: use PyTorch MLP/NN models and move tensors to device.')
+        else:
+            print(' - No suitable GPU detected: scikit-learn RandomForest or CPU-based PyTorch is recommended.')
+            print('   Example: RandomForest with n_jobs=-1 for parallel training.')
+        print(' - Consider model size vs available RAM; if RAM < 8GB use smaller models or batch training.')
+        print(' - Note: these model recommendations are experimental and under construction; validate before production.')
+    except Exception:
+        print(' - Model recommendations: unavailable')
+
+    return system_info, cpu_metrics
+
+
+def pretty_print_resource_summary(system_info, cpu_metrics):
+    """Print a pair of aligned ASCII tables summarizing system_info and cpu_metrics."""
+    # System table
+    rows = [
+        ('Physical cores', str(system_info.get('cpu_cores_physical'))),
+        ('Logical cores', str(system_info.get('cpu_cores_logical'))),
+        ('Total RAM (GB)', f"{system_info.get('total_ram_gb', 0):.2f}"),
+        ('GPU available', str(system_info.get('gpu_available'))),
+        ('GPU info', str(system_info.get('gpu_info'))),
+        ('Recommended device', str(system_info.get('device'))),
+    ]
+
+    col_left = max(len(r[0]) for r in rows)
+    col_right = max(len(r[1]) for r in rows)
+
+    print('\nSYSTEM')
+    print('-' * (col_left + col_right + 5))
+    for k, v in rows:
+        print(f"{k.ljust(col_left)} : {v.rjust(col_right)}")
+    print('-' * (col_left + col_right + 5))
+
+    # CPU metrics table
+    print('\nCPU MONITORING')
+    if not cpu_metrics or not cpu_metrics.get('ok'):
+        print('  CPU monitoring not available or failed: ', cpu_metrics.get('reason') if isinstance(cpu_metrics, dict) else cpu_metrics)
+        return
+
+    per_core = cpu_metrics.get('per_core_cpu_percent', [])
+    per_core_sample = ', '.join([f"{x:.0f}%" for x in per_core[:8]])
+
+    cpu_rows = [
+        ('Baseline CPU %', f"{cpu_metrics.get('baseline_cpu_percent'):.1f}%"),
+        ('Pre-fit CPU %', f"{cpu_metrics.get('pre_fit_cpu_percent'):.1f}%"),
+        ('Post-fit CPU %', f"{cpu_metrics.get('post_fit_cpu_percent'):.1f}%"),
+        ('Training time (s)', f"{cpu_metrics.get('training_time_sec'):.2f}"),
+        ('Utilization detected', str(cpu_metrics.get('utilization_detected'))),
+        ('Per-core sample', per_core_sample),
+    ]
+
+    col_left = max(len(r[0]) for r in cpu_rows)
+    col_right = max(len(r[1]) for r in cpu_rows)
+    print('-' * (col_left + col_right + 5))
+    for k, v in cpu_rows:
+        print(f"{k.ljust(col_left)} : {v.rjust(col_right)}")
+    print('-' * (col_left + col_right + 5))
+
+    # Recommendations
+    print('\nRECOMMENDATIONS')
+    print('-' * 40)
+
+
+def _collect_system_info_quiet():
+    """Collect system info without printing (used by tabular reporters)."""
+    info = {
+        'os': f"{platform.system()} {platform.release()}",
+        'architecture': platform.machine(),
+        'python': sys.version.split()[0],
+        'cpu_cores_physical': None,
+        'cpu_cores_logical': None,
+        'total_ram_gb': None,
+        'gpu_available': False,
+        'gpu_info': 'None detected',
+        'device': 'cpu',
+        'job_info': None,
+    }
+
+    # If psutil available, collect live usage numbers
+    if psutil is None:
+        return info
+
+    try:
+        info['cpu_cores_physical'] = psutil.cpu_count(logical=False)
+        info['cpu_cores_logical'] = psutil.cpu_count(logical=True)
+    except Exception:
+        pass
+
+    # CPU brand/type
+    try:
+        cpu_brand = platform.processor() or ''
+        if not cpu_brand and platform.system() == 'Darwin':
+            # macOS best-effort
+            try:
+                cpu_brand = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string'], text=True).strip()
+            except Exception:
+                cpu_brand = ''
+        info['cpu_brand'] = cpu_brand or 'Unknown'
+    except Exception:
+        info['cpu_brand'] = 'Unknown'
+
+    try:
+        info['cpu_percent'] = psutil.cpu_percent(interval=1)
+        info['per_core_percent'] = psutil.cpu_percent(interval=1, percpu=True)
+    except Exception:
+        info['cpu_percent'] = None
+        info['per_core_percent'] = []
+
+    try:
+        memory = psutil.virtual_memory()
+        info['total_ram_gb'] = memory.total / (1024**3)
+        info['memory_available_gb'] = memory.available / (1024**3)
+        info['memory_used_gb'] = memory.used / (1024**3)
+        info['memory_percent'] = memory.percent
+    except Exception:
+        info['memory_available_gb'] = None
+        info['memory_used_gb'] = None
+        info['memory_percent'] = None
+
+    # GPU detection (best-effort, quiet) - produce gpu_details list with dict per device
+    gpu_details = []
+    try:
+        result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,memory.used,utilization.gpu', '--format=csv,noheader,nounits'],
+                                capture_output=True, text=True, timeout=3)
+        if result.returncode == 0 and result.stdout.strip():
+            lines = [l for l in result.stdout.strip().split('\n') if l]
+            for line in lines:
+                parts = [p.strip() for p in line.split(',')]
+                if len(parts) >= 4:
+                    name = parts[0]
+                    mem_total = float(parts[1])
+                    mem_used = float(parts[2])
+                    util = float(parts[3])
+                    gpu_details.append({'name': name, 'memory_total_mb': mem_total, 'memory_used_mb': mem_used, 'util_percent': util})
+            if gpu_details:
+                info['gpu_available'] = True
+                info['gpu_info'] = f"NVIDIA: {len(gpu_details)} device(s)"
+    except Exception:
+        pass
+
+    # macOS Metal detection
+    try:
+        if not gpu_details and platform.system() == 'Darwin':
+            result = subprocess.run(['system_profiler', 'SPDisplaysDataType'], capture_output=True, text=True, timeout=3)
+            if result.stdout and ('Metal' in result.stdout or 'GPU' in result.stdout):
+                info['gpu_available'] = True
+                info['gpu_info'] = 'Metal GPU detected (macOS)'
+                gpu_details.append({'name': 'MPS/Metal', 'memory_total_mb': None, 'memory_used_mb': None, 'util_percent': None})
+    except Exception:
+        pass
+
+    # PyTorch device detection (quiet)
+    try:
+        cuda_available = torch.cuda.is_available()
+        mps_available = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
+        if cuda_available:
+            info['gpu_available'] = True
+            info['device'] = 'cuda'
+            info['gpu_info'] = 'CUDA available'
+            # add GPU names if not already
+            try:
+                for i in range(torch.cuda.device_count()):
+                    gpu_details.append({'name': torch.cuda.get_device_name(i), 'memory_total_mb': None, 'memory_used_mb': None, 'util_percent': None})
+            except Exception:
+                pass
+        elif mps_available:
+            info['gpu_available'] = True
+            info['device'] = 'mps'
+            info['gpu_info'] = 'MPS/Metal available'
+            if not any(g.get('name') == 'MPS/Metal' for g in gpu_details):
+                gpu_details.append({'name': 'MPS/Metal', 'memory_total_mb': None, 'memory_used_mb': None, 'util_percent': None})
+    except Exception:
+        pass
+
+    # (NVML/pynvml probing was removed )
+    info['gpu_details'] = gpu_details
+
+    # Job/cluster detection (quiet)
+    try:
+        if 'SLURM_JOB_NODELIST' in os.environ:
+            info['job_info'] = {'scheduler': 'slurm', 'nodelist': os.environ.get('SLURM_JOB_NODELIST'), 'nnodes': int(os.environ.get('SLURM_NNODES', '1'))}
+        elif 'PBS_NODEFILE' in os.environ:
+            nodefile = os.environ.get('PBS_NODEFILE')
+            ji = {'scheduler': 'pbs', 'nodefile': nodefile}
+            try:
+                if nodefile and os.path.exists(nodefile):
+                    with open(nodefile, 'r') as fh:
+                        ji['nnodes'] = sum(1 for _ in fh)
+                else:
+                    ji['nnodes'] = None
+            except Exception:
+                ji['nnodes'] = None
+            info['job_info'] = ji
+        elif 'LSB_JOBID' in os.environ or 'LSB_HOSTS' in os.environ:
+            info['job_info'] = {'scheduler': 'lsf'}
+        elif 'COBALT_JOBID' in os.environ:
+            info['job_info'] = {'scheduler': 'cobalt'}
+    except Exception:
+        pass
+
+    return info
+
+
+def system_resource_report(save: bool = False, save_dir: Optional[str] = None):
+    """Produce a concise tabular system report (suitable before running SURGE).
+
+    Prints only an ASCII table and returns the collected info dict.
+
+    Args:
+        save (bool): If True, save a JSON and text copy to `surge_dev_artifacts` (default: False).
+        save_dir (str|None): Optional directory path to save artifacts. If None, uses
+            $SURGE/surge_dev_artifacts or ./surge_dev_artifacts.
+    """
+    import io
+    info = _collect_system_info_quiet()
+
+    rows = [
+        ('OS', info.get('os')),
+        ('Architecture', info.get('architecture')),
+        ('Python', info.get('python')),
+        # CPU summary will be printed in its own section
+        ('Physical cores', str(info.get('cpu_cores_physical'))),
+        ('Logical cores', str(info.get('cpu_cores_logical'))),
+        ('Total RAM (GB)', f"{info.get('total_ram_gb'):.2f}" if info.get('total_ram_gb') is not None else 'None'),
+        ('GPU available', str(info.get('gpu_available'))),
+        ('GPU info', str(info.get('gpu_info'))),
+        ('Recommended device', str(info.get('device'))),
+    ]
+
+    col_left = max(len(r[0]) for r in rows)
+    col_right = max(len(r[1]) for r in rows)
+
+    sio = io.StringIO()
+    header = 'SYSTEM RESOURCE REPORT'
+    print(header, file=sio)
+    print('-' * (col_left + col_right + 5), file=sio)
+    for k, v in rows:
+        print(f"{k.ljust(col_left)} : {v.rjust(col_right)}", file=sio)
+    print('-' * (col_left + col_right + 5), file=sio)
+
+    # Short job info line if present
+    ji = info.get('job_info')
+    if ji:
+        print(f"Job scheduler: {ji.get('scheduler')} | nodes: {ji.get('nnodes')}", file=sio)
+
+    out = sio.getvalue()
+    # Print a single boxed ASCII table with sections in order: CPU -> GPU -> MEMORY
+    # Prepare grouped rows
+    cpu_rows = []
+    cpu_brand = info.get('cpu_brand', 'Unknown')
+    cpu_rows.append(('Type', str(cpu_brand)))
+    cpu_rows.append(('Physical cores', str(info.get('cpu_cores_physical'))))
+    cpu_rows.append(('Logical cores', str(info.get('cpu_cores_logical'))))
+    cpu_pct = info.get('cpu_percent')
+    cpu_rows.append(('Current usage', f"{cpu_pct:.1f}%" if cpu_pct is not None else 'N/A'))
+
+    gpu_rows = []
+    gpu_rows.append(('Available', str(info.get('gpu_available'))))
+    gpu_rows.append(('Info', str(info.get('gpu_info'))))
+    gd = info.get('gpu_details', [])
+    for i, g in enumerate(gd):
+        name = g.get('name') or f'GPU {i}'
+        parts = []
+        if g.get('memory_total_mb') is not None:
+            parts.append(f"mem {g.get('memory_total_mb'):.0f}MB")
+        if g.get('memory_used_mb') is not None:
+            parts.append(f"used {g.get('memory_used_mb'):.0f}MB")
+        if g.get('util_percent') is not None:
+            parts.append(f"util {g.get('util_percent'):.0f}%")
+        extra = ', '.join(parts) if parts else ''
+        gpu_rows.append((f'{name}', extra))
+
+    mem_rows = []
+    tr = info.get('total_ram_gb')
+    av = info.get('memory_available_gb')
+    us = info.get('memory_used_gb')
+    mp = info.get('memory_percent')
+    mem_rows.append(('Total (GB)', f"{tr:.2f}" if tr is not None else 'N/A'))
+    mem_rows.append(('Available (GB)', f"{av:.2f}" if av is not None else 'N/A'))
+    mem_rows.append(('Used (GB)', f"{us:.2f} ({mp:.1f}%)" if us is not None and mp is not None else 'N/A'))
+
+    # Compute widths
+    all_rows = [('CPU ' + k, v) for k, v in cpu_rows] + [('GPU ' + k, v) for k, v in gpu_rows] + [('MEM ' + k, v) for k, v in mem_rows]
+    col_left2 = max(len(r[0]) for r in all_rows)
+    col_right2 = max(len(r[1]) for r in all_rows)
+    total_width = col_left2 + 3 + col_right2
+
+    def hline():
+        print('+' + '-' * total_width + '+')
+
+    def print_row(left, right):
+        print('| ' + left.ljust(col_left2) + ' : ' + right.rjust(col_right2) + ' |')
+
+    # Print header
+    hline()
+    print('| ' + header.center(total_width - 2) + ' |')
+    hline()
+
+    # CPU section
+    print('| ' + 'CPU'.center(total_width - 2) + ' |')
+    hline()
+    for k, v in cpu_rows:
+        print_row(k, v)
+    hline()
+
+    # GPU section
+    print('| ' + 'GPU'.center(total_width - 2) + ' |')
+    hline()
+    for k, v in gpu_rows:
+        print_row(k, v)
+    hline()
+
+    # MEMORY section
+    print('| ' + 'MEMORY'.center(total_width - 2) + ' |')
+    hline()
+    for k, v in mem_rows:
+        print_row(k, v)
+    hline()
+
+    # Optionally save
+    if save:
+        try:
+            from pathlib import Path
+            artifacts = Path(save_dir) if save_dir else Path(os.environ.get('SURGE', '.')) / 'surge_dev_artifacts'
+            artifacts.mkdir(parents=True, exist_ok=True)
+            ts = int(time.time())
+            json_path = artifacts / f'system_resource_report_{ts}.json'
+            txt_path = artifacts / f'system_resource_report_{ts}.txt'
+            with open(json_path, 'w') as fh:
+                json.dump(info, fh, indent=2)
+            with open(txt_path, 'w') as fh:
+                fh.write(out)
+        except Exception:
+            # non-fatal: just continue
+            pass
+
+    return info
+
+
+def system_monitor_report(run_cpu_test: bool = False, n_estimators: int = 40, n_jobs: int = -1, sample_rows: int = 500, save: bool = False, save_dir: Optional[str] = None):
+    """Produce a concise tabular runtime monitor report (CPU/GPU) while building models.
+
+    Args:
+        run_cpu_test (bool): If True, run a short RandomForest fit to measure CPU utilization.
+        n_estimators (int): n_estimators for the brief RandomForest (if run_cpu_test).
+        n_jobs (int): n_jobs passed to the RandomForest (if run_cpu_test).
+        sample_rows (int): Number of dummy rows for the short CPU test.
+
+    Returns:
+        dict: cpu_metrics-like dict with monitoring results.
+    """
+    import io
+    if psutil is None:
+        metrics = {'ok': False, 'reason': 'psutil unavailable'}
+        sio = io.StringIO()
+        print('CPU MONITOR REPORT', file=sio)
+        print('------------------', file=sio)
+        print('  psutil not available', file=sio)
+        out = sio.getvalue()
+        print(out)
+        if save:
+            try:
+                from pathlib import Path
+                artifacts = Path(save_dir) if save_dir else Path(os.environ.get('SURGE', '.')) / 'surge_dev_artifacts'
+                artifacts.mkdir(parents=True, exist_ok=True)
+                ts = int(time.time())
+                txt_path = artifacts / f'system_monitor_report_{ts}.txt'
+                with open(txt_path, 'w') as fh:
+                    fh.write(out)
+            except Exception:
+                pass
+        return metrics
+
+    baseline = psutil.cpu_percent(interval=1)
+    per_core = psutil.cpu_percent(interval=1, percpu=True)
+
+    metrics = {
+        'ok': True,
+        'baseline_cpu_percent': float(baseline),
+        'per_core_cpu_percent': [float(x) for x in per_core],
+    }
+
+    # Optionally run a brief CPU test
+    if run_cpu_test:
+        try:
+            import numpy as _np
+            from sklearn.ensemble import RandomForestRegressor as _RFR
+
+            X = _np.random.random((sample_rows, 8))
+            y = _np.random.random(sample_rows)
+            start = time.time()
+            pre = psutil.cpu_percent(interval=None)
+            m = _RFR(n_estimators=n_estimators, n_jobs=n_jobs, random_state=42)
+            m.fit(X, y)
+            post = psutil.cpu_percent(interval=0.5)
+            dur = time.time() - start
+
+            metrics.update({
+                'pre_fit_cpu_percent': float(pre),
+                'post_fit_cpu_percent': float(post),
+                'training_time_sec': float(dur),
+                'utilization_detected': bool(post > pre + 5),
+            })
+        except Exception as e:
+            metrics.update({'ok': False, 'reason': f'cpu_test_failed: {e}'})
+
+    # Also include GPU/device info quietly
+    sysinfo = _collect_system_info_quiet()
+    metrics['gpu_available'] = sysinfo.get('gpu_available')
+    metrics['device'] = sysinfo.get('device')
+    # (NVML/pynvml probing was removed )
+
+    # Prepare tabular output
+    # Prepare boxed report (CPU -> GPU -> MEMORY) using sysinfo + metrics
+    import io as _io
+    sio = _io.StringIO()
+
+    cpu_rows = []
+    cpu_rows.append(('Type', str(sysinfo.get('cpu_brand', 'Unknown'))))
+    cpu_rows.append(('Physical cores', str(sysinfo.get('cpu_cores_physical'))))
+    cpu_rows.append(('Logical cores', str(sysinfo.get('cpu_cores_logical'))))
+    cpu_pct = sysinfo.get('cpu_percent') if sysinfo.get('cpu_percent') is not None else metrics.get('baseline_cpu_percent')
+    cpu_rows.append(('Current usage', f"{cpu_pct:.1f}%" if cpu_pct is not None else 'N/A'))
+    # include baseline/per-core as extra rows
+    cpu_rows.append(('Baseline CPU %', f"{metrics.get('baseline_cpu_percent'):.1f}%"))
+    per_core_sample = ', '.join([f"{int(x)}%" for x in metrics.get('per_core_cpu_percent', [])[:8]])
+    cpu_rows.append(('Per-core sample', per_core_sample))
+
+    gpu_rows = []
+    gpu_rows.append(('Available', str(metrics.get('gpu_available'))))
+    gpu_rows.append(('Info', str(sysinfo.get('gpu_info'))))
+    gd = sysinfo.get('gpu_details', [])
+    for i, g in enumerate(gd):
+        name = g.get('name') or f'GPU {i}'
+        parts = []
+        if g.get('memory_total_mb') is not None:
+            parts.append(f"mem {g.get('memory_total_mb'):.0f}MB")
+        if g.get('memory_used_mb') is not None:
+            parts.append(f"used {g.get('memory_used_mb'):.0f}MB")
+        if g.get('util_percent') is not None:
+            parts.append(f"util {g.get('util_percent'):.0f}%")
+        extra = ', '.join(parts) if parts else ''
+        gpu_rows.append((f'{name}', extra))
+
+    mem_rows = []
+    tr = sysinfo.get('total_ram_gb')
+    av = sysinfo.get('memory_available_gb')
+    us = sysinfo.get('memory_used_gb')
+    mp = sysinfo.get('memory_percent')
+    mem_rows.append(('Total (GB)', f"{tr:.2f}" if tr is not None else 'N/A'))
+    mem_rows.append(('Available (GB)', f"{av:.2f}" if av is not None else 'N/A'))
+    mem_rows.append(('Used (GB)', f"{us:.2f} ({mp:.1f}%)" if us is not None and mp is not None else 'N/A'))
+
+    all_rows = [('CPU ' + k, v) for k, v in cpu_rows] + [('GPU ' + k, v) for k, v in gpu_rows] + [('MEM ' + k, v) for k, v in mem_rows]
+    col_left2 = max(len(r[0]) for r in all_rows)
+    col_right2 = max(len(r[1]) for r in all_rows)
+    total_width = col_left2 + 3 + col_right2
+
+    def hline():
+        sio.write('+' + '-' * total_width + '+' + '\n')
+
+    def print_row(left, right):
+        sio.write('| ' + left.ljust(col_left2) + ' : ' + right.rjust(col_right2) + ' |' + '\n')
+
+    header = 'SYSTEM MONITOR REPORT'
+    hline()
+    sio.write('| ' + header.center(total_width - 2) + ' |' + '\n')
+    hline()
+
+    sio.write('| ' + 'CPU'.center(total_width - 2) + ' |' + '\n')
+    hline()
+    for k, v in cpu_rows:
+        print_row(k, v)
+    hline()
+
+    sio.write('| ' + 'GPU'.center(total_width - 2) + ' |' + '\n')
+    hline()
+    for k, v in gpu_rows:
+        print_row(k, v)
+    hline()
+
+    sio.write('| ' + 'MEMORY'.center(total_width - 2) + ' |' + '\n')
+    hline()
+    for k, v in mem_rows:
+        print_row(k, v)
+    hline()
+
+    out = sio.getvalue()
+    print(out)
+
+    if save:
+        try:
+            from pathlib import Path
+            artifacts = Path(save_dir) if save_dir else Path(os.environ.get('SURGE', '.')) / 'surge_dev_artifacts'
+            artifacts.mkdir(parents=True, exist_ok=True)
+            ts = int(time.time())
+            json_path = artifacts / f'system_monitor_report_{ts}.json'
+            txt_path = artifacts / f'system_monitor_report_{ts}.txt'
+            with open(json_path, 'w') as fh:
+                json.dump(metrics, fh, indent=2)
+            with open(txt_path, 'w') as fh:
+                fh.write(out)
+        except Exception:
+            pass
+
+    return metrics
 
 
 def inspect_surge(module_names=None, verbose=0):
@@ -416,12 +1007,27 @@ def inspect_surge(module_names=None, verbose=0):
     py_files = [p for p in pkg_dir.iterdir() if p.suffix == '.py']
     file_module_names = [f"surge.{p.stem}" for p in py_files]
 
-    # Merge requested module_names if given
+    # Merge requested module_names if given (normalize short names to surge.<name>)
     if module_names:
         # ensure unique, preserve order
         for m in module_names:
-            if m not in file_module_names:
-                file_module_names.append(m)
+            if not isinstance(m, str):
+                continue
+            full = m if m.startswith('surge.') else f"surge.{m}"
+            if full not in file_module_names:
+                file_module_names.append(full)
+
+    # Normalize module_names for verbose filtering: allow short names like 'metrics'
+    # to match 'surge.metrics'. If module_names provided, build a set of normalized
+    # full module names to control which modules get the verbose details printed.
+    normalized_targets = set()
+    if module_names:
+        for m in module_names:
+            if isinstance(m, str):
+                if m.startswith('surge.'):
+                    normalized_targets.add(m)
+                else:
+                    normalized_targets.add(f"surge.{m}")
 
     for mod_name in file_module_names:
         try:
@@ -456,7 +1062,10 @@ def inspect_surge(module_names=None, verbose=0):
             })
 
             # Print according to verbosity: verbose=0 -> concise per module
-            if verbose:
+            # If the caller provided module_names, only print detailed verbose
+            # blocks for those modules (helps target a single module for debug).
+            should_print_verbose = bool(verbose) and (not normalized_targets or mod_name in normalized_targets)
+            if should_print_verbose:
                 # Nicely formatted verbose block for each module
                 import textwrap
 
