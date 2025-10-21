@@ -212,5 +212,8 @@ data/datasets/example-data/hpo_results
 notebooks/*.ipynb
 notebooks/*.csv
 
+# Developer diagnostics artifacts
+surge_dev_artifacts/
+
 # OS files
 .DS_Store
