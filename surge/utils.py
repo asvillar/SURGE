@@ -49,6 +49,7 @@ class ResourceMonitor:
     def update(self):
         """Update resource metrics and return current values"""
         # Get current metrics
+        assert psutil is not None, "psutil is required for resource monitoring"
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
         ram_mb = memory_info.rss / 1024 / 1024  # Convert to MB
