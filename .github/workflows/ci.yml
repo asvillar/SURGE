@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.10, 3.11]
+        # Quote versions so YAML treats them as strings (prevents '3.10' -> 3.1 float parsing)
+        python-version: ['"3.10"', '"3.11"']
     steps:
       - uses: actions/checkout@v4
 
