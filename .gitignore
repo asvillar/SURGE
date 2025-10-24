@@ -191,6 +191,9 @@ models/
 *.joblib
 results.json
 
+# DataGenerator batch outputs (generated data, not tracked)
+examples/datagen/batch*/
+
 # Exclude all PNG files except the main logos
 *.png
 !data/logos/SURGE.png
