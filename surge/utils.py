@@ -82,11 +82,11 @@ class ResourceMonitor:
         if not MATPLOTLIB_AVAILABLE:
             print("⚠️ Matplotlib not available for plotting. Install with: pip install matplotlib")
             return
-            
+        
         if len(self.timestamps) < 2:
             print("Insufficient data for plotting")
             return
-            
+        
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
         
         # RAM usage plot
