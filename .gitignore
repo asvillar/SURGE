@@ -225,3 +225,14 @@ REFACTORING_SUMMARY.md
 
 # OS files
 .DS_Store
+
+# Test artifacts and outputs
+test_outputs/
+test_hhfw*.py
+
+# Documentation files (keep local only)
+RUN_RF_TEST.md
+TRAINER_COMPARISON_REPORT.md
+UNIFIED_FRAMEWORK_SUMMARY.md
+BRANCH_STRATEGY.md
+
