@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'refactor/**', 'feature/**' ]
   pull_request:
     branches: [ main ]
 
@@ -25,12 +25,19 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt || true; fi
-          pip install -U pytest
+          # Install core dependencies from requirements.txt if available
+          if [ -f requirements.txt ]; then 
+            pip install -r requirements.txt
+          fi
+          # Install essential dependencies for testing
+          pip install pytest pytest-cov scikit-learn pandas numpy matplotlib joblib scipy
+          # Install optional dependencies (non-blocking)
+          pip install torch || echo "PyTorch installation failed, continuing..."
+          pip install optuna scikit-optimize || echo "Optional dependencies failed, continuing..."
 
       - name: Run tests
         run: |
-          pytest -q || true
+          pytest tests/ -v --tb=short
 
   lint:
     name: Lint (flake8)
@@ -44,6 +51,12 @@ jobs:
       - name: Install linter
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 || true
+          pip install flake8 ruff
       - name: Run flake8
-        run: flake8 . || true
+        run: |
+          flake8 . --max-line-length=100 --extend-ignore=E203,W503 || echo "flake8 issues found (non-blocking)"
+      - name: Run ruff (if pyproject.toml exists)
+        run: |
+          if [ -f pyproject.toml ]; then
+            ruff check . --config pyproject.toml || echo "ruff issues found (non-blocking)"
+          fi

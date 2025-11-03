@@ -22,8 +22,6 @@ try:
         plot_regression_comparison,
         plot_multi_output_comparison,
         plot_model_comparison,
-        plot_profile_comparison,
-        plot_profile_grid,
     )
     VISUALIZATION_AVAILABLE = True
 except ImportError:
@@ -205,6 +203,12 @@ class SurrogateEngine:
         else:
             X = self.x_train_val_sc
             y = self.y_train_val_sc
+        
+        # sklearn models prefer 1D y for single output (prevents DataConversionWarning)
+        # Reshape y to 1D if it's a column vector and we have single output
+        if y.ndim == 2 and y.shape[1] == 1:
+            y = y.ravel()
+        
         return X, y
 
     def _select_prediction_inputs(self, adapter: BaseModelAdapter, dataset: str) -> np.ndarray:
@@ -1751,9 +1755,11 @@ class SurrogateEngine:
         else:
             print(f"⚠️ Optuna optimization not implemented for model type {spec.display_name}")
 
-    def get_model_summary(self, model_index=None):
+    def print_model_summary(self, model_index=None):
         """
         Display comprehensive performance summary for models.
+        
+        This is a convenience method for printing. Use get_model_summary() to get a dict.
         
         Parameters:
         -----------
