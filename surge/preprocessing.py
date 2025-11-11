@@ -11,8 +11,40 @@ from sklearn.preprocessing import StandardScaler
 __all__ = ['StandardScaler', 'train_test_split_data', 'make_cv_splits', 'analyze_dataset_structure']
 
 
-def train_test_split_data(X, y, test_size=0.2, random_state=42):
-    return train_test_split(X, y, test_size=test_size, random_state=random_state)
+def train_test_split_data(
+    X,
+    y,
+    test_size: float = 0.2,
+    random_state: Optional[int] = 42,
+    shuffle: bool = True,
+    stratify=None,
+):
+    """
+    Convenience wrapper around sklearn's train_test_split that keeps SURGE defaults.
+
+    Parameters
+    ----------
+    X : array-like or DataFrame
+        Feature matrix.
+    y : array-like or Series/DataFrame
+        Target values.
+    test_size : float, default=0.2
+        Fraction of samples assigned to the test split.
+    random_state : int, optional
+        Random seed used by the shuffling logic.
+    shuffle : bool, default=True
+        Whether to shuffle samples before splitting.
+    stratify : array-like, optional
+        If not None, data is split in a stratified fashion using this as class labels.
+    """
+    return train_test_split(
+        X,
+        y,
+        test_size=test_size,
+        random_state=random_state,
+        shuffle=shuffle,
+        stratify=stratify,
+    )
 
 
 def make_cv_splits(X, y, n_splits=5, random_state=42):
