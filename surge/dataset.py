@@ -16,17 +16,38 @@ from .preprocessing import (
     print_dataset_analysis,
 )
 
+# Optional HDF5 support
+try:
+    import h5py
+    H5PY_AVAILABLE = True
+except ImportError:
+    H5PY_AVAILABLE = False
+
+# Optional MHD-code loader (now in scripts/mhd_code/)
+try:
+    import sys
+    from pathlib import Path
+    scripts_mhd_code = (Path(__file__).resolve().parent.parent / "scripts" / "mhd_code")
+    if str(scripts_mhd_code) not in sys.path:
+        sys.path.insert(0, str(scripts_mhd_code))
+    from loader import convert_to_dataframe as mhd_code_convert_to_dataframe
+    MHD-code_LOADER_AVAILABLE = True
+except ImportError:
+    MHD-code_LOADER_AVAILABLE = False
+
 
 class SurrogateDataset:
     """
     General-purpose dataset loader with automatic input/output detection.
     
     This class handles loading datasets from various file formats (CSV, pickle,
-    parquet, Excel) and automatically identifies input and output variables based
+    parquet, Excel, HDF5) and automatically identifies input and output variables based
     on column naming patterns (e.g., var_1, var_2, ...).
     
     Uses the preprocessing.analyze_dataset_structure() function for generalized
     pattern-based detection, avoiding hardcoded naming conventions.
+    
+    Supports MHD-code HDF5 format via the scripts/mhd_code/loader helpers.
     
     Examples
     --------
@@ -37,6 +58,9 @@ class SurrogateDataset:
     
     >>> # Or with manual specification
     >>> dataset.load_from_file('data.csv', input_cols=['x1', 'x2'], output_cols=['y1', 'y2'])
+    
+    >>> # MHD-code HDF5 format
+    >>> dataset.load_from_file('sdata.h5', mhd_code_format=True)
     """
     
     def __init__(self):
@@ -54,12 +78,15 @@ class SurrogateDataset:
         input_cols: Optional[List[str]] = None,
         output_cols: Optional[List[str]] = None,
         auto_detect: bool = True,
+        hdf5_key: Optional[str] = None,
+        mhd_code_format: bool = False,
         **kwargs
     ) -> Tuple[List[str], List[str]]:
         """
         Load dataset from file with optional auto-detection.
         
-        Supports CSV, pickle (.pkl, .pickle), parquet (.parquet, .pq), and Excel (.xlsx, .xls).
+        Supports CSV, pickle (.pkl, .pickle), parquet (.parquet, .pq), Excel (.xlsx, .xls),
+        and HDF5 (.h5, .hdf5) files.
         
         Parameters
         ----------
@@ -74,8 +101,13 @@ class SurrogateDataset:
         auto_detect : bool, default=True
             If True, automatically detect inputs/outputs using pattern analysis.
             If False, requires manual specification of input_cols and output_cols.
+        hdf5_key : str, optional
+            For HDF5 files, the key/path to the dataset. If None, attempts to auto-detect
+            or uses MHD-code format if mhd_code_format=True.
+        mhd_code_format : bool, default=False
+            If True and file is HDF5, treats it as MHD-code format and uses MHD-code loader.
         **kwargs
-            Additional arguments passed to pandas read function.
+            Additional arguments passed to pandas read function or MHD-code converter.
             
         Returns
         -------
@@ -88,6 +120,8 @@ class SurrogateDataset:
             If file does not exist
         ValueError
             If auto_detect=False and columns not specified
+        ImportError
+            If HDF5 support is requested but h5py is not available
         """
         file_path = Path(file_path)
         if not file_path.exists():
@@ -107,8 +141,95 @@ class SurrogateDataset:
             self.df = pd.read_parquet(file_path, **kwargs)
         elif suffix in ['.xlsx', '.xls']:
             self.df = pd.read_excel(file_path, **kwargs)
+        elif suffix in ['.h5', '.hdf5']:
+            # HDF5 file handling
+            if not H5PY_AVAILABLE:
+                raise ImportError(
+                    "h5py is required for HDF5 support. Install with: pip install h5py"
+                )
+            
+            if mhd_code_format:
+                # Use MHD-code loader
+                if not MHD-code_LOADER_AVAILABLE:
+                    raise ImportError(
+                        "MHD-code loader is not available. Ensure scripts/mhd_code/loader.py is accessible."
+                    )
+                
+                print("🔍 Detected MHD-code HDF5 format, using MHD-code loader...")
+                # Extract MHD-code-specific kwargs
+                input_features = kwargs.pop('input_features', None)
+                output_features = kwargs.pop('output_features', None)
+                include_equilibrium = kwargs.pop('include_equilibrium_features', True)
+                include_mesh = kwargs.pop('include_mesh_features', False)
+                
+                self.df = mhd_code_convert_to_dataframe(
+                    file_path,
+                    input_features=input_features,
+                    output_features=output_features,
+                    include_equilibrium_features=include_equilibrium,
+                    include_mesh_features=include_mesh,
+                )
+            else:
+                # Standard HDF5 file - try to read as pandas HDFStore or h5py
+                if hdf5_key is not None:
+                    # Read specific key
+                    self.df = pd.read_hdf(file_path, key=hdf5_key, **kwargs)
+                else:
+                    # Try to auto-detect key or read first available dataset
+                    try:
+                        # Try pandas HDFStore format first
+                        store = pd.HDFStore(file_path, mode='r')
+                        keys = store.keys()
+                        if keys:
+                            # Use first key
+                            first_key = keys[0].lstrip('/')
+                            print(f"📋 Auto-detected HDF5 key: {first_key}")
+                            self.df = pd.read_hdf(file_path, key=first_key, **kwargs)
+                        else:
+                            raise ValueError("No datasets found in HDF5 file")
+                        store.close()
+                    except Exception:
+                        # Fall back to h5py and try to convert
+                        import h5py
+                        with h5py.File(file_path, 'r') as f:
+                            # Try to find a dataset that looks like a table
+                            def find_table_dataset(group, path=''):
+                                for key in group.keys():
+                                    full_path = f"{path}/{key}" if path else key
+                                    item = group[key]
+                                    if isinstance(item, h5py.Dataset):
+                                        # Check if it's 2D (table-like)
+                                        if item.ndim == 2:
+                                            return full_path, item
+                                    elif isinstance(item, h5py.Group):
+                                        result = find_table_dataset(item, full_path)
+                                        if result:
+                                            return result
+                                return None
+                            
+                            result = find_table_dataset(f)
+                            if result:
+                                key_path, dataset = result
+                                print(f"📋 Found 2D dataset at: {key_path}")
+                                # Convert to DataFrame
+                                data = dataset[:]
+                                # Try to infer column names from attributes
+                                if 'column_names' in dataset.attrs:
+                                    columns = [name.decode() if isinstance(name, bytes) else name 
+                                             for name in dataset.attrs['column_names']]
+                                else:
+                                    columns = [f'col_{i}' for i in range(data.shape[1])]
+                                self.df = pd.DataFrame(data, columns=columns)
+                            else:
+                                raise ValueError(
+                                    "Could not auto-detect HDF5 dataset. "
+                                    "Please specify hdf5_key or use mhd_code_format=True for MHD-code files."
+                                )
         else:
-            raise ValueError(f"Unsupported file format: {suffix}. Supported: .csv, .pkl, .parquet, .xlsx")
+            raise ValueError(
+                f"Unsupported file format: {suffix}. "
+                f"Supported: .csv, .pkl, .parquet, .xlsx, .h5"
+            )
         
         print(f"✅ Dataset loaded: {self.df.shape[0]} samples, {self.df.shape[1]} columns")
         

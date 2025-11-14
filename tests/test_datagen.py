@@ -10,16 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-# Import DataGenerator directly to avoid torch dependency
-import importlib.util
-import os
-spec = importlib.util.spec_from_file_location(
-    "datagen",
-    os.path.join(os.path.dirname(__file__), "..", "surge", "datagen.py")
-)
-datagen_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(datagen_module)
-DataGenerator = datagen_module.DataGenerator
+from surge.datagen import DataGenerator
 
 
 @pytest.fixture
