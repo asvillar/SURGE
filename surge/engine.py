@@ -1,3 +1,4 @@
+
 import os
 import time
 from dataclasses import dataclass, field
@@ -13,7 +14,7 @@ from sklearn.model_selection import KFold, cross_val_score, train_test_split
 from sklearn.preprocessing import StandardScaler as SKStandardScaler
 
 from .metrics import mean_squared_error, r2_score
-from .models import BaseModelAdapter, MODEL_REGISTRY
+from .model import BaseModelAdapter, MODEL_REGISTRY, FNNEnsemble, GPFLOW_AVAILABLE, PYTORCH_AVAILABLE
 
 # Import visualization functions
 try:
@@ -29,12 +30,6 @@ except ImportError:
 
 # Optional imports for advanced functionality
 try:
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-
-try:
     import optuna
     from optuna.integration import BoTorchSampler
     OPTUNA_AVAILABLE = True
@@ -46,12 +41,6 @@ try:
     SKOPT_AVAILABLE = True
 except ImportError:
     SKOPT_AVAILABLE = False
-
-try:
-    import gpflow as gpf
-    GPFLOW_AVAILABLE = True
-except ImportError:
-    GPFLOW_AVAILABLE = False
 
 
 @dataclass(frozen=True)
@@ -111,6 +100,7 @@ class SurrogateEngine:
 
         # Model performance tracking
         self.model_performance: List[Dict[str, Any]] = []
+        self.ensembles: List[FNNEnsemble] = []
         
         # Model predictions storage (per model index)
         # Format: {model_index: {'train': y_pred_train, 'test': y_pred_test}}
@@ -391,6 +381,28 @@ class SurrogateEngine:
             print("\n--- Statistics for y_scaler [on axis, max_value] ---")
             print("means: ", self.y_scaler.mean_[[0, idx_max_ytrain_mean]])
             print("standard deviation: ", np.sqrt(self.y_scaler.var_[[0, idx_max_ytrain_mean]]))
+
+    def create_fnn_ensemble(self, n_members: int = 5, **model_kwargs: Any) -> FNNEnsemble:
+        """Build a feed-forward neural network ensemble for UQ."""
+        ensemble_models = []
+        for member_idx in range(n_members):
+            params = dict(model_kwargs)
+            params.setdefault('random_state', 42 + member_idx)
+            adapter = MODEL_REGISTRY.create('pytorch.mlp', **params)
+            ensemble_models.append(adapter)
+        ensemble = FNNEnsemble(ensemble_models)
+        self.ensembles.append(ensemble)
+        return ensemble
+
+    def predict_with_ensemble(self, ensemble_index: int, X: Any) -> Dict[str, Any]:
+        """Return mean/std predictions for an ensemble."""
+        ensemble = self.ensembles[ensemble_index]
+        result = ensemble.predict(X)
+        return {
+            'mean': result.mean,
+            'std': result.std,
+            'members': result.members,
+        }
 
     def init_model(
         self,
@@ -1695,7 +1707,7 @@ class SurrogateEngine:
             self.predict_output(model_idx)
 
         elif spec.registry_key == 'pytorch.mlp':
-            if not TORCH_AVAILABLE:
+            if not PYTORCH_AVAILABLE:
                 raise ImportError("PyTorch not available. Please install torch.")
 
             print(f'🔍 Optimizing PyTorch MLP with Optuna ({n_trials} trials)')
@@ -1812,7 +1824,7 @@ class SurrogateEngine:
         output_path : str
             Path to save ONNX model
         """
-        if not TORCH_AVAILABLE:
+        if not PYTORCH_AVAILABLE:
             print("⚠️ PyTorch not available for ONNX export")
             return
 
