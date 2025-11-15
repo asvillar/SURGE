@@ -30,18 +30,34 @@ class GPflowGPRModel:
 
     def __init__(self, kernel_type="matern32", lengthscales=None, variance=1.0,
                  noise_variance=0.1, mean_function=None, optimize=True,
-                 maxiter=1000, **kwargs):
+                 maxiter=1000, add_linear=True, linear_variance=None, 
+                 kernel_combinations=None, **kwargs):
 
         if not GPFLOW_AVAILABLE:
             raise ImportError("GPflow is required for GPflowGPRModel. Install with: pip install gpflow")
 
-        self.kernel_type = kernel_type.lower()
+        self.kernel_type = kernel_type.lower() if isinstance(kernel_type, str) else kernel_type
         self.lengthscales = lengthscales
         self.variance = variance
         self.noise_variance = noise_variance
         self.mean_function = mean_function
         self.optimize = optimize
         self.maxiter = maxiter
+        # Handle add_linear: support bool, string "true"/"false", etc.
+        if isinstance(add_linear, bool):
+            self.add_linear = add_linear
+        elif isinstance(add_linear, str):
+            self.add_linear = add_linear.lower() in ("true", "1", "yes", "y")
+        else:
+            self.add_linear = bool(add_linear)
+        self.linear_variance = linear_variance if linear_variance is not None else 0.1
+        # kernel_combinations: list of kernel types to combine (e.g., ["rbf", "matern32"])
+        # If provided, will create additive combinations instead of using single kernel_type
+        # Handle "null" strings from YAML/categorical choices
+        if kernel_combinations == "null" or kernel_combinations == "None":
+            self.kernel_combinations = None
+        else:
+            self.kernel_combinations = kernel_combinations
 
         self.model = None
         self.scaler_X = StandardScaler()
@@ -51,35 +67,66 @@ class GPflowGPRModel:
     def _create_kernel(self, input_dim):
         """
         Create GPflow kernel based on specifications.
+        Supports single kernels, kernel combinations, and optional Linear kernel.
         """
         # Set default lengthscales if not provided
         if self.lengthscales is None:
             lengthscales = np.ones(input_dim) * 0.75
         else:
             lengthscales = np.array(self.lengthscales)
-            if lengthscales.shape[0] != input_dim:
+            if lengthscales.ndim == 0:
+                lengthscales = np.ones(input_dim) * float(lengthscales)
+            elif lengthscales.shape[0] != input_dim:
                 lengthscales = np.ones(input_dim) * lengthscales[0]
+        
+        # Helper function to create a single kernel
+        def _create_single_kernel(k_type, ls, var):
+            k_type_lower = k_type.lower() if isinstance(k_type, str) else str(k_type).lower()
+            if k_type_lower == "matern32":
+                return gpf.kernels.Matern32(lengthscales=ls, variance=var)  # type: ignore
+            elif k_type_lower == "matern52" or k_type_lower == "matern53":
+                return gpf.kernels.Matern52(lengthscales=ls, variance=var)  # type: ignore
+            elif k_type_lower == "matern12":
+                return gpf.kernels.Matern12(lengthscales=ls, variance=var)  # type: ignore
+            elif k_type_lower == "rbf" or k_type_lower == "squared_exponential":
+                return gpf.kernels.SquaredExponential(lengthscales=ls, variance=var)  # type: ignore
+            elif k_type_lower == "exponential":
+                return gpf.kernels.Exponential(lengthscales=ls, variance=var)  # type: ignore
+            elif k_type_lower == "rational_quadratic":
+                return gpf.kernels.RationalQuadratic(lengthscales=ls, variance=var, alpha=1.0)  # type: ignore
+            elif k_type_lower == "linear":
+                return gpf.kernels.Linear(variance=var)  # type: ignore
+            else:
+                raise ValueError(f"Unknown kernel type: {k_type}")
 
-        # Create base kernel
-        # Note: GPflow automatically converts float to TensorType, safe to ignore type warnings
-        if self.kernel_type == "matern32":
-            base_kernel = gpf.kernels.Matern32(lengthscales=lengthscales, variance=self.variance)  # type: ignore
-        elif self.kernel_type == "matern52":
-            base_kernel = gpf.kernels.Matern52(lengthscales=lengthscales, variance=self.variance)  # type: ignore
-        elif self.kernel_type == "matern12":
-            base_kernel = gpf.kernels.Matern12(lengthscales=lengthscales, variance=self.variance)  # type: ignore
-        elif self.kernel_type == "rbf" or self.kernel_type == "squared_exponential":
-            base_kernel = gpf.kernels.SquaredExponential(lengthscales=lengthscales, variance=self.variance)  # type: ignore
-        elif self.kernel_type == "exponential":
-            base_kernel = gpf.kernels.Exponential(lengthscales=lengthscales, variance=self.variance)  # type: ignore
-        elif self.kernel_type == "rational_quadratic":
-            base_kernel = gpf.kernels.RationalQuadratic(lengthscales=lengthscales, variance=self.variance, alpha=1.0)  # type: ignore
+        # Handle kernel combinations
+        # Convert string "null" to None if needed
+        kernel_combo = self.kernel_combinations
+        if kernel_combo == "null" or kernel_combo == "None":
+            kernel_combo = None
+        
+        if kernel_combo is not None and isinstance(kernel_combo, (list, tuple)) and len(kernel_combo) > 0:
+            # Create additive combination of multiple kernels
+            kernels_to_combine = []
+            for k_type in kernel_combo:
+                if k_type.lower() == "linear":
+                    # Linear kernel doesn't use lengthscales, uses its own variance
+                    kernels_to_combine.append(_create_single_kernel(k_type, lengthscales, self.linear_variance))
+                else:
+                    kernels_to_combine.append(_create_single_kernel(k_type, lengthscales, self.variance))
+            
+            # Combine all kernels by addition
+            combined_kernel = kernels_to_combine[0]
+            for k in kernels_to_combine[1:]:
+                combined_kernel = combined_kernel + k
         else:
-            raise ValueError(f"Unknown kernel type: {self.kernel_type}")
-
-        # Add linear kernel for better modeling flexibility
-        linear_kernel = gpf.kernels.Linear(variance=0.1)  # type: ignore
-        combined_kernel = base_kernel + linear_kernel
+            # Single kernel mode
+            combined_kernel = _create_single_kernel(self.kernel_type, lengthscales, self.variance)
+            
+            # Optionally add Linear kernel (if add_linear is True and not using combinations)
+            if self.add_linear:
+                linear_kernel = gpf.kernels.Linear(variance=self.linear_variance)  # type: ignore
+                combined_kernel = combined_kernel + linear_kernel
 
         return combined_kernel
 
