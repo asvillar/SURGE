@@ -23,6 +23,7 @@ version = '1.0'
 
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
@@ -35,8 +36,8 @@ extensions = [
 
 # Support for both .rst and .md files
 source_suffix = {
-    '.rst': None,
-    '.md': None,
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
 }
 
 templates_path = ['_templates']
@@ -64,6 +65,8 @@ html_theme_options = {
     'includehidden': True,
     'titles_only': False
 }
+
+autosummary_generate = True
 
 # Napoleon settings for Google/NumPy style docstrings
 napoleon_google_docstring = True

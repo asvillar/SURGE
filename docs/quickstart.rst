@@ -1,133 +1,87 @@
 Quick Start Guide
 =================
 
-This guide will get you up and running with SURGE in just a few minutes.
+This guide covers the unified SURGE workflow (dataset ingestion → splitting → training → HPO → artifact export). Legacy helpers such as ``SurrogateTrainer`` remain available but are no longer highlighted in Quick Start.
 
-Basic Usage
+Prerequisites
+-------------
+
+* Python 3.11 environment (see ``envs/surge-env-devel.yml``)
+* device dataset: ``data/datasets/device/case_data`` and ``mhd_code_metadata.yaml`` (already tracked)
+
+Baseline workflow (1k-sample smoke test)
+----------------------------------------
+
+.. code-block:: bash
+
+   conda run -n surge python -m examples.mhd_code_workflow \
+       --spec configs/mhd_code_demo.yaml \
+       --run-tag mhd_code_demo_cli
+
+This spec samples 1,000 rows for a rapid validation run (RFR + Torch MLP + GPflow GPR, with modest Optuna sweeps).
+
+Augmented workflow (all 9,981 samples, 50 Optuna trials/model)
+--------------------------------------------------------------
+
+.. code-block:: bash
+
+   conda run -n surge python -m examples.mhd_code_workflow \
+       --spec configs/mhd_code_demo_augmented.yaml \
+       --run-tag mhd_code_demo_full
+
+The augmented spec removes sampling and increases Optuna sweeps to 50 trials per model, exercising the full dataset.
+
+Notebook exploration
+--------------------
+
+.. code-block:: bash
+
+   conda run -n surge jupyter lab notebooks/MHD-code_demo.ipynb
+
+The notebook:
+
+* Analyzes the dataset with ``SurrogateDataset``
+* Runs the same workflow (baseline spec by default)
+* Visualizes timing/metric tables and multiple comparison plots
+* Documents how to switch ``spec_path`` to ``configs/mhd_code_demo_augmented.yaml``
+
+Programmatic workflow invocation
+--------------------------------
+
+.. code-block:: python
+
+   from pathlib import Path
+   import yaml
+   from surge.workflow.spec import SurrogateWorkflowSpec
+   from surge.workflow.run import run_surrogate_workflow
+
+   spec_path = Path("configs/mhd_code_demo.yaml")
+   spec = SurrogateWorkflowSpec.from_dict(yaml.safe_load(spec_path.read_text()))
+   spec.run_tag = "mhd_code_python_api"
+   summary = run_surrogate_workflow(spec)
+   print(summary["models"][0]["metrics"]["test"])
+
+Each entry in ``summary["models"]`` contains metrics, timings, artifact paths, and Optuna/HPO information.
+
+Inspecting artifacts
+--------------------
+
+All workflow outputs land under ``runs/<tag>/``:
+
+* ``models/`` – joblib-serialized adapters
+* ``scalers/`` – StandardScaler bundles for inputs/outputs
+* ``predictions/`` – per-model CSVs (train/val/test) plus optional UQ JSON
+* ``metrics.json`` / ``workflow_summary.json`` – aggregate metrics and dataset/split summary
+* ``hpo/<model>_hpo.json`` – serialized Optuna trials
+* ``spec.yaml`` / ``environment.txt`` / ``git.txt`` – provenance snapshot
+
+Legacy APIs
 -----------
 
-Here's a simple example using SURGE's SurrogateTrainer:
-
-.. code-block:: python
-
-   from surge import SurrogateTrainer
-   import numpy as np
-
-   # Generate sample data
-   X = np.random.random((100, 5))
-   y = np.sum(X, axis=1) + 0.1 * np.random.randn(100)
-
-   # Create and train a surrogate model
-   trainer = SurrogateTrainer(model_type='rfr', n_estimators=100)
-   trainer.fit(X, y)
-
-   # Perform cross-validation
-   results = trainer.cross_validate(n_splits=5)
-   print(f"Average R² score: {results['r2_mean']:.3f}")
-
-   # Save the model
-   trainer.save('my_model')
-
-Advanced Example: Hyperparameter Optimization
-----------------------------------------------
-
-SURGE integrates seamlessly with Optuna for hyperparameter optimization:
-
-.. code-block:: python
-
-   import numpy as np
-   from sklearn.ensemble import RandomForestRegressor
-   from sklearn.model_selection import train_test_split
-   from sklearn.metrics import r2_score
-   import optuna
-   
-   # Generate sample data
-   np.random.seed(42)
-   X = np.random.randn(1000, 5)
-   y = 2*X[:, 0] + X[:, 1]**2 + 0.5*X[:, 2] + 0.1*np.random.randn(1000)
-   
-   X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-   
-   # Define objective function for optimization
-   def objective(trial):
-       params = {
-           'n_estimators': trial.suggest_int('n_estimators', 50, 200),
-           'max_depth': trial.suggest_int('max_depth', 3, 15),
-           'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
-           'random_state': 42
-       }
-       
-       model = RandomForestRegressor(**params)
-       model.fit(X_train, y_train)
-       predictions = model.predict(X_test)
-       
-       return r2_score(y_test, predictions)
-   
-   # Run optimization with TPE sampler
-   study = optuna.create_study(direction='maximize')
-   study.optimize(objective, n_trials=100)
-   
-   print(f"Best R² score: {study.best_value:.4f}")
-   print(f"Best parameters: {study.best_params}")
-
-Model Types
------------
-
-SURGE provides pre-built model classes for common use cases:
-
-.. code-block:: python
-
-   from surge.models import RandomForestModel
-   from surge.preprocessing import StandardScaler
-   from surge.metrics import evaluate_model
-   
-   # Preprocess data
-   scaler = StandardScaler()
-   X_scaled = scaler.fit_transform(X_train)
-   X_test_scaled = scaler.transform(X_test)
-   
-   # Create and train model
-   model = RandomForestModel(
-       n_estimators=100,
-       max_depth=10,
-       random_state=42
-   )
-   model.fit(X_scaled, y_train)
-   
-   # Make predictions
-   predictions = model.predict(X_test_scaled)
-   
-   # Evaluate performance
-   metrics = evaluate_model(y_test, predictions)
-   print(f"Model performance: {metrics}")
-
-Hyperparameter Optimization with BoTorch
------------------------------------------
-
-For advanced Bayesian optimization using BoTorch:
-
-.. code-block:: python
-
-   from optuna.integration import BoTorchSampler
-   
-   # Create study with BoTorch sampler
-   sampler = BoTorchSampler()
-   study = optuna.create_study(direction='maximize', sampler=sampler)
-   study.optimize(objective, n_trials=50)
-   
-   # Analyze convergence
-   trial_values = [trial.value for trial in study.trials]
-   
-   import matplotlib.pyplot as plt
-   plt.plot(trial_values)
-   plt.xlabel('Trial')
-   plt.ylabel('R² Score')
-   plt.title('Optimization Convergence')
-   plt.show()
+If you still depend on the historical ``SurrogateTrainer`` / ``MLTrainer`` helpers, they remain importable. However, all new development should target ``surge.workflow`` so that CLI runs, notebooks, and programmatic usage stay unified.
 
 Next Steps
 ----------
 
-* Read the :doc:`user_guide/index` for detailed explanations
-* Check out the :doc:`examples/index` for more complex use cases
-* Explore the :doc:`api_reference/index` for complete API documentation
+* Read the :doc:`examples/index` page for more demonstrations (RF heating, Optuna comparisons, etc.)
+* Browse :doc:`api_reference/index` for detailed class/method documentation
