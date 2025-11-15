@@ -194,6 +194,14 @@ results.json
 # DataGenerator batch outputs (generated data, not tracked)
 examples/datagen/batch*/
 
+# Large datasets and workflow outputs
+runs/
+data/datasets/MHD-code/*.csv
+!data/datasets/MHD-code/*_sample.csv
+data/datasets/device/*.pkl
+!data/datasets/device/*_sample.pkl
+pscratch/
+
 # Exclude all PNG files except the main logos
 *.png
 !data/logos/SURGE.png
