@@ -8,6 +8,12 @@ import sys
 import os
 from pathlib import Path
 
+# Ensure SURGE root is on sys.path so imports succeed when running from scripts/
+SCRIPT_DIR = Path(__file__).resolve().parent
+SURGE_ROOT = SCRIPT_DIR.parent.parent
+if str(SURGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SURGE_ROOT))
+
 def check_surge_installation():
     """Check if SURGE is properly installed and print diagnostic information"""
     
