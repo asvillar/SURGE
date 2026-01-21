@@ -1,319 +1,312 @@
+"""
+Dataset analysis utilities used by the refactored SURGE stack.
+
+This module supersedes the legacy `surge.preprocessing` helpers and adds:
+  * Metadata-aware input/output overrides (YAML or dict)
+  * Multi-profile grouping hints for scientific surrogate targets
+  * Optional sampling knobs for large datasets
+"""
+
+from __future__ import annotations
+
+import math
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold, train_test_split
-from sklearn.preprocessing import StandardScaler
 
-# Re-export StandardScaler for convenience
-__all__ = ['StandardScaler', 'train_test_split_data', 'make_cv_splits', 'analyze_dataset_structure']
+PROFILE_HINTS = (
+    "gamma",
+    "profile",
+    "mode",
+    "fourier",
+    "harmonic",
+    "spectrum",
+    "psi",
+    "rho",
+)
 
+OUTPUT_PREFIXES = (
+    "y",
+    "out",
+    "output",
+    "target",
+    "gamma",
+    "beta",
+    "profile",
+    "stability",
+    "growth",
+)
 
-def train_test_split_data(
-    X,
-    y,
-    test_size: float = 0.2,
-    random_state: Optional[int] = 42,
-    shuffle: bool = True,
-    stratify=None,
-):
-    """
-    Convenience wrapper around sklearn's train_test_split that keeps SURGE defaults.
+INPUT_PREFIXES = ("x", "inp", "input", "feature", "eq", "geom", "basis")
 
-    Parameters
-    ----------
-    X : array-like or DataFrame
-        Feature matrix.
-    y : array-like or Series/DataFrame
-        Target values.
-    test_size : float, default=0.2
-        Fraction of samples assigned to the test split.
-    random_state : int, optional
-        Random seed used by the shuffling logic.
-    shuffle : bool, default=True
-        Whether to shuffle samples before splitting.
-    stratify : array-like, optional
-        If not None, data is split in a stratified fashion using this as class labels.
-    """
-    return train_test_split(
-        X,
-        y,
-        test_size=test_size,
-        random_state=random_state,
-        shuffle=shuffle,
-        stratify=stratify,
-    )
+PATTERNS = [
+    re.compile(r"^(?P<base>.+?)[\-_](?P<idx>\d+)$"),
+    re.compile(r"^(?P<base>.+?)\[(?P<idx>\d+)\]$"),
+    re.compile(r"^(?P<base>.+?)(?P<idx>\d+)$"),
+]
 
 
-def make_cv_splits(X, y, n_splits=5, random_state=42):
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    return list(kf.split(X, y))
+def _lower_name(column: str) -> str:
+    return column.lower()
+
+
+def _group_repeating_columns(columns: Sequence[str]) -> Dict[str, List[str]]:
+    groups: Dict[str, List[str]] = defaultdict(list)
+    for col in columns:
+        for pattern in PATTERNS:
+            match = pattern.match(col)
+            if match:
+                base = match.group("base")
+                groups[base].append(col)
+                break
+    return {base: sorted(cols) for base, cols in groups.items() if len(cols) > 1}
+
+
+def _apply_prefix_hints(
+    column: str, prefixes: Sequence[str]
+) -> bool:
+    lowered = _lower_name(column)
+    return any(lowered.startswith(prefix) for prefix in prefixes)
+
+
+def _metadata_list(metadata: Mapping[str, Any], key: str) -> List[str]:
+    value = metadata.get(key, [])
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    return []
 
 
 def analyze_dataset_structure(
     df: pd.DataFrame,
-    memory_efficient: bool = True,
-    max_correlation_features: int = 50,
-    sample_size_for_stats: Optional[int] = None
+    *,
+    metadata: Optional[Mapping[str, Any]] = None,
+    hints: Optional[Mapping[str, Any]] = None,
+    sample_size_for_stats: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Efficiently analyze dataset structure to automatically identify input/output variables
-    based on column naming patterns and provide comprehensive dataset statistics.
-    
-    This function identifies output variables by detecting repeating patterns (e.g., var_1, var_2, ...)
-    and treats non-repeating columns as input variables.
-    
-    Parameters:
-    -----------
+    Analyze a tabular dataset to infer inputs, outputs, and multi-output groupings.
+
+    Parameters
+    ----------
     df : pd.DataFrame
-        Input dataframe to analyze
-    memory_efficient : bool, default=True
-        If True, uses memory-efficient operations for large datasets
-    max_correlation_features : int, default=50
-        Maximum number of features to include in correlation analysis
+        Dataset to analyze.
+    metadata : dict, optional
+        Structured metadata (from YAML or manual dict). Supports keys:
+        - inputs: list of column names
+        - outputs: list of column names
+        - output_groups: mapping of group_name -> [columns]
+        - profile_groups: mapping specific to scientific profile bundles
+    hints : dict, optional
+        Additional overrides (same structure as metadata) used at runtime
+        without mutating the persisted metadata.
     sample_size_for_stats : int, optional
-        Sample size for statistical analysis. If None, uses full dataset for small datasets
-        or 10% sample for large datasets (>100k rows)
-        
-    Returns:
-    --------
-    Dict containing:
-        - 'input_variables': List of identified input variable names
-        - 'output_groups': Dict mapping group names to lists of output variables
-        - 'output_variables': List of all output variables
-        - 'dataset_info': Dict with basic dataset information
-        - 'memory_usage_mb': Dataset memory usage in MB
-        - 'data_types': Count of different data types
-        - 'missing_values': Dict of columns with missing values
-        - 'completeness_percent': Overall data completeness percentage
+        If provided, use at most this many samples when computing dataset
+        statistics (mean, std, etc.) to reduce memory pressure.
     """
 
     if df.empty:
         return {
-            'input_variables': [],
-            'output_groups': {},
-            'output_variables': [],
-            'dataset_info': {'error': 'Empty dataset'},
-            'memory_usage_mb': 0,
-            'data_types': {},
-            'missing_values': {},
-            'completeness_percent': 0
+            "input_variables": [],
+            "output_variables": [],
+            "output_groups": {},
+            "profile_groups": {},
+            "dataset_info": {"error": "Empty dataset"},
+            "memory_usage_mb": 0,
+            "data_types": {},
+            "missing_values": {},
+            "completeness_percent": 0.0,
+            "metadata_overrides": {},
         }
 
-    # Basic dataset information (memory efficient)
-    n_rows, n_cols = df.shape
+    metadata = metadata or {}
+    hints = hints or {}
 
-    # Memory usage calculation
-    if memory_efficient and n_rows > 10000:
-        # Sample for memory calculation on large datasets
-        sample_df = df.sample(n=min(1000, n_rows), random_state=42)
-        memory_per_row = sample_df.memory_usage(deep=True).sum() / len(sample_df)
-        total_memory_mb = (memory_per_row * n_rows) / (1024**2)
-    else:
-        total_memory_mb = df.memory_usage(deep=True).sum() / (1024**2)
+    manual_inputs = set(_metadata_list(metadata, "inputs"))
+    manual_outputs = set(_metadata_list(metadata, "outputs"))
 
-    # Data types analysis
-    data_types = df.dtypes.value_counts().to_dict()
-    data_types = {str(k): v for k, v in data_types.items()}  # Convert dtypes to strings
+    hint_inputs = set(_metadata_list(hints, "inputs"))
+    hint_outputs = set(_metadata_list(hints, "outputs"))
 
-    # Missing values analysis (memory efficient)
-    if memory_efficient and n_rows > 50000:
-        # For very large datasets, check missing values in chunks
-        missing_counts = {}
-        chunk_size = 10000
-        for i in range(0, n_rows, chunk_size):
-            chunk = df.iloc[i:i+chunk_size]
-            chunk_missing = chunk.isnull().sum()
-            for col, count in chunk_missing.items():
-                missing_counts[col] = missing_counts.get(col, 0) + count
-    else:
-        missing_counts = df.isnull().sum().to_dict()
+    input_candidates = set(manual_inputs) | hint_inputs
+    output_candidates = set(manual_outputs) | hint_outputs
 
-    missing_values = {col: count for col, count in missing_counts.items() if count > 0}
+    grouped = _group_repeating_columns(df.columns)
 
-    # Overall completeness
-    total_cells = n_rows * n_cols
-    missing_cells = sum(missing_counts.values())
-    completeness_percent = ((total_cells - missing_cells) / total_cells) * 100
+    output_groups: Dict[str, List[str]] = {}
+    profile_groups: Dict[str, List[str]] = {}
 
-    # Automatic input/output variable detection
-    column_groups = defaultdict(list)
-    standalone_columns = []
+    # Apply metadata-defined groups first
+    for group_name, cols in metadata.get("output_groups", {}).items():
+        output_groups[group_name] = [col for col in cols if col in df.columns]
+        output_candidates.update(output_groups[group_name])
 
-    # Compile regex patterns once for efficiency
-    pattern_underscore = re.compile(r'^(.+?)_(\d+)(_?)$')
-    pattern_no_underscore = re.compile(r'^(.+?)(\d+)$')
+    for group_name, cols in metadata.get("profile_groups", {}).items():
+        profile_groups[group_name] = [col for col in cols if col in df.columns]
+        output_candidates.update(profile_groups[group_name])
 
+    # Merge runtime hints
+    for group_name, cols in hints.get("output_groups", {}).items():
+        existing = output_groups.setdefault(group_name, [])
+        for col in cols:
+            if col in df.columns and col not in existing:
+                existing.append(col)
+                output_candidates.add(col)
+
+    for group_name, cols in hints.get("profile_groups", {}).items():
+        existing = profile_groups.setdefault(group_name, [])
+        for col in cols:
+            if col in df.columns and col not in existing:
+                existing.append(col)
+                output_candidates.add(col)
+
+    # Pattern-based grouping
+    for base, cols in grouped.items():
+        output_groups.setdefault(base, [])
+        for col in cols:
+            if col not in output_groups[base]:
+                output_groups[base].append(col)
+                output_candidates.add(col)
+        if any(base.lower().startswith(prefix) for prefix in PROFILE_HINTS):
+            profile_groups.setdefault(base, output_groups[base])
+
+    # Heuristic classification for remaining columns
     for col in df.columns:
-        # Look for patterns like var_1, var_2, etc.
-        match = pattern_underscore.match(col)
-        if match:
-            base_name = match.group(1)
-            column_groups[base_name].append(col)
+        if col in input_candidates or col in output_candidates:
+            continue
+        if _apply_prefix_hints(col, OUTPUT_PREFIXES):
+            output_candidates.add(col)
+        elif _apply_prefix_hints(col, INPUT_PREFIXES):
+            input_candidates.add(col)
+        elif col in grouped:
+            output_candidates.add(col)
         else:
-            # Check for patterns like var1, var2 (without underscore)
-            match = pattern_no_underscore.match(col)
-            if match:
-                base_name = match.group(1)
-                column_groups[base_name].append(col)
-            else:
-                standalone_columns.append(col)
+            # Default to inputs when unsure
+            input_candidates.add(col)
 
-    # Identify outputs (grouped columns) vs inputs (standalone columns)
-    output_groups = {k: sorted(v) for k, v in column_groups.items() if len(v) > 1}
+    # Ensure columns are classified exactly once
+    overlap = input_candidates & output_candidates
+    if overlap:
+        for col in overlap:
+            output_candidates.add(col)
+            input_candidates.discard(col)
 
-    # Collect all output variables
-    output_variables = []
-    for group_cols in output_groups.values():
-        output_variables.extend(group_cols)
+    input_variables = sorted(col for col in input_candidates if col in df.columns)
+    output_variables = sorted(col for col in output_candidates if col in df.columns)
 
-    # Input variables are standalone columns plus single-instance groups
-    input_variables = standalone_columns.copy()
-    for k, v in column_groups.items():
-        if len(v) == 1:
-            input_variables.extend(v)
-
-    # Sort for consistency
-    input_variables = sorted(input_variables)
-    output_variables = sorted(output_variables)
-
-    # Dataset info summary
     dataset_info = {
-        'shape': (n_rows, n_cols),
-        'n_input_variables': len(input_variables),
-        'n_output_variables': len(output_variables),
-        'n_output_groups': len(output_groups),
-        'largest_output_group': max([len(v) for v in output_groups.values()]) if output_groups else 0,
-        'largest_output_group_name': max(output_groups.keys(),
-                                       key=lambda k: len(output_groups[k])) if output_groups else None
+        "shape": df.shape,
+        "n_input_variables": len(input_variables),
+        "n_output_variables": len(output_variables),
+        "n_output_groups": len(output_groups),
+        "largest_output_group": max(
+            (len(cols) for cols in output_groups.values()), default=0
+        ),
+        "largest_output_group_name": max(
+            output_groups.keys(), key=lambda k: len(output_groups[k]), default=None
+        ),
     }
 
+    # Memory usage + dtypes
+    memory_usage_mb = df.memory_usage(deep=True).sum() / (1024**2)
+    data_types = {str(dtype): int(count) for dtype, count in df.dtypes.value_counts().items()}
+
+    missing_counts = df.isnull().sum()
+    missing_values = {
+        column: int(count) for column, count in missing_counts.items() if count > 0
+    }
+    total_cells = df.shape[0] * df.shape[1]
+    completeness_percent = (
+        (total_cells - missing_counts.sum()) / total_cells * 100 if total_cells else 0.0
+    )
+
+    # Optional statistics sample
+    stats_sample = None
+    if sample_size_for_stats and sample_size_for_stats < len(df):
+        stats_sample = df.sample(n=sample_size_for_stats, random_state=42)
+
     return {
-        'input_variables': input_variables,
-        'output_groups': output_groups,
-        'output_variables': output_variables,
-        'dataset_info': dataset_info,
-        'memory_usage_mb': round(total_memory_mb, 2),
-        'data_types': data_types,
-        'missing_values': missing_values,
-        'completeness_percent': round(completeness_percent, 1)
+        "input_variables": input_variables,
+        "output_variables": output_variables,
+        "output_groups": {k: sorted(v) for k, v in output_groups.items()},
+        "profile_groups": {k: sorted(v) for k, v in profile_groups.items()},
+        "dataset_info": dataset_info,
+        "memory_usage_mb": round(memory_usage_mb, 3),
+        "data_types": data_types,
+        "missing_values": missing_values,
+        "completeness_percent": round(completeness_percent, 2),
+        "metadata_overrides": {
+            "inputs": sorted(manual_inputs),
+            "outputs": sorted(manual_outputs),
+        },
+        "statistics_sample": stats_sample,
     }
 
 
 def get_dataset_statistics(
     df: pd.DataFrame,
-    columns: Optional[List[str]] = None,
+    *,
+    columns: Optional[Sequence[str]] = None,
     sample_size: Optional[int] = None,
-    memory_efficient: bool = True
 ) -> pd.DataFrame:
-    """
-    Get statistical summary for specified columns in a memory-efficient way.
-    
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        Input dataframe
-    columns : List[str], optional
-        Columns to analyze. If None, analyzes all numeric columns
-    sample_size : int, optional
-        Sample size for large datasets. If None, auto-determines based on dataset size
-    memory_efficient : bool, default=True
-        Use memory-efficient operations for large datasets
-        
-    Returns:
-    --------
-    pd.DataFrame
-        Statistical summary (describe() output)
-    """
-
+    """Convenience wrapper around `DataFrame.describe()` with optional sampling."""
     if df.empty:
         return pd.DataFrame()
-
-    # Select columns
-    if columns is None:
-        columns = df.select_dtypes(include=[np.number]).columns.tolist()
-
-    # Determine if sampling is needed
-    n_rows = len(df)
-    if sample_size is None:
-        if memory_efficient and n_rows > 100000:
-            sample_size = min(10000, n_rows // 10)  # 10% sample, max 10k rows
-        else:
-            sample_size = n_rows  # Use full dataset
-
-    # Get sample if needed
-    if sample_size < n_rows:
-        sample_df = df[columns].sample(n=sample_size, random_state=42)
-        stats = sample_df.describe()
-        # Add note that this is from a sample
-        stats.loc['sample_size'] = sample_size
-    else:
-        stats = df[columns].describe()
-        stats.loc['sample_size'] = n_rows
-
+    if columns:
+        df = df[list(columns)]
+    numeric_cols = df.select_dtypes(include=[np.number])
+    if numeric_cols.empty:
+        return pd.DataFrame()
+    if sample_size and sample_size < len(numeric_cols):
+        numeric_cols = numeric_cols.sample(n=sample_size, random_state=42)
+    stats = numeric_cols.describe().transpose()
+    stats["variance"] = stats["std"] ** 2
     return stats
 
 
-def print_dataset_analysis(analysis_result: Dict, verbose: bool = True) -> None:
+def print_dataset_analysis(analysis: Mapping[str, Any]) -> str:
     """
-    Pretty print the results from analyze_dataset_structure().
-    
-    Parameters:
-    -----------
-    analysis_result : Dict
-        Result from analyze_dataset_structure()
-    verbose : bool, default=True
-        If True, prints detailed information
+    Build a human-readable string summarizing the analysis results.
+
+    Returned string can be printed or logged by callers; returning instead of
+    printing makes the function easier to reuse in notebooks/tests.
     """
 
-    info = analysis_result['dataset_info']
+    info = analysis.get("dataset_info", {})
+    if info.get("error"):
+        return f"❌ {info['error']}"
 
-    if 'error' in info:
-        print(f"❌ {info['error']}")
-        return
+    lines = []
+    lines.append("📈 DATASET OVERVIEW")
+    lines.append(f"Shape: {info.get('shape')}")
+    lines.append(f"Memory usage: {analysis.get('memory_usage_mb')} MB")
+    lines.append(f"Data types: {analysis.get('data_types')}")
 
-    print("=" * 50)
-    print("📈 DATASET OVERVIEW")
-    print("=" * 50)
-    print(f"Shape: {info['shape']}")
-    print(f"Memory usage: {analysis_result['memory_usage_mb']} MB")
-    print(f"Data types: {analysis_result['data_types']}")
-
-    if analysis_result['missing_values']:
-        print("\n⚠️  Missing values found:")
-        for col, count in analysis_result['missing_values'].items():
-            print(f"   {col}: {count}")
+    missing_values = analysis.get("missing_values", {})
+    if missing_values:
+        lines.append("⚠️ Missing values detected:")
+        for col, count in missing_values.items():
+            lines.append(f"  - {col}: {count}")
     else:
-        print("\n✅ No missing values found")
+        lines.append("✅ No missing values detected.")
 
-    print("\n" + "=" * 50)
-    print("🔍 AUTOMATIC INPUT/OUTPUT DETECTION")
-    print("=" * 50)
+    lines.append("")
+    lines.append("🔍 AUTOMATIC INPUT/OUTPUT DETECTION")
+    lines.append(
+        f"Inputs: {len(analysis.get('input_variables', []))} | "
+        f"Outputs: {len(analysis.get('output_variables', []))}"
+    )
+    lines.append(
+        f"Output groups: {len(analysis.get('output_groups', {}))} | "
+        f"Profile groups: {len(analysis.get('profile_groups', {}))}"
+    )
 
-    output_groups = analysis_result['output_groups']
-    input_vars = analysis_result['input_variables']
+    for group_name, cols in analysis.get("output_groups", {}).items():
+        preview = ", ".join(cols[:5])
+        suffix = "..." if len(cols) > 5 else ""
+        lines.append(f"  • {group_name}: {len(cols)} vars ({preview}{suffix})")
 
-    print(f"🎯 **OUTPUT VARIABLE GROUPS** (repeating patterns): {len(output_groups)}")
-    for base_name, cols in output_groups.items():
-        print(f"   📊 {base_name}: {len(cols)} variables")
-        if verbose:
-            display_cols = cols[:5] + ['...'] if len(cols) > 5 else cols
-            print(f"      └── {display_cols}")
+    return "\n".join(lines)
 
-    print(f"\n📥 **INPUT VARIABLES** (non-repeating): {len(input_vars)}")
-    if verbose:
-        display_inputs = input_vars[:10] + ['...'] if len(input_vars) > 10 else input_vars
-        print(f"   Variables: {display_inputs}")
-
-    print("\n📊 **SUMMARY:**")
-    print(f"   ✅ Total columns: {info['shape'][1]}")
-    print(f"   📥 Input variables: {info['n_input_variables']}")
-    print(f"   📤 Output variables: {info['n_output_variables']}")
-    print(f"   🏷️  Output groups: {info['n_output_groups']}")
-    print(f"   📊 Data completeness: {analysis_result['completeness_percent']}%")
-
-    if info['largest_output_group_name']:
-        print(f"   🎯 Largest output group: '{info['largest_output_group_name']}' "
-              f"({info['largest_output_group']} variables)")
