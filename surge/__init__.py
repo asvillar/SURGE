@@ -1,13 +1,28 @@
-# surge/src/__init__.py
+# -*- coding: utf-8 -*-
+"""SURGE package public exports."""
+
+from __future__ import annotations
 
 __version__ = "0.1.0"
-__author__ = "Álvaro Sánchez Villar"  # Expose the core classes/functions at package level
+__author__ = "Álvaro Sánchez Villar"
+
 from .metrics import summarize
-from .model import GPFLOW_AVAILABLE, PYTORCH_AVAILABLE, MODEL_REGISTRY
-from .engine import SurrogateEngine
+from .model import GPFLOW_AVAILABLE, MODEL_REGISTRY, PYTORCH_AVAILABLE
+from .engine import (
+    EngineRunConfig,
+    ModelRunResult,
+    ModelSpec,
+    SurrogateEngine,
+)
+from .registry import BaseModelAdapter, ModelRegistry, RegistryEntry, registry_summary
 from .dataset import SurrogateDataset
-from .utils import setup_surge_path, get_data_path
+from .utils import get_data_path, setup_surge_path
 from .datagen import DataGenerator
+from .workflow.run import run_surrogate_workflow
+from .workflow.spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
+
+# Ensure adapter modules register themselves on import
+from .models import adapters as _adapters  # noqa: F401
 
 # Optional dataset utilities
 try:
@@ -48,11 +63,22 @@ except ImportError:
 __all__ = [
     "SurrogateEngine",
     "SurrogateDataset",
+    "EngineRunConfig",
+    "ModelSpec",
+    "ModelRunResult",
+    "BaseModelAdapter",
+    "ModelRegistry",
+    "RegistryEntry",
+    "registry_summary",
+    "MODEL_REGISTRY",
+    "run_surrogate_workflow",
+    "SurrogateWorkflowSpec",
+    "ModelConfig",
+    "HPOConfig",
     "summarize",
     "setup_surge_path",
     "get_data_path",
     "DataGenerator",
-    "MODEL_REGISTRY",
     "__version__",
     "__author__",
     "PYTORCH_AVAILABLE",
