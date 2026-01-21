@@ -3,21 +3,36 @@ PyTorch-based model implementations for SURGE package.
 Integrates PyTorch MLP models with the unified SURGE interface.
 """
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
 from sklearn.preprocessing import StandardScaler
-from torch.utils.data import DataLoader, TensorDataset
+
+# Guard torch imports for environments without PyTorch
+try:
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from torch.utils.data import DataLoader, TensorDataset
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None
+    nn = None
+    optim = None
+    DataLoader = None
+    TensorDataset = None
 
 
-class PyTorchMLP(nn.Module):
+class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
     """
     PyTorch Multi-Layer Perceptron implementation compatible with SURGE interface.
     """
 
     def __init__(self, input_size, hidden_layers, output_size=1, dropout_rate=0.1,
-                 activation_fn=nn.ReLU, learning_rate=1e-3, n_epochs=300,
+                 activation_fn=None, learning_rate=1e-3, n_epochs=300,
                  batch_size=32, device=None):
+        if not TORCH_AVAILABLE:
+            raise ImportError("PyTorch is required for PyTorchMLP. Install with: pip install torch")
+        if activation_fn is None:
+            activation_fn = nn.ReLU
         super(PyTorchMLP, self).__init__()
 
         self.input_size = input_size
@@ -135,6 +150,8 @@ class PyTorchMLPModel:
 
     def __init__(self, hidden_layers=[64, 32], dropout_rate=0.1, activation_fn="relu",
                  learning_rate=1e-3, n_epochs=300, batch_size=32, **kwargs):
+        if not TORCH_AVAILABLE:
+            raise ImportError("PyTorch is required for PyTorchMLPModel. Install with: pip install torch")
 
         # Map activation functions
         activation_map = {

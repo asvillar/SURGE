@@ -5,10 +5,17 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 import joblib
-import torch
-from typing import Optional
+
+# Guard torch import for environments without PyTorch
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    TORCH_AVAILABLE = False
 
 # Try to import psutil with fallback for compute resource analysis
 try:
@@ -110,6 +117,8 @@ class ResourceMonitor:
 
 
 def get_device():
+    if not TORCH_AVAILABLE:
+        raise ImportError("PyTorch is required for get_device(). Install with: pip install torch")
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -275,7 +284,7 @@ def detect_compute_resources():
     print(f"   Status: {gpu_info}")
     
     # Check if PyTorch can use GPU
-    try:
+    if TORCH_AVAILABLE:
         cuda_available = torch.cuda.is_available()
         mps_available = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
         
@@ -294,8 +303,7 @@ def detect_compute_resources():
         else:
             device = "cpu"
         print(f"   Recommended Device: {device}")
-        
-    except ImportError:
+    else:
         print(f"\n🔥 PyTorch: Not installed")
         device = "cpu"
     
@@ -623,27 +631,28 @@ def _collect_system_info_quiet():
         pass
 
     # PyTorch device detection (quiet)
-    try:
-        cuda_available = torch.cuda.is_available()
-        mps_available = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
-        if cuda_available:
-            info['gpu_available'] = True
-            info['device'] = 'cuda'
-            info['gpu_info'] = 'CUDA available'
-            # add GPU names if not already
-            try:
-                for i in range(torch.cuda.device_count()):
-                    gpu_details.append({'name': torch.cuda.get_device_name(i), 'memory_total_mb': None, 'memory_used_mb': None, 'util_percent': None})
-            except Exception:
-                pass
-        elif mps_available:
-            info['gpu_available'] = True
-            info['device'] = 'mps'
-            info['gpu_info'] = 'MPS/Metal available'
-            if not any(g.get('name') == 'MPS/Metal' for g in gpu_details):
-                gpu_details.append({'name': 'MPS/Metal', 'memory_total_mb': None, 'memory_used_mb': None, 'util_percent': None})
-    except Exception:
-        pass
+    if TORCH_AVAILABLE:
+        try:
+            cuda_available = torch.cuda.is_available()
+            mps_available = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
+            if cuda_available:
+                info['gpu_available'] = True
+                info['device'] = 'cuda'
+                info['gpu_info'] = 'CUDA available'
+                # add GPU names if not already
+                try:
+                    for i in range(torch.cuda.device_count()):
+                        gpu_details.append({'name': torch.cuda.get_device_name(i), 'memory_total_mb': None, 'memory_used_mb': None, 'util_percent': None})
+                except Exception:
+                    pass
+            elif mps_available:
+                info['gpu_available'] = True
+                info['device'] = 'mps'
+                info['gpu_info'] = 'MPS/Metal available'
+                if not any(g.get('name') == 'MPS/Metal' for g in gpu_details):
+                    gpu_details.append({'name': 'MPS/Metal', 'memory_total_mb': None, 'memory_used_mb': None, 'util_percent': None})
+        except Exception:
+            pass
 
     # (NVML/pynvml probing was removed )
     info['gpu_details'] = gpu_details
