@@ -196,6 +196,10 @@ examples/datagen/batch*/
 
 # Large datasets and workflow outputs
 runs/
+runs
+
+# Reference runs archive (local only, not committed)
+data/runs/
 data/datasets/MHD-code/*.csv
 !data/datasets/MHD-code/*_sample.csv
 data/datasets/device/*.pkl
