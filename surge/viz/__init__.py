@@ -17,6 +17,7 @@ from .analysis import (
     plot_strongest_correlation,
 )
 from .comparison import plot_inference_comparison_grid, plot_mse_comparison
+from .run_viz import load_predictions, viz_run
 from .hpo import plot_hpo_comparison, plot_hpo_convergence
 from .profiles import (
     compute_profile_metrics,
@@ -26,6 +27,9 @@ from .profiles import (
 )
 
 __all__ = [
+    # Run viz
+    "load_predictions",
+    "viz_run",
     # Profile plots
     "compute_profile_metrics",
     "plot_profile_band",

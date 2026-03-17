@@ -14,6 +14,42 @@ except ImportError:
     yaml = None  # type: ignore[assignment]
 
 
+def _viz(args: argparse.Namespace) -> int:
+    """Generate inference comparison plots from a run directory."""
+    import matplotlib
+    matplotlib.use("Agg")
+
+    from surge.viz.run_viz import viz_run
+
+    run_dir = args.run_dir
+    if not run_dir.exists():
+        print(f"Run directory not found: {run_dir}", file=sys.stderr)
+        return 1
+
+    axis_lim = None
+    if args.axis_lim:
+        parts = args.axis_lim.split(",")
+        if len(parts) == 2:
+            axis_lim = (float(parts[0].strip()), float(parts[1].strip()))
+
+    result = viz_run(
+        run_dir=Path(run_dir),
+        output_dir=args.output_dir,
+        axis_lim=axis_lim,
+    )
+    print("SURGE inference comparison plots")
+    print("=" * 50)
+    print(f"Run directory: {run_dir}")
+    print()
+    print("R² scores:")
+    print(json.dumps(result["r2"], indent=2))
+    print()
+    print("Plots saved:")
+    for p in result["saved_paths"]:
+        print(f"  {p}")
+    return 0
+
+
 def _run(args: argparse.Namespace) -> int:
     """Run surrogate workflow from spec file."""
     if yaml is None:
@@ -71,6 +107,32 @@ def main() -> int:
         help="Override output directory in spec",
     )
     run_parser.set_defaults(func=_run)
+
+    # surge viz
+    viz_parser = subparsers.add_parser(
+        "viz",
+        help="Generate inference comparison plots from a run directory",
+    )
+    viz_parser.add_argument(
+        "run_dir",
+        type=Path,
+        nargs="?",
+        default=Path("runs/xgc_target_set1_v2"),
+        help="Path to SURGE workflow run directory (default: runs/xgc_target_set1_v2)",
+    )
+    viz_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for plots (default: run_dir/plots)",
+    )
+    viz_parser.add_argument(
+        "--axis-lim",
+        type=str,
+        default=None,
+        help="Axis limits as 'min,max' e.g. '-0.5,1.5'",
+    )
+    viz_parser.set_defaults(func=_viz)
 
     args = parser.parse_args()
 
