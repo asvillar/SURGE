@@ -41,7 +41,9 @@ def _apply_sklearn_compat_patch() -> None:
         LOG.debug("Could not apply sklearn compat patch: %s", e)
 
 
-def _load_torch_model(path: Path, model_entry: dict) -> Optional[Any]:
+def _load_torch_model(
+    path: Path, model_entry: dict, *, for_finetune: bool = False
+) -> Optional[Any]:
     """Load a PyTorch model saved with torch.save (avoids joblib/pickle protocol 0 issues)."""
     try:
         import torch
@@ -61,9 +63,14 @@ def _load_torch_model(path: Path, model_entry: dict) -> Optional[Any]:
     if "model_state_dict" in checkpoint and "model_config" in checkpoint:
         try:
             from ..model.pytorch_impl import PyTorchMLPModel
+            from ..model.pytorch import PyTorchMLPAdapter
 
             model = PyTorchMLPModel()
             model.load(str(path))
+            if for_finetune:
+                adapter = PyTorchMLPAdapter()
+                adapter._model = model
+                return adapter
             return _TorchAdapter(model)
         except Exception as e:
             LOG.debug("Could not load PyTorchMLPModel format: %s", e)
@@ -149,12 +156,15 @@ def _reconstruct_net_mlp(checkpoint: dict) -> Optional[Any]:
 def load_model_compat(
     model_path: Path,
     model_entry: Optional[dict] = None,
+    *,
+    for_finetune: bool = False,
 ) -> Any:
     """
     Load a model with compatibility for older sklearn (monotonic_cst) and PyTorch (persistent IDs).
 
     Tries joblib.load first (with sklearn patch). On persistent ID errors for torch models,
     falls back to torch.load and reconstructs the adapter.
+    When for_finetune=True, returns a full PyTorchMLPAdapter (with fit) for torch models.
     """
     _apply_sklearn_compat_patch()
     model_entry = model_entry or {}
@@ -162,14 +172,20 @@ def load_model_compat(
 
     # Try joblib first (works for sklearn models and some torch if no protocol 0 issues)
     try:
-        return joblib.load(model_path)
-    except Exception as e:
-        err_msg = str(e).lower()
-        is_persistent_id_error = "persistent" in err_msg and "ascii" in err_msg
-        is_torch_model = backend in ("torch", "pytorch") or "mlp" in model_entry.get("name", "").lower()
-
-        if is_persistent_id_error and is_torch_model:
-            adapter = _load_torch_model(model_path, model_entry)
+        obj = joblib.load(model_path)
+        # If we got a dict (torch checkpoint) or thin adapter without fit, use torch loader
+        if isinstance(obj, dict) and "model_state_dict" in obj:
+            adapter = _load_torch_model(model_path, model_entry, for_finetune=for_finetune)
             if adapter is not None:
                 return adapter
+        if for_finetune and hasattr(obj, "_model") and not hasattr(obj, "fit"):
+            adapter = _load_torch_model(model_path, model_entry, for_finetune=True)
+            if adapter is not None:
+                return adapter
+        return obj
+    except Exception:
+        # Fallback: try torch format (for PyTorch models saved with adapter.save)
+        adapter = _load_torch_model(model_path, model_entry, for_finetune=for_finetune)
+        if adapter is not None:
+            return adapter
         raise
