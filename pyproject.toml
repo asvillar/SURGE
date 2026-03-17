@@ -62,6 +62,7 @@ dev = [
     "scikit-optimize",
     "botorch",
     "psutil",
+    "tqdm",
 ]
 docs = [
     "sphinx",
