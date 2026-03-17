@@ -128,6 +128,60 @@ def save_model(adapter: BaseModelAdapter, name: str, paths: ArtifactPaths) -> Pa
     return target
 
 
+def _count_params(adapter: BaseModelAdapter) -> Optional[int]:
+    """Estimate parameter count for model card. Returns None if unknown."""
+    try:
+        if adapter.backend == "torch" and hasattr(adapter, "model") and adapter.model is not None:
+            import torch
+            return sum(p.numel() for p in adapter.model.parameters())
+        if hasattr(adapter, "_model") and adapter._model is not None:
+            est = adapter._model
+            if hasattr(est, "estimators_"):  # RF, GBDT
+                n = 0
+                for e in est.estimators_:
+                    if hasattr(e, "tree_") and e.tree_ is not None:
+                        n += e.tree_.node_count
+                return n if n > 0 else None
+            if hasattr(est, "coefs_"):  # MLP
+                return sum(c.size for c in est.coefs_) + sum(
+                    c.size for c in est.intercepts_
+                )
+        return None
+    except Exception:
+        return None
+
+
+def save_model_card(
+    adapter: BaseModelAdapter,
+    model_name: str,
+    paths: ArtifactPaths,
+    *,
+    training_config: Optional[Mapping[str, Any]] = None,
+) -> Path:
+    """
+    Save a model card (JSON) with model size and metadata for tracking.
+
+    Writes runs/<tag>/model_card_<name>.json with n_params, file_size_bytes, backend, etc.
+    """
+    from datetime import datetime
+
+    model_path = paths.models_dir / f"{model_name}.joblib"
+    file_size_bytes = model_path.stat().st_size if model_path.exists() else 0
+    n_params = _count_params(adapter)
+
+    payload = {
+        "model_name": model_name,
+        "backend": getattr(adapter, "backend", "unknown"),
+        "n_params": n_params,
+        "file_size_bytes": file_size_bytes,
+        "training_config": dict(training_config) if training_config else {},
+        "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    target = paths.root / f"model_card_{model_name}.json"
+    _write_json(target, payload)
+    return target
+
+
 def save_scaler(scaler: Any, name: str, paths: ArtifactPaths) -> Path:
     target = paths.scalers_dir / f"{name}.joblib"
     joblib.dump(scaler, target, protocol=4)

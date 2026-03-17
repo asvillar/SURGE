@@ -8,9 +8,11 @@ from .artifacts import (
     save_hpo_results,
     save_metrics,
     save_model,
+    save_model_card,
     save_predictions,
     save_scaler,
     save_spec,
+    save_train_data_ranges,
     save_workflow_summary,
 )
 
@@ -23,9 +25,11 @@ __all__ = [
     "save_environment_snapshot",
     "save_git_revision",
     "save_model",
+    "save_model_card",
     "save_scaler",
     "save_predictions",
     "save_hpo_results",
+    "save_train_data_ranges",
 ]
 
 
