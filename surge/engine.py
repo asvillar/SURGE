@@ -178,13 +178,26 @@ class SurrogateEngine:
     # ------------------------------------------------------------------
     # Public orchestration helpers
     # ------------------------------------------------------------------
-    def prepare(self) -> None:
-        """Split + (optionally) standardize the configured dataset."""
+    def prepare(
+        self,
+        *,
+        pretrained_scalers: Optional[ScalerBundle] = None,
+    ) -> None:
+        """Split + (optionally) standardize the configured dataset.
+
+        When pretrained_scalers is provided (e.g. for fine-tuning), use them to
+        transform instead of fitting new scalers.
+        """
         if self._dataset_df is None:
             raise ValueError("Dataset not configured. Call configure_dataframe() first.")
 
         self._raw_splits = self._build_raw_splits()
-        self._proc_splits, self._scalers = self._standardize_raw_splits(self._raw_splits)
+        if pretrained_scalers is not None:
+            self._proc_splits, self._scalers = self._standardize_with_pretrained(
+                self._raw_splits, pretrained_scalers
+            )
+        else:
+            self._proc_splits, self._scalers = self._standardize_raw_splits(self._raw_splits)
         self.logger.debug("Prepared dataset splits and scalers.")
 
     def run(self, model_specs: Sequence[ModelSpec]) -> List[ModelRunResult]:
@@ -200,11 +213,27 @@ class SurrogateEngine:
             results.append(result)
         return results
 
-    def train_model(self, spec: ModelSpec, *, record: bool = False) -> ModelRunResult:
-        """Public hook for training a single model (used by HPO routines)."""
+    def train_model(
+        self,
+        spec: ModelSpec,
+        *,
+        record: bool = False,
+        pretrained_adapter: Optional[BaseModelAdapter] = None,
+        finetune_lr_scale: float = 0.1,
+    ) -> ModelRunResult:
+        """Public hook for training a single model (used by HPO routines).
+
+        When pretrained_adapter is provided (fine-tuning), continue training
+        instead of training from scratch. finetune_lr_scale multiplies the
+        learning rate for torch models.
+        """
         if self._raw_splits is None or self._proc_splits is None:
             self.prepare()
-        result = self._train_single_model(spec)
+        result = self._train_single_model(
+            spec,
+            pretrained_adapter=pretrained_adapter,
+            finetune_lr_scale=finetune_lr_scale,
+        )
         if record:
             self._results.append(result)
         return result
@@ -334,6 +363,47 @@ class SurrogateEngine:
         scalers = ScalerBundle(input_scaler=input_scaler, output_scaler=output_scaler)
         return processed, scalers
 
+    def _standardize_with_pretrained(
+        self, raw: RawSplits, pretrained: ScalerBundle
+    ) -> Tuple[ProcessedSplits, ScalerBundle]:
+        """Transform splits using pretrained scalers (for fine-tuning)."""
+        X_train = raw.X_train
+        X_val = raw.X_val
+        X_test = raw.X_test
+        y_train = raw.y_train
+        y_val = raw.y_val
+        y_test = raw.y_test
+
+        if pretrained.input_scaler is not None:
+            X_train = pretrained.input_scaler.transform(X_train)
+            X_val = pretrained.input_scaler.transform(X_val)
+            X_test = (
+                pretrained.input_scaler.transform(X_test)
+                if X_test is not None
+                else None
+            )
+        if pretrained.output_scaler is not None:
+            y_train = pretrained.output_scaler.transform(y_train)
+            y_val = pretrained.output_scaler.transform(y_val)
+            y_test = (
+                pretrained.output_scaler.transform(y_test)
+                if y_test is not None
+                else None
+            )
+
+        processed = ProcessedSplits(
+            X_train=X_train,
+            y_train=y_train,
+            X_val=X_val,
+            y_val=y_val,
+            X_test=X_test,
+            y_test=y_test,
+            train_index=raw.train_index,
+            val_index=raw.val_index,
+            test_index=raw.test_index,
+        )
+        return processed, pretrained
+
     @staticmethod
     def _prepare_target_for_fit(target: np.ndarray) -> np.ndarray:
         arr = np.asarray(target)
@@ -348,11 +418,33 @@ class SurrogateEngine:
             arr = arr.reshape(-1, 1)
         return arr
 
-    def _train_single_model(self, spec: ModelSpec) -> ModelRunResult:
+    def _train_single_model(
+        self,
+        spec: ModelSpec,
+        *,
+        pretrained_adapter: Optional[BaseModelAdapter] = None,
+        finetune_lr_scale: float = 0.1,
+    ) -> ModelRunResult:
         if spec.key not in self.registry:
             raise KeyError(f"Model '{spec.key}' not found in registry.")
 
-        adapter = self.registry.create(spec.key, **spec.params)
+        if pretrained_adapter is not None and getattr(
+            pretrained_adapter, "backend", None
+        ) == "torch":
+            adapter = pretrained_adapter
+            # Scale LR for fine-tuning (optimizer lives on inner PyTorchMLP)
+            inner = getattr(adapter._model, "model", None) if hasattr(adapter, "_model") else None
+            if inner is not None and hasattr(inner, "optimizer") and inner.optimizer is not None:
+                base_lr = getattr(adapter._model, "learning_rate", 1e-3) * finetune_lr_scale
+                for pg in inner.optimizer.param_groups:
+                    pg["lr"] = base_lr
+        else:
+            adapter = self.registry.create(spec.key, **spec.params)
+            if pretrained_adapter is not None:
+                self.logger.warning(
+                    "pretrained_adapter provided but backend %s does not support fine-tuning; training from scratch",
+                    getattr(pretrained_adapter, "backend", "unknown"),
+                )
 
         proc = self._proc_splits
         raw = self._raw_splits
@@ -361,12 +453,16 @@ class SurrogateEngine:
 
         start = time.perf_counter()
         y_train_for_fit = self._prepare_target_for_fit(proc.y_train)
+        finetune = pretrained_adapter is not None and getattr(
+            adapter, "backend", None
+        ) == "torch"
         if getattr(adapter, "backend", None) == "torch":
             adapter.fit(
                 proc.X_train,
                 y_train_for_fit,
                 X_val=proc.X_val,
                 y_val=self._prepare_target_for_fit(proc.y_val),
+                finetune=finetune,
             )
         else:
             adapter.fit(proc.X_train, y_train_for_fit)

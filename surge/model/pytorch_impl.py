@@ -71,9 +71,11 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
     def forward(self, x):
         return self.network(x)
 
-    def fit(self, X, y):
+    def fit(self, X, y, X_val=None, y_val=None, patience=None, finetune=False):
         """
         Fit the model using sklearn-like interface.
+        If X_val, y_val and patience are provided, use early stopping.
+        When finetune=True and scalers exist (from load), use transform instead of fit_transform.
         """
         # Convert to numpy if needed
         if isinstance(X, torch.Tensor):
@@ -85,9 +87,13 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
         if y.ndim == 1:
             y = y.reshape(-1, 1)
 
-        # Scale the data
-        X_scaled = self.scaler_X.fit_transform(X)
-        y_scaled = self.scaler_y.fit_transform(y)
+        # Scale the data. When finetune=True, engine already scaled with pretrained scalers.
+        if finetune:
+            X_scaled = X
+            y_scaled = y.reshape(-1, 1) if y.ndim == 1 else y
+        else:
+            X_scaled = self.scaler_X.fit_transform(X)
+            y_scaled = self.scaler_y.fit_transform(y)
 
         # Convert to tensors
         X_tensor = torch.tensor(X_scaled, dtype=torch.float32, device=self.device)
@@ -97,8 +103,32 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
         dataset = TensorDataset(X_tensor, y_tensor)
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
+        # Validation data for early stopping
+        use_early_stop = (
+            patience is not None and patience > 0
+            and X_val is not None and y_val is not None
+        )
+        if use_early_stop:
+            if isinstance(X_val, torch.Tensor):
+                X_val = X_val.cpu().numpy()
+            if isinstance(y_val, torch.Tensor):
+                y_val = y_val.cpu().numpy()
+            if y_val.ndim == 1:
+                y_val = y_val.reshape(-1, 1)
+            if finetune:
+                X_val_scaled = X_val
+                y_val_scaled = y_val
+            else:
+                X_val_scaled = self.scaler_X.transform(X_val)
+                y_val_scaled = self.scaler_y.transform(y_val)
+            X_val_t = torch.tensor(X_val_scaled, dtype=torch.float32, device=self.device)
+            y_val_t = torch.tensor(y_val_scaled, dtype=torch.float32, device=self.device)
+
         # Training loop
         self.train()
+        best_val_loss = float("inf")
+        epochs_without_improvement = 0
+
         for epoch in range(self.n_epochs):
             epoch_loss = 0.0
             for batch_X, batch_y in dataloader:
@@ -108,6 +138,20 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
+
+            if use_early_stop:
+                self.eval()
+                with torch.no_grad():
+                    val_pred = self.forward(X_val_t)
+                    val_loss = self.criterion(val_pred, y_val_t).item()
+                self.train()
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+                if epochs_without_improvement >= patience:
+                    break
 
         self.is_fitted = True
         return self
@@ -146,10 +190,12 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
 class PyTorchMLPModel:
     """
     SURGE-compatible wrapper for PyTorch MLP models.
+    Supports early stopping via patience (epochs without val improvement).
     """
 
     def __init__(self, hidden_layers=[64, 32], dropout_rate=0.1, activation_fn="relu",
-                 learning_rate=1e-3, n_epochs=300, batch_size=32, **kwargs):
+                 learning_rate=1e-3, n_epochs=300, batch_size=32, patience=None,
+                 max_epochs=None, epochs=None, dropout=0.1, **kwargs):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch is required for PyTorchMLPModel. Install with: pip install torch")
 
@@ -164,34 +210,41 @@ class PyTorchMLPModel:
         if isinstance(activation_fn, str):
             activation_fn = activation_map.get(activation_fn.lower(), nn.ReLU)
 
+        n_epochs = max_epochs or epochs or n_epochs
+        dropout_rate = dropout if dropout is not None else dropout_rate
+
         self.hidden_layers = hidden_layers
         self.dropout_rate = dropout_rate
         self.activation_fn = activation_fn
         self.learning_rate = learning_rate
         self.n_epochs = n_epochs
         self.batch_size = batch_size
+        self.patience = patience
         self.model = None
 
-    def fit(self, X, y):
+    def fit(self, X, y, X_val=None, y_val=None, finetune=False):
         """
         Fit the PyTorch MLP model.
+        When finetune=True and self.model exists (from load), continue training.
         """
-        # Initialize model with correct input size
         input_size = X.shape[1]
         output_size = 1 if y.ndim == 1 else y.shape[1]
 
-        self.model = PyTorchMLP(
-            input_size=input_size,
-            hidden_layers=self.hidden_layers,
-            output_size=output_size,
-            dropout_rate=self.dropout_rate,
-            activation_fn=self.activation_fn,
-            learning_rate=self.learning_rate,
-            n_epochs=self.n_epochs,
-            batch_size=self.batch_size
-        )
+        if self.model is None or not finetune:
+            self.model = PyTorchMLP(
+                input_size=input_size,
+                hidden_layers=self.hidden_layers,
+                output_size=output_size,
+                dropout_rate=self.dropout_rate,
+                activation_fn=self.activation_fn,
+                learning_rate=self.learning_rate,
+                n_epochs=self.n_epochs,
+                batch_size=self.batch_size
+            )
 
-        return self.model.fit(X, y)
+        return self.model.fit(
+            X, y, X_val=X_val, y_val=y_val, patience=self.patience, finetune=finetune
+        )
 
     def predict(self, X):
         """

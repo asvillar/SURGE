@@ -33,10 +33,10 @@ class PyTorchMLPAdapter(BaseModelAdapter):
     def _build_model(self, **kwargs: Any) -> PyTorchMLPModel:
         return PyTorchMLPModel(**kwargs)
 
-    def fit(self, X: Any, y: Any) -> Any:
-        if self._model is None:
+    def fit(self, X: Any, y: Any, *, X_val: Any = None, y_val: Any = None, finetune: bool = False, **kwargs: Any) -> Any:
+        if self._model is None and not finetune:
             self._model = self._build_model(**self.params)
-        return self._model.fit(X, y)
+        return self._model.fit(X, y, X_val=X_val, y_val=y_val, finetune=finetune)
 
     def predict(self, X: Any) -> Any:
         if self._model is None:
