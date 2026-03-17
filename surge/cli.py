@@ -45,7 +45,8 @@ def _viz(args: argparse.Namespace) -> int:
         shap_output_index=getattr(args, "shap_output_index", None),
         include_datastreamset_eval=getattr(args, "datastreamset_eval", False),
         datastreamset_size=getattr(args, "datastreamset_size", 50000),
-        datastreamset_max=getattr(args, "datastreamset_max", 5),
+        datastreamset_max=getattr(args, "datastreamset_max", 10),
+        datastreamset_eval_set=getattr(args, "datastreamset_eval_set", None),
     )
     print("SURGE inference comparison plots")
     print("=" * 50)
@@ -301,6 +302,12 @@ def main() -> int:
         type=int,
         default=10,
         help="Max datastreamsets for --datastreamset-eval (default: 10)",
+    )
+    viz_parser.add_argument(
+        "--datastreamset-eval-set",
+        type=str,
+        default=None,
+        help="Override set_name for datastreamset eval (e.g. stack_b for cross-set eval)",
     )
     viz_parser.set_defaults(func=_viz)
 
