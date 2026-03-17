@@ -162,15 +162,21 @@ def analyze_dataset_structure(
                 existing.append(col)
                 output_candidates.add(col)
 
-    # Pattern-based grouping
+    # Pattern-based grouping: only treat as output groups if base matches output-like prefixes
     for base, cols in grouped.items():
-        output_groups.setdefault(base, [])
-        for col in cols:
-            if col not in output_groups[base]:
-                output_groups[base].append(col)
-                output_candidates.add(col)
-        if any(base.lower().startswith(prefix) for prefix in PROFILE_HINTS):
-            profile_groups.setdefault(base, output_groups[base])
+        base_lower = base.lower()
+        is_output_like = any(base_lower.startswith(prefix) for prefix in OUTPUT_PREFIXES)
+        is_input_like = any(base_lower.startswith(prefix) for prefix in INPUT_PREFIXES)
+        if is_output_like and not is_input_like:
+            output_groups.setdefault(base, [])
+            for col in cols:
+                if col not in output_groups[base]:
+                    output_groups[base].append(col)
+                    output_candidates.add(col)
+            if any(base_lower.startswith(prefix) for prefix in PROFILE_HINTS):
+                profile_groups.setdefault(base, output_groups[base])
+        elif is_input_like:
+            input_candidates.update(col for col in cols if col in df.columns)
 
     # Heuristic classification for remaining columns
     for col in df.columns:
