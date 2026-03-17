@@ -208,6 +208,19 @@ pscratch/
 !data/logos/surge_logo_panoramic.png
 !data/logos/SURGE_logo_cropped.png
 
+# MHD-code interface/visualization outputs (explicitly excluded)
+comprehensive_eigenmode*.png
+test_*.png
+eigenmode_*.png
+field_reconstruction*.png
+2d_field_*.png
+
+# MHD-code interface artifacts directory (generated outputs)
+scripts/mhd_code/interfaces/artifacts/
+
+# MHD-code Python support code (pulled from external repo; see docs/dev/MHD-code_PYTHON_CODE.md)
+notebooks/mhd_code/mhd_code_python_code/
+
 # Include specific datasets for demos and testing
 # Note: These are relatively large files (~41MB each) but essential for examples
 !data/datasets/example-data/target_.pkl
