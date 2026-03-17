@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
 
-@dataclass(slots=True)
+@dataclass
 class HPOConfig:
     enabled: bool = False
     n_trials: int = 20
@@ -26,7 +26,7 @@ class HPOConfig:
         return HPOConfig(**data)
 
 
-@dataclass(slots=True)
+@dataclass
 class ModelConfig:
     key: str
     name: Optional[str] = None
@@ -43,7 +43,7 @@ class ModelConfig:
         return ModelConfig(**data)
 
 
-@dataclass(slots=True)
+@dataclass
 class SurrogateWorkflowSpec:
     dataset_path: Union[str, Path]
     dataset_format: str = "auto"
