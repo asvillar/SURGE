@@ -33,6 +33,12 @@ try:  # pragma: no cover
 except Exception:  # pragma: no cover
     XARRAY_AVAILABLE = False
 
+# PyTorch and TensorFlow are NOT imported at module load time.
+# They are imported lazily inside to_dataloader() and to_tf_dataset() only when
+# those methods are called. This keeps SurrogateDataset framework-agnostic:
+# you can import and use it without any ML framework installed.
+# Use iter_batches() for framework-agnostic numpy batching.
+
 
 DataLike = Union[str, Path, pd.DataFrame]
 
@@ -162,6 +168,181 @@ class SurrogateDataset:
         if self.df is None:
             raise ValueError("Dataset not loaded.")
         return get_dataset_statistics(self.df, columns=columns)
+
+    def iter_batches(
+        self,
+        batch_size: int = 32,
+        shuffle: bool = True,
+        random_state: Optional[int] = None,
+    ):
+        """
+        Generator yielding (X_batch, y_batch) as numpy arrays. Framework-agnostic.
+
+        Works with PyTorch, TensorFlow, or any framework that accepts numpy.
+        No framework imports required.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size
+        shuffle : bool
+            Whether to shuffle before iterating
+        random_state : int, optional
+            Seed for reproducible shuffling
+
+        Yields
+        ------
+        X_batch : np.ndarray
+            Input batch (n_batch, n_inputs)
+        y_batch : np.ndarray
+            Output batch (n_batch, n_outputs)
+        """
+        if self.df is None:
+            raise ValueError("Dataset not loaded. Call load_from_path or load_from_dataframe first.")
+        if not self.input_columns or not self.output_columns:
+            raise ValueError("No input or output columns set.")
+
+        import numpy as np
+
+        X = self.df[self.input_columns].values.astype(np.float32)
+        y = self.df[self.output_columns].values.astype(np.float32)
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
+
+        n = len(X)
+        indices = np.arange(n)
+        if shuffle:
+            rng = np.random.default_rng(random_state)
+            rng.shuffle(indices)
+
+        for start in range(0, n, batch_size):
+            end = min(start + batch_size, n)
+            batch_idx = indices[start:end]
+            yield X[batch_idx], y[batch_idx]
+
+    def to_dataloader(
+        self,
+        batch_size: int = 32,
+        shuffle: bool = True,
+        num_workers: int = 0,
+        device: Optional[str] = None,
+        **kwargs: Any,
+    ) -> "Any":
+        """
+        Create a PyTorch DataLoader from the dataset.
+
+        For framework-agnostic batching, use iter_batches() instead.
+        Requires PyTorch and a loaded DataFrame. Yields (X, y) batches
+        suitable for training loops.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size for the DataLoader
+        shuffle : bool
+            Whether to shuffle the data
+        num_workers : int
+            Number of worker processes (0 = main process only)
+        device : str, optional
+            Device to place tensors on ('cpu', 'cuda'). If None, keeps on CPU.
+        **kwargs
+            Additional arguments passed to DataLoader (e.g. pin_memory)
+
+        Returns
+        -------
+        torch.utils.data.DataLoader
+            DataLoader yielding (X_batch, y_batch) tensors
+
+        Raises
+        ------
+        ImportError
+            If PyTorch is not installed
+        ValueError
+            If dataset is not loaded
+        """
+        try:
+            import torch
+            from torch.utils.data import DataLoader, TensorDataset
+        except ImportError:
+            raise ImportError(
+                "PyTorch is required for to_dataloader(). Install with: pip install torch"
+            )
+        if self.df is None:
+            raise ValueError("Dataset not loaded. Call load_from_path or load_from_dataframe first.")
+        if not self.input_columns or not self.output_columns:
+            raise ValueError("No input or output columns set.")
+
+        X = self.df[self.input_columns].values.astype("float32")
+        y = self.df[self.output_columns].values.astype("float32")
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
+
+        X_tensor = torch.from_numpy(X)
+        y_tensor = torch.from_numpy(y)
+        if device is not None:
+            X_tensor = X_tensor.to(device)
+            y_tensor = y_tensor.to(device)
+
+        dataset = TensorDataset(X_tensor, y_tensor)
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            **kwargs,
+        )
+
+    def to_tf_dataset(
+        self,
+        batch_size: int = 32,
+        shuffle: bool = True,
+        shuffle_buffer_size: Optional[int] = None,
+        **kwargs: Any,
+    ) -> "Any":
+        """
+        Create a TensorFlow tf.data.Dataset from the dataset.
+
+        Requires TensorFlow. Returns a batched, optionally shuffled dataset
+        suitable for model.fit() or custom training loops.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size
+        shuffle : bool
+            Whether to shuffle (uses shuffle_buffer_size)
+        shuffle_buffer_size : int, optional
+            Buffer size for shuffling. If None, uses dataset size.
+        **kwargs
+            Additional arguments passed to tf.data.Dataset.batch()
+
+        Returns
+        -------
+        tf.data.Dataset
+            Batched dataset yielding (X_batch, y_batch) tensors
+        """
+        try:
+            import tensorflow as tf  # type: ignore
+        except ImportError:
+            raise ImportError(
+                "TensorFlow is required for to_tf_dataset(). Install with: pip install tensorflow"
+            )
+        if self.df is None:
+            raise ValueError("Dataset not loaded. Call load_from_path or load_from_dataframe first.")
+        if not self.input_columns or not self.output_columns:
+            raise ValueError("No input or output columns set.")
+
+        X = self.df[self.input_columns].values.astype("float32")
+        y = self.df[self.output_columns].values.astype("float32")
+        if y.ndim == 1:
+            y = y.reshape(-1, 1)
+
+        ds = tf.data.Dataset.from_tensor_slices((X, y))
+        if shuffle:
+            buf = shuffle_buffer_size if shuffle_buffer_size is not None else len(X)
+            ds = ds.shuffle(buffer_size=buf)
+        ds = ds.batch(batch_size, **kwargs)
+        return ds
 
     # ------------------------------------------------------------------
     # Internal helpers
