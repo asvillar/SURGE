@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+import warnings
 from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -32,6 +34,12 @@ from .spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
 LOGGER = logging.getLogger(__name__)
 
+
+def _progress_step(step: int, total: int, message: str, *, file: Any = None) -> None:
+    """Print a workflow step line so the user sees progress (e.g. [2/8] Preparing splits...)."""
+    file = file or sys.stdout
+    print(f"[{step}/{total}] {message}", flush=True, file=file)
+
 try:  # pragma: no cover
     import optuna
     from optuna.samplers import TPESampler
@@ -55,7 +63,22 @@ except ImportError:  # pragma: no cover
 
 def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
     """Execute the full surrogate workflow described by the spec."""
+    print("SURGE workflow started.", flush=True)
+
+    # Total steps: 1 load dataset, 1 prepare, then per model: 1 (HPO if enabled) + 1 (train)
+    n_model_steps = sum(
+        2 if (c.hpo and c.hpo.enabled and c.hpo.search_space) else 1 for c in spec.models
+    )
+    total_steps = 2 + n_model_steps
+    step = 0
+
+    def next_step(msg: str) -> None:
+        nonlocal step
+        step += 1
+        _progress_step(step, total_steps, msg)
+
     LOGGER.info("Starting SURGE workflow for dataset %s", spec.dataset_path)
+    next_step("Loading dataset...")
     dataset = SurrogateDataset.from_path(
         spec.dataset_path,
         format=spec.dataset_format,
@@ -64,6 +87,7 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
         analyzer_kwargs={"hints": spec.metadata_overrides, **spec.analyzer},
     )
 
+    next_step("Preparing splits and scalers...")
     engine = SurrogateEngine(
         run_config=EngineRunConfig(
             test_fraction=spec.test_fraction,
@@ -110,11 +134,14 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
             LOGGER.warning("Skipping model '%s' because it is not registered.", model_cfg.key)
             continue
         model_spec = _model_spec_from_config(model_cfg)
+        model_name = model_spec.name or model_spec.key
         hpo_artifact = None
         if model_cfg.hpo and model_cfg.hpo.enabled and model_cfg.hpo.search_space:
+            next_step(f"HPO for {model_name} ({model_cfg.hpo.n_trials} trials)...")
             model_spec, hpo_summary = _run_hpo(engine, model_spec, model_cfg.hpo, run_tag, paths)
             hpo_artifact = str(save_hpo_results(hpo_summary, paths, filename=f"{model_spec.name}_hpo.json"))
 
+        next_step(f"Training {model_name}...")
         result = engine.train_model(model_spec, record=True)
         model_entry = _persist_model_artifacts(
             result,
@@ -150,6 +177,7 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
         },
     }
     save_workflow_summary(summary, paths)
+    _progress_step(total_steps, total_steps, f"Done. Artifacts in {paths.root}")
     LOGGER.info("Workflow %s complete. Artifacts saved to %s", run_tag, paths.root)
     return summary
 
@@ -230,25 +258,98 @@ def _run_hpo(
     elif config.sampler == "tpe" or sampler is None:
         sampler = TPESampler(seed=engine.config.random_state)
 
+    import time as _time_module
+    import traceback as _traceback_module
+
     def objective(trial: "optuna.Trial") -> float:
-        sampled_params = _sample_hpo_params(trial, config.search_space)
-        trial_spec = replace(
-            base_spec,
-            params={**base_spec.params, **sampled_params},
-            store_predictions=False,
-        )
-        result = engine.train_model(trial_spec, record=False)
-        metric_value = _extract_metric(result, config.metric)
-        return metric_value
+        print(f"  [HPO] Trial {trial.number} started...", flush=True)
+        t0 = _time_module.perf_counter()
+        try:
+            sampled_params = _sample_hpo_params(trial, config.search_space)
+            trial_spec = replace(
+                base_spec,
+                params={**base_spec.params, **sampled_params},
+                store_predictions=False,
+            )
+            result = engine.train_model(trial_spec, record=False)
+            metric_value = _extract_metric(result, config.metric)
+            elapsed = _time_module.perf_counter() - t0
+            print(f"  [HPO] Trial {trial.number} finished in {elapsed:.1f}s ({config.metric}={metric_value:.4f})", flush=True)
+            return metric_value
+        except Exception as e:
+            elapsed = _time_module.perf_counter() - t0
+            print(f"  [HPO] Trial {trial.number} FAILED after {elapsed:.1f}s: {e!r}", flush=True)
+            _traceback_module.print_exc()
+            raise
 
     study = optuna.create_study(
         direction=config.direction,
         sampler=sampler,
         study_name=f"{run_tag}-{base_spec.key}",
     )
-    study.optimize(objective, n_trials=config.n_trials, timeout=config.timeout)
 
-    best_params = {**base_spec.params, **study.best_trial.params}
+    # Progress: tqdm bar only when stdout is a TTY (e.g. real terminal). Otherwise print each trial
+    # so progress is visible when run via conda run / nohup / CI where there is no TTY.
+    callbacks: List[Callable[["optuna.Study", "optuna.FrozenTrial"], None]] = []
+    tqdm_pbar = None
+    use_tqdm = sys.stdout.isatty()
+    if use_tqdm:
+        try:
+            from tqdm import tqdm
+            tqdm_pbar = tqdm(
+                total=config.n_trials,
+                desc=f"  HPO {base_spec.name or base_spec.key}",
+                unit="trial",
+                file=sys.stdout,
+            )
+            def _tqdm_cb(study: "optuna.Study", trial: "optuna.FrozenTrial") -> None:
+                tqdm_pbar.update(1)
+                if study.best_trial is not None and study.best_trial.value is not None:
+                    tqdm_pbar.set_postfix(best=f"{study.best_trial.value:.4f}")
+            callbacks.append(_tqdm_cb)
+        except ImportError:
+            use_tqdm = False
+    if not use_tqdm:
+        def _print_cb(study: "optuna.Study", trial: "optuna.FrozenTrial") -> None:
+            n = len(study.trials)
+            best = study.best_trial.value if study.best_trial is not None and study.best_trial.value is not None else None
+            best_str = f"{best:.4f}" if best is not None else "?"
+            print(f"    Trial {n}/{config.n_trials} (best {config.metric}={best_str})", flush=True)
+        callbacks.append(_print_cb)
+
+    # Suppress Optuna categorical serialization warning during HPO so tqdm bar is not flooded
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=".*categorical distribution should be a tuple of None, bool, int, float and str.*",
+            module="optuna.distributions",
+        )
+        try:
+            study.optimize(
+                objective,
+                n_trials=config.n_trials,
+                timeout=config.timeout,
+                callbacks=callbacks,
+                show_progress_bar=False,  # we use our own tqdm or print callback
+            )
+        finally:
+            if tqdm_pbar is not None:
+                tqdm_pbar.close()
+
+    # Resolve _index params (categoricals with list/tuple choices) back to actual values
+    best_params = dict(base_spec.params)
+    for k, v in study.best_trial.params.items():
+        if k.endswith("_index") and k[:-6] in config.search_space:
+            cat_spec = config.search_space[k[:-6]]
+            if cat_spec.get("type") == "categorical":
+                choices = cat_spec["choices"]
+                normalized = [
+                    tuple(c) if isinstance(c, list) else c for c in choices
+                ]
+                val = normalized[v]
+                best_params[k[:-6]] = list(val) if isinstance(val, tuple) else val
+                continue
+        best_params[k] = v
     updated_spec = replace(base_spec, params=best_params)
 
     hpo_summary = {
@@ -304,13 +405,20 @@ def _sample_hpo_params(trial: "optuna.Trial", space: Mapping[str, Any]) -> Dict[
             )
         elif spec_type == "categorical":
             choices = spec["choices"]
-            normalized = []
-            for choice in choices:
-                if isinstance(choice, list):
-                    normalized.append(tuple(choice))
-                else:
-                    normalized.append(choice)
-            sampled = trial.suggest_categorical(name, normalized)
+            normalized = [
+                tuple(c) if isinstance(c, list) else c for c in choices
+            ]
+            # Use an int index for non-serializable choices (e.g. lists/tuples) so Optuna
+            # doesn't warn and the study remains serializable; we resolve the index when
+            # building best_params in _run_hpo.
+            simple = all(
+                isinstance(c, (type(None), bool, int, float, str)) for c in normalized
+            )
+            if simple:
+                sampled = trial.suggest_categorical(name, normalized)
+            else:
+                idx = trial.suggest_int(f"{name}_index", 0, len(normalized) - 1)
+                sampled = normalized[idx]
             if isinstance(sampled, tuple):
                 sampled = list(sampled)
             params[name] = sampled

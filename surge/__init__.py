@@ -47,7 +47,9 @@ try:
     from loader import (
         load_mhd_code_hdf5,
         convert_to_dataframe,
+        convert_sdata_complex_v2_to_dataframe,
         read_mhd_code_hdf5_structure,
+        read_sdata_complex_v2_structure,
     )
     MHD-code_LOADER_AVAILABLE = True
 except ImportError:
@@ -99,7 +101,9 @@ if MHD-code_LOADER_AVAILABLE:
     __all__.extend([
         "load_mhd_code_hdf5",
         "convert_to_dataframe",
+        "convert_sdata_complex_v2_to_dataframe",
         "read_mhd_code_hdf5_structure",
+        "read_sdata_complex_v2_structure",
     ])
 
 # Backward compatibility aliases

@@ -15,18 +15,32 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 try:
     import matplotlib.pyplot as plt
-    from matplotlib.colors import LogNorm
+    from matplotlib.gridspec import GridSpec
+    from matplotlib.colors import LinearSegmentedColormap, LogNorm
     from matplotlib.patches import Rectangle
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
+
+# Whitened-orange background for density heatmaps (orange-ish grey)
+_PLASMA_ORANGE_UNDER = '#f5e6d3'
+
+
+def _plasma_orange_cmap(base_cmap: str = 'plasma_r', under_color: str = _PLASMA_ORANGE_UNDER):
+    """Colormap with whitened orange at low end, blending into base colormap."""
+    try:
+        base = plt.colormaps.get_cmap(base_cmap)
+    except AttributeError:
+        base = plt.cm.get_cmap(base_cmap)
+    colors = [under_color] + [base(x) for x in np.linspace(0.08, 1.0, 248)]
+    return LinearSegmentedColormap.from_list('plasma_orange', colors, N=256)
 
 
 def plot_inference_comparison_grid(
     results_dict: Dict[str, Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray]]]],
     output_names: Optional[List[str]] = None,
     model_names: Optional[List[str]] = None,
-    bins: int = 100,
+    bins: int = 60,
     cmap: str = 'plasma_r',
     figsize: Optional[Tuple[float, float]] = None,
     save_path: Optional[Union[str, Path]] = None,
@@ -35,6 +49,12 @@ def plot_inference_comparison_grid(
     show_colorbar: bool = True,
     xlabel_prefix: str = "Reference",
     ylabel_prefix: str = "Surrogate",
+    ylabel_include_model: bool = True,
+    output_display_names: Optional[Dict[str, str]] = None,
+    model_display_names: Optional[Dict[str, str]] = None,
+    title_include_model_dataset: bool = False,
+    layout: str = "models_rows",
+    axis_lim: Optional[Tuple[float, float]] = None,
 ) -> Tuple[Optional[object], Optional[object], Dict[str, Dict[str, float]]]:
     """
     Create a grid of inference comparison plots matching publication style.
@@ -74,7 +94,21 @@ def plot_inference_comparison_grid(
     xlabel_prefix : str, default="Reference"
         Prefix for x-axis label (ground truth source).
     ylabel_prefix : str, default="Surrogate"
-        Prefix for y-axis label (prediction source, will include model name).
+        Prefix for y-axis label (prediction source).
+    ylabel_include_model : bool, default=True
+        If True, append model name in parentheses to ylabel_prefix.
+    output_display_names : dict, optional
+        Map output names to display strings (e.g. {'output_gamma': r'$\\gamma$'}).
+    model_display_names : dict, optional
+        Map model names to short display (e.g. {'gpflow_gpr_profiles': 'GPR'}).
+    title_include_model_dataset : bool, default=False
+        If True, subplot titles show "Model — Training Set" / "Model — Test Set"
+        instead of repeating the output name.
+    layout : str, default="models_rows"
+        "models_rows": rows=models, cols=datasets (train/test).
+        "outputs_rows": rows=outputs, cols=models×datasets.
+    axis_lim : tuple, optional
+        (xmin, xmax) for both axes. If None, auto from data.
         
     Returns
     -------
@@ -98,96 +132,108 @@ def plot_inference_comparison_grid(
         first_output = output_names[0]
         model_names = list(results_dict[first_output].keys())
     
-    # Determine layout: rows = outputs, columns = models × datasets
     datasets = ['train', 'test']
     n_outputs = len(output_names)
-    n_cols = len(model_names) * len(datasets)
-    n_rows = n_outputs
     
-    # Calculate figure size if not provided
+    if layout == "models_rows":
+        n_rows = len(model_names)
+        n_cols = len(datasets)
+    else:
+        n_rows = n_outputs
+        n_cols = len(model_names) * len(datasets)
+    
     if figsize is None:
         figsize = (4 * n_cols, 4 * n_rows)
     
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False)
+    # GridSpec: data subplots only; colorbar attached to row axes (sized to plot area)
+    fig = plt.figure(figsize=figsize, constrained_layout=True)
+    gs = GridSpec(n_rows, n_cols, figure=fig,
+                  width_ratios=[1.0] * n_cols, height_ratios=[1.0] * n_rows,
+                  hspace=0.02, wspace=0.02)
+    axes = np.empty((n_rows, n_cols), dtype=object)
+    for i in range(n_rows):
+        for j in range(n_cols):
+            axes[i, j] = fig.add_subplot(gs[i, j])
     
     # Store results
     r2_results = {}
     
-    # Plot each combination
+    # Compute axis limits (shared across subplots)
+    if axis_lim is not None:
+        lim = list(axis_lim)
+    else:
+        all_values = []
+        for output_name in output_names:
+            if output_name not in results_dict:
+                continue
+            output_data = results_dict[output_name]
+            for model_name in model_names:
+                if model_name not in output_data:
+                    continue
+                for dataset in datasets:
+                    if dataset not in output_data[model_name]:
+                        continue
+                    y_true, y_pred = output_data[model_name][dataset]
+                    all_values.extend([np.asarray(y_true).flatten(), np.asarray(y_pred).flatten()])
+        if all_values:
+            all_values = np.concatenate(all_values)
+            vmin, vmax = np.min(all_values), np.max(all_values)
+            padding = (vmax - vmin) * 0.05 if vmax > vmin else 0.01
+            lim = [vmin - padding, vmax + padding]
+        else:
+            lim = [0, 1]
+    
     plot_idx = 0
     subplot_labels = 'abcdefghijklmnopqrstuvwxyz'
+    cbar_items = []  # (im, row_idx) for colorbars attached to row axes
     
-    for row_idx, output_name in enumerate(output_names):
-        if output_name not in results_dict:
-            continue
-            
-        output_data = results_dict[output_name]
-        output_unit = units.get(output_name, '') if units else ''
-        
-        # Set consistent axis limits for this output across all subplots
-        all_values = []
-        for model_name in model_names:
-            if model_name not in output_data:
+    if layout == "models_rows":
+        for row_idx, model_name in enumerate(model_names):
+            output_name = output_names[0]
+            if output_name not in results_dict or model_name not in results_dict[output_name]:
                 continue
+            output_data = results_dict[output_name]
+            output_unit = units.get(output_name, '') if units else ''
+            
+            # Precompute hists for this model (train+test) to get shared clim
+            hists_row = []
             for dataset in datasets:
                 if dataset not in output_data[model_name]:
                     continue
                 y_true, y_pred = output_data[model_name][dataset]
-                all_values.extend([y_true.flatten(), y_pred.flatten()])
-        
-        if all_values:
-            all_values = np.concatenate(all_values)
-            value_range = [np.min(all_values), np.max(all_values)]
-            # Add small padding
-            padding = (value_range[1] - value_range[0]) * 0.05
-            axis_lim = [max(0, value_range[0] - padding), value_range[1] + padding]
-        else:
-            axis_lim = [0, 1]
-        
-        for col_idx, model_name in enumerate(model_names):
-            if model_name not in output_data:
-                continue
-                
-            for dataset_idx, dataset in enumerate(datasets):
-                if dataset not in output_data[model_name]:
-                    continue
-                
-                ax = axes[row_idx, col_idx * len(datasets) + dataset_idx]
-                y_true, y_pred = output_data[model_name][dataset]
-                
-                # Ensure 1D arrays
                 y_true = np.asarray(y_true).flatten()
                 y_pred = np.asarray(y_pred).flatten()
-                
-                # Calculate R²
+                hist, xedges, yedges = np.histogram2d(
+                    y_true, y_pred, bins=bins, range=[lim, lim]
+                )
+                hists_row.append((hist, xedges, yedges, y_true, y_pred, dataset))
+            vmax_row = max(h.max() for h, _, _, _, _, _ in hists_row) if hists_row else 1
+            
+            for col_idx, (hist, xedges, yedges, y_true, y_pred, dataset) in enumerate(hists_row):
+                ax = axes[row_idx, col_idx]
                 r2 = r2_score(y_true, y_pred)
-                
-                # Store results
                 if output_name not in r2_results:
                     r2_results[output_name] = {}
                 if model_name not in r2_results[output_name]:
                     r2_results[output_name][model_name] = {}
                 r2_results[output_name][model_name][dataset] = float(r2)
                 
-                # Create 2D histogram for density heatmap
-                hist, xedges, yedges = np.histogram2d(
-                    y_true, y_pred, bins=bins, range=[axis_lim, axis_lim]
-                )
-                
-                # Plot density heatmap
+                plot_cmap = _plasma_orange_cmap() if cmap == 'plasma_r' else cmap
                 extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
                 im = ax.imshow(
                     hist.T,
                     origin='lower',
                     extent=extent,
-                    aspect='auto',
-                    cmap=cmap,
+                    aspect='equal',
+                    cmap=plot_cmap,
                     interpolation='nearest',
-                    alpha=0.8
+                    alpha=0.8,
+                    vmin=0,
+                    vmax=vmax_row
                 )
                 
                 # Add diagonal reference line
-                ax.plot(axis_lim, axis_lim, 'k--', linewidth=1.5, alpha=0.6, label='y=x')
+                ax.plot(lim, lim, 'k--', linewidth=1.5, alpha=0.6, label='y=x')
                 
                 # Add R² score text
                 ax.text(
@@ -208,35 +254,106 @@ def plot_inference_comparison_grid(
                     ax.set_xlabel('')
                     ax.tick_params(labelbottom=False)
                 
-                if col_idx == 0 and dataset_idx == 0:
+                if col_idx == 0:
                     # First column: show y-axis labels
-                    model_label = f'{ylabel_prefix}({model_name})'
-                    ax.set_ylabel(f'{model_label} {output_unit}'.strip(), fontsize=10)
+                    ylabel = f'{ylabel_prefix}({model_name})' if ylabel_include_model else ylabel_prefix
+                    ax.set_ylabel(f'{ylabel} {output_unit}'.strip(), fontsize=10)
                 
-                # Set title for top row (only on first column of each output)
-                if row_idx == 0 and col_idx == 0 and dataset_idx == 0:
-                    title = f"({subplot_labels[plot_idx]}) {output_name} {output_unit}".strip()
+                # Set title
+                if title_include_model_dataset:
+                    model_display = (model_display_names or {}).get(model_name, model_name)
+                    dataset_label = "Training Set" if dataset == 'train' else "Test Set"
+                    title = f"({subplot_labels[plot_idx]}) {model_display} — {dataset_label}"
                     ax.set_title(title, fontsize=11, fontweight='bold')
                 elif row_idx == 0:
-                    # Other columns in top row
-                    title = f"({subplot_labels[plot_idx]}) {output_name} {output_unit}".strip()
+                    out_display = (output_display_names or {}).get(output_name, output_name)
+                    title = f"({subplot_labels[plot_idx]}) {out_display} {output_unit}".strip()
                     ax.set_title(title, fontsize=11, fontweight='bold')
                 
-                # Set axis limits
-                ax.set_xlim(axis_lim)
-                ax.set_ylim(axis_lim)
+                # Set axis limits and equal aspect (1:1 scale)
+                ax.set_xlim(lim)
+                ax.set_ylim(lim)
+                ax.set_aspect('equal', adjustable='box')
                 
-                # Add colorbar (only on last column subplots)
-                if show_colorbar and col_idx == len(model_names) - 1 and dataset_idx == len(datasets) - 1:
-                    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-                    cbar.set_label(f'Number of data points ({dataset})', fontsize=9)
+                if show_colorbar and col_idx == len(hists_row) - 1:
+                    cbar_items.append((im, row_idx))
                 
                 # Grid
                 ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
                 
                 plot_idx += 1
     
-    plt.tight_layout()
+    else:  # layout == "outputs_rows"
+        for row_idx, output_name in enumerate(output_names):
+            if output_name not in results_dict:
+                continue
+            output_data = results_dict[output_name]
+            output_unit = units.get(output_name, '') if units else ''
+            
+            # Precompute all hists for this row to get shared clim (train+test per model)
+            hists_row = []
+            for col_idx, model_name in enumerate(model_names):
+                if model_name not in output_data:
+                    continue
+                for dataset_idx, dataset in enumerate(datasets):
+                    if dataset not in output_data[model_name]:
+                        continue
+                    y_true, y_pred = output_data[model_name][dataset]
+                    y_true = np.asarray(y_true).flatten()
+                    y_pred = np.asarray(y_pred).flatten()
+                    hist, xedges, yedges = np.histogram2d(
+                        y_true, y_pred, bins=bins, range=[lim, lim]
+                    )
+                    hists_row.append((hist, xedges, yedges, y_true, y_pred, model_name, dataset, col_idx, dataset_idx))
+            vmax_row = max(h.max() for h, _, _, _, _, _, _, _, _ in hists_row) if hists_row else 1
+            
+            for i, (hist, xedges, yedges, y_true, y_pred, model_name, dataset, col_idx, dataset_idx) in enumerate(hists_row):
+                ax = axes[row_idx, col_idx * len(datasets) + dataset_idx]
+                r2 = r2_score(y_true, y_pred)
+                if output_name not in r2_results:
+                    r2_results[output_name] = {}
+                if model_name not in r2_results[output_name]:
+                    r2_results[output_name][model_name] = {}
+                r2_results[output_name][model_name][dataset] = float(r2)
+                plot_cmap = _plasma_orange_cmap() if cmap == 'plasma_r' else cmap
+                extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+                im = ax.imshow(
+                    hist.T, origin='lower', extent=extent, aspect='equal',
+                    cmap=plot_cmap, interpolation='nearest', alpha=0.8,
+                    vmin=0, vmax=vmax_row
+                )
+                ax.plot(lim, lim, 'k--', linewidth=1.5, alpha=0.6, label='y=x')
+                ax.text(0.05, 0.95, f'R² = {r2:.2f}', transform=ax.transAxes,
+                        fontsize=11, verticalalignment='top',
+                        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                if row_idx == n_rows - 1:
+                    ax.set_xlabel(f'{xlabel_prefix} {output_unit}'.strip(), fontsize=10)
+                else:
+                    ax.set_xlabel('')
+                    ax.tick_params(labelbottom=False)
+                if col_idx == 0 and dataset_idx == 0:
+                    ylabel = f'{ylabel_prefix}({model_name})' if ylabel_include_model else ylabel_prefix
+                    ax.set_ylabel(f'{ylabel} {output_unit}'.strip(), fontsize=10)
+                if title_include_model_dataset:
+                    model_display = (model_display_names or {}).get(model_name, model_name)
+                    dataset_label = "Training Set" if dataset == 'train' else "Test Set"
+                    ax.set_title(f"({subplot_labels[plot_idx]}) {model_display} — {dataset_label}", fontsize=11, fontweight='bold')
+                elif row_idx == 0:
+                    out_display = (output_display_names or {}).get(output_name, output_name)
+                    ax.set_title(f"({subplot_labels[plot_idx]}) {out_display} {output_unit}".strip(), fontsize=11, fontweight='bold')
+                ax.set_xlim(lim)
+                ax.set_ylim(lim)
+                ax.set_aspect('equal', adjustable='box')
+                if show_colorbar and i == len(hists_row) - 1:
+                    cbar_items.append((im, row_idx))
+                ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+                plot_idx += 1
+    
+    # Add colorbars attached to row axes; shrink to match plot area (not full axes+title)
+    for im, row_idx in cbar_items:
+        row_axes = [axes[row_idx, j] for j in range(n_cols)]
+        cbar = fig.colorbar(im, ax=row_axes, fraction=0.04, pad=0.03, shrink=0.85)
+        cbar.set_label('Number of data points', fontsize=9)
     
     if save_path is not None:
         fig.savefig(save_path, dpi=dpi, bbox_inches='tight')
