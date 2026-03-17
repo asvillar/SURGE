@@ -422,12 +422,14 @@ class SurrogateDataset:
         set_name = reader_kwargs.get("set_name", "set1")
         sample = reader_kwargs.get("sample")
         random_state = reader_kwargs.get("random_state", 42)
+        row_range = reader_kwargs.get("row_range")
 
         df, _input_cols, _output_cols = _load_stacked_dir(
             path,
             set_name=set_name,
             sample=sample,
             random_state=random_state,
+            row_range=row_range,
         )
         return df
 
