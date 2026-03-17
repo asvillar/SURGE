@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover
 from ..registry import BaseModelAdapter
 
 
-@dataclass(slots=True)
+@dataclass
 class ArtifactPaths:
     root: Path
     models_dir: Path
@@ -124,13 +124,42 @@ def save_model(adapter: BaseModelAdapter, name: str, paths: ArtifactPaths) -> Pa
         return target
     except Exception:
         pass
-    joblib.dump(adapter, target)
+    joblib.dump(adapter, target, protocol=4)
     return target
 
 
 def save_scaler(scaler: Any, name: str, paths: ArtifactPaths) -> Path:
     target = paths.scalers_dir / f"{name}.joblib"
-    joblib.dump(scaler, target)
+    joblib.dump(scaler, target, protocol=4)
+    return target
+
+
+def save_train_data_ranges(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    input_columns: list,
+    output_columns: list,
+    paths: ArtifactPaths,
+) -> Path:
+    """
+    Save min/max of training data (in model-input space) for in-distribution checks.
+
+    Use when evaluating new datastreamsets: compare datastreamset min/max to these ranges.
+    """
+    target = paths.root / "train_data_ranges.json"
+    payload = {
+        "inputs": {
+            "columns": input_columns,
+            "min": X_train.min(axis=0).tolist(),
+            "max": X_train.max(axis=0).tolist(),
+        },
+        "outputs": {
+            "columns": output_columns,
+            "min": y_train.min(axis=0).tolist(),
+            "max": y_train.max(axis=0).tolist(),
+        },
+    }
+    _write_json(target, payload)
     return target
 
 

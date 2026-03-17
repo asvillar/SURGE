@@ -26,6 +26,7 @@ from ..io import (
     save_predictions,
     save_scaler,
     save_spec,
+    save_train_data_ranges,
     save_workflow_summary,
 )
 from ..io.artifacts import ArtifactPaths
@@ -79,13 +80,29 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
 
     LOGGER.info("Starting SURGE workflow for dataset %s", spec.dataset_path)
     next_step("Loading dataset...")
-    dataset = SurrogateDataset.from_path(
-        spec.dataset_path,
-        format=spec.dataset_format,
-        metadata_path=spec.metadata_path,
-        sample=spec.sample_rows,
-        analyzer_kwargs={"hints": spec.metadata_overrides, **spec.analyzer},
-    )
+    if spec.dataset_source == "mhd_code_batch":
+        from ..datasets import MHD-codeDataset
+        batch_dir = Path(spec.dataset_path)
+        if not batch_dir.is_dir():
+            raise FileNotFoundError(f"dataset_source=mhd_code_batch requires a directory: {batch_dir}")
+        dataset = MHD-codeDataset.from_batch_dir(
+            batch_dir,
+            mode_step=spec.batch_dir_mode_step,
+            psi_step=spec.batch_dir_psi_step,
+            target_shape=spec.batch_dir_target_shape,
+            include_eigenmodes=spec.batch_dir_include_eigenmodes,
+            verbose=True,
+        )
+        if spec.sample_rows:
+            dataset.df = dataset.df.sample(n=min(spec.sample_rows, len(dataset.df)), random_state=spec.seed)
+    else:
+        dataset = SurrogateDataset.from_path(
+            spec.dataset_path,
+            format=spec.dataset_format,
+            metadata_path=spec.metadata_path,
+            sample=spec.sample_rows,
+            analyzer_kwargs={"hints": spec.metadata_overrides, **spec.analyzer},
+        )
 
     next_step("Preparing splits and scalers...")
     engine = SurrogateEngine(
@@ -113,6 +130,16 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
     run_tag = spec.run_tag or _default_run_tag(dataset.file_path)
     paths = init_artifact_paths(spec.output_dir, run_tag, exist_ok=spec.overwrite_existing_run)
     save_spec(spec.to_dict(), paths)
+
+    # Save training data min/max for in-distribution checks on new datastreamsets
+    proc = engine.get_processed_splits()
+    save_train_data_ranges(
+        proc.X_train,
+        proc.y_train,
+        dataset.input_columns,
+        dataset.output_columns,
+        paths,
+    )
 
     resources = detect_compute_resources()
     save_environment_snapshot(paths, extras=resources.to_dict())
@@ -161,6 +188,7 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
         workflow_models.append(model_entry)
 
     metrics_path = save_metrics(workflow_metrics, paths)
+    ranges_path = paths.root / "train_data_ranges.json"
     summary = {
         "run_tag": run_tag,
         "dataset": dataset.summary(),
@@ -174,6 +202,7 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
             "metrics": str(metrics_path),
             "summary": str(paths.summary_file),
             "spec": str(paths.spec_file),
+            "train_data_ranges": str(ranges_path) if ranges_path.exists() else None,
         },
     }
     save_workflow_summary(summary, paths)
@@ -273,6 +302,9 @@ def _run_hpo(
             )
             result = engine.train_model(trial_spec, record=False)
             metric_value = _extract_metric(result, config.metric)
+            # Store additional metrics for visualization (R², RMSE)
+            trial.set_user_attr("val_r2", result.val_metrics.get("r2"))
+            trial.set_user_attr("val_rmse", result.val_metrics.get("rmse"))
             elapsed = _time_module.perf_counter() - t0
             print(f"  [HPO] Trial {trial.number} finished in {elapsed:.1f}s ({config.metric}={metric_value:.4f})", flush=True)
             return metric_value
@@ -362,7 +394,12 @@ def _run_hpo(
         },
         "n_trials": len(study.trials),
         "trials": [
-            {"number": trial.number, "value": trial.value, "params": trial.params}
+            {
+                "number": trial.number,
+                "value": trial.value,
+                "params": trial.params,
+                **{k: v for k, v in getattr(trial, "user_attrs", {}).items()},
+            }
             for trial in study.trials
         ],
     }
