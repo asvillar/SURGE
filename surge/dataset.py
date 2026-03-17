@@ -159,17 +159,18 @@ class SurrogateDataset:
     # Introspection helpers
     # ------------------------------------------------------------------
     def summary(self) -> Dict[str, Any]:
-        if self.analysis is None:
-            return {}
-        return {
+        base = {
             "file_path": str(self.file_path) if self.file_path else "<in-memory>",
             "n_rows": len(self.df) if self.df is not None else 0,
             "n_inputs": len(self.input_columns),
             "n_outputs": len(self.output_columns),
-            "output_groups": self.output_groups,
-            "profile_groups": self.profile_groups,
-            "dataset_info": self.analysis.get("dataset_info"),
         }
+        if self.analysis is None:
+            return base
+        base["output_groups"] = self.output_groups
+        base["profile_groups"] = self.profile_groups
+        base["dataset_info"] = self.analysis.get("dataset_info")
+        return base
 
     def describe(self) -> str:
         if self.analysis is None:
