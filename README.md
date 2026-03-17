@@ -15,7 +15,7 @@
 - Optuna-based HPO with TPE or BoTorch samplers
 - Standardized artifact layout under `runs/<tag>/` (models, scalers, predictions, metrics, HPO logs, env snapshot, git rev)
 - Visualization helpers (`surge.viz`) for GT vs. prediction density, per-mode scatter, violin/SNR panels, etc.
-- **kinetic-code support**: Datastreamset evaluation, drift detection (OOD inputs/outputs, accuracy drop), SHAP on target, input range evolution plots.
+- **kinetic-code support**: Datastreamset evaluation, drift detection (OOD inputs/outputs, accuracy drop), SHAP on target, cross-set eval (set1↔set2), fine-tuning from pretrained, model cards, optional MLflow tracking.
 
 ## 🚀 Getting Started
 

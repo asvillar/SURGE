@@ -73,6 +73,12 @@ def _viz(args: argparse.Namespace) -> int:
                 print(f"  Datastreamsets with drift: {dd['datastreamsets_with_drift']}")
             if dd.get("continual_learning_recommendation"):
                 print(f"  Recommendation: {dd['continual_learning_recommendation']}")
+    if getattr(args, "mlflow", False):
+        try:
+            from surge.integrations.mlflow_logger import log_surge_run
+            log_surge_run(Path(run_dir), run_name=Path(run_dir).stem)
+        except ImportError:
+            print("MLflow not installed. pip install surge[mlflow]", file=sys.stderr)
     return 0
 
 
@@ -173,6 +179,8 @@ def _run(args: argparse.Namespace) -> int:
         spec.run_tag = args.run_tag
     if args.output_dir:
         spec.output_dir = str(args.output_dir)
+    if getattr(args, "mlflow", False):
+        spec.mlflow_tracking = True
 
     summary = run_surrogate_workflow(spec)
     print(json.dumps(summary, indent=2))
@@ -205,6 +213,11 @@ def main() -> int:
         type=Path,
         default=None,
         help="Override output directory in spec",
+    )
+    run_parser.add_argument(
+        "--mlflow",
+        action="store_true",
+        help="Log run to MLflow (tracking). Requires pip install surge[mlflow]",
     )
     run_parser.set_defaults(func=_run)
 
@@ -308,6 +321,11 @@ def main() -> int:
         type=str,
         default=None,
         help="Override set_name for datastreamset eval (e.g. stack_b for cross-set eval)",
+    )
+    viz_parser.add_argument(
+        "--mlflow",
+        action="store_true",
+        help="Log run to MLflow after viz. Requires pip install surge[mlflow]",
     )
     viz_parser.set_defaults(func=_viz)
 

@@ -280,6 +280,21 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
         },
     }
     save_workflow_summary(summary, paths)
+
+    # Optional MLflow logging (tracking)
+    if spec.mlflow_tracking:
+        try:
+            from ..integrations.mlflow_logger import log_surge_run
+            log_surge_run(
+                paths.root,
+                experiment_name=spec.mlflow_experiment or "surge",
+                run_name=run_tag,
+            )
+        except ImportError:
+            LOGGER.warning(
+                "MLflow not installed. pip install surge[mlflow]"
+            )
+
     _progress_step(total_steps, total_steps, f"Done. Artifacts in {paths.root}")
     LOGGER.info("Workflow %s complete. Artifacts saved to %s", run_tag, paths.root)
     return summary

@@ -71,6 +71,8 @@ class SurrogateWorkflowSpec:
     overwrite_existing_run: bool = False
     pretrained_run_dir: Optional[Union[str, Path]] = None
     finetune_lr_scale: float = 0.1
+    mlflow_tracking: bool = False
+    mlflow_experiment: Optional[str] = None
 
     @staticmethod
     def from_dict(payload: Mapping[str, Any]) -> "SurrogateWorkflowSpec":
