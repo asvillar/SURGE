@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from ..engine import EngineRunConfig, ModelRunResult, ModelSpec, SurrogateEngine
+from ..engine import EngineRunConfig, ModelRunResult, ModelSpec, ScalerBundle, SurrogateEngine
 from ..dataset import SurrogateDataset
 from ..hpc import detect_compute_resources
 from ..io import (
@@ -23,6 +23,7 @@ from ..io import (
     save_hpo_results,
     save_metrics,
     save_model,
+    save_model_card,
     save_predictions,
     save_scaler,
     save_spec,
@@ -30,6 +31,7 @@ from ..io import (
     save_workflow_summary,
 )
 from ..io.artifacts import ArtifactPaths
+from ..io.load_compat import load_model_compat
 from ..registry import registry_summary
 from .spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
@@ -40,6 +42,20 @@ def _progress_step(step: int, total: int, message: str, *, file: Any = None) -> 
     """Print a workflow step line so the user sees progress (e.g. [2/8] Preparing splits...)."""
     file = file or sys.stdout
     print(f"[{step}/{total}] {message}", flush=True, file=file)
+
+
+def _load_pretrained_scalers(run_dir: Path) -> ScalerBundle:
+    """Load input/output scalers from a pretrained run directory."""
+    import joblib
+
+    scalers_dir = run_dir / "scalers"
+    input_scaler = None
+    output_scaler = None
+    if (scalers_dir / "inputs.joblib").exists():
+        input_scaler = joblib.load(scalers_dir / "inputs.joblib")
+    if (scalers_dir / "outputs.joblib").exists():
+        output_scaler = joblib.load(scalers_dir / "outputs.joblib")
+    return ScalerBundle(input_scaler=input_scaler, output_scaler=output_scaler)
 
 try:  # pragma: no cover
     import optuna
@@ -93,6 +109,17 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
             include_eigenmodes=spec.batch_dir_include_eigenmodes,
             verbose=True,
         )
+    elif spec.dataset_source == "mhd_code_batch_per_mode":
+        from ..datasets import MHD-codeDataset
+        batch_dir = Path(spec.dataset_path)
+        if not batch_dir.is_dir():
+            raise FileNotFoundError(
+                f"dataset_source=mhd_code_batch_per_mode requires a directory: {batch_dir}"
+            )
+        dataset = MHD-codeDataset.from_batch_dir_per_mode(
+            batch_dir,
+            verbose=True,
+        )
         if spec.sample_rows:
             dataset.df = dataset.df.sample(n=min(spec.sample_rows, len(dataset.df)), random_state=spec.seed)
     else:
@@ -119,7 +146,38 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
         dataset.input_columns,
         dataset.output_columns,
     )
-    engine.prepare()
+    pretrained_dir: Optional[Path] = None
+    pretrained_models: Dict[str, Any] = {}
+    if spec.pretrained_run_dir:
+        pretrained_dir = Path(spec.pretrained_run_dir).resolve()
+        if not pretrained_dir.is_dir():
+            raise FileNotFoundError(
+                f"pretrained_run_dir not found: {pretrained_dir}"
+            )
+        pretrained_scalers = _load_pretrained_scalers(pretrained_dir)
+        engine.prepare(pretrained_scalers=pretrained_scalers)
+        # Load workflow summary to map model names to pretrained paths
+        summary_path = pretrained_dir / "workflow_summary.json"
+        if summary_path.exists():
+            with summary_path.open() as f:
+                pretrained_summary = json.load(f)
+            for m in pretrained_summary.get("models", []):
+                name = m.get("name") or m.get("key", "")
+                if name:
+                    model_path = pretrained_dir / "models" / f"{name}.joblib"
+                    if model_path.exists():
+                        try:
+                            pretrained_models[name] = load_model_compat(
+                                model_path, m, for_finetune=True
+                            )
+                        except Exception as e:
+                            LOGGER.warning(
+                                "Could not load pretrained model %s: %s",
+                                name,
+                                e,
+                            )
+    else:
+        engine.prepare()
     raw_splits = engine.get_raw_splits()
     split_info = {
         "train": len(raw_splits.X_train),
@@ -169,12 +227,28 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
             hpo_artifact = str(save_hpo_results(hpo_summary, paths, filename=f"{model_spec.name}_hpo.json"))
 
         next_step(f"Training {model_name}...")
-        result = engine.train_model(model_spec, record=True)
+        pretrained_adapter = pretrained_models.get(model_name) if pretrained_dir else None
+        result = engine.train_model(
+            model_spec,
+            record=True,
+            pretrained_adapter=pretrained_adapter,
+            finetune_lr_scale=spec.finetune_lr_scale,
+        )
+        training_config = {
+            "run_tag": run_tag,
+            "dataset_path": str(spec.dataset_path),
+            "sample_rows": spec.sample_rows,
+            "n_train": split_info["train"],
+            "n_val": split_info["val"],
+            "n_test": split_info["test"],
+            "metadata_overrides": dict(spec.metadata_overrides or {}),
+        }
         model_entry = _persist_model_artifacts(
             result,
             spec.predictions_scope,
             spec.predictions_format,
             paths,
+            training_config=training_config,
         )
 
         workflow_metrics[model_entry["name"]] = {
@@ -236,9 +310,17 @@ def _persist_model_artifacts(
     prediction_splits: Sequence[str],
     predictions_format: str,
     paths: ArtifactPaths,
+    *,
+    training_config: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     model_name = result.spec.name or result.spec.key
     model_path = save_model(result.adapter, model_name, paths)
+    save_model_card(
+        result.adapter,
+        model_name,
+        paths,
+        training_config=training_config,
+    )
     prediction_files: Dict[str, str] = {}
     for split in prediction_splits:
         payload = result.predictions.get(split)

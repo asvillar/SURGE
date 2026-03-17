@@ -47,6 +47,7 @@ class ModelConfig:
 class SurrogateWorkflowSpec:
     dataset_path: Union[str, Path]
     dataset_format: str = "auto"
+    dataset_source: Optional[str] = None  # "mhd_code_batch" or "mhd_code_batch_per_mode" = load from batch dir
     metadata_path: Optional[Union[str, Path]] = None
     models: List[ModelConfig] = field(default_factory=list)
     test_fraction: float = 0.2
@@ -62,8 +63,14 @@ class SurrogateWorkflowSpec:
     sample_rows: Optional[int] = None
     analyzer: Dict[str, Any] = field(default_factory=dict)
     metadata_overrides: Dict[str, Any] = field(default_factory=dict)
+    batch_dir_mode_step: Optional[int] = None
+    batch_dir_psi_step: Optional[int] = None
+    batch_dir_target_shape: Optional[tuple] = None  # (n_modes, n_psi) for fixed resolution
+    batch_dir_include_eigenmodes: bool = False
     notes: Optional[str] = None
     overwrite_existing_run: bool = False
+    pretrained_run_dir: Optional[Union[str, Path]] = None
+    finetune_lr_scale: float = 0.1
 
     @staticmethod
     def from_dict(payload: Mapping[str, Any]) -> "SurrogateWorkflowSpec":
