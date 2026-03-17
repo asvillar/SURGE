@@ -23,7 +23,7 @@ from .registry import BaseModelAdapter, ModelRegistry, MODEL_REGISTRY
 LOGGER = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
+@dataclass
 class EngineRunConfig:
     """Controls dataset splitting, scaling, and metric computation."""
 
@@ -39,7 +39,7 @@ class EngineRunConfig:
         return replace(self, **overrides)
 
 
-@dataclass(slots=True)
+@dataclass
 class ModelSpec:
     """User-facing description of a model to train within the engine."""
 
@@ -51,7 +51,7 @@ class ModelSpec:
     tags: Tuple[str, ...] = ()
 
 
-@dataclass(slots=True)
+@dataclass
 class RawSplits:
     X_train: np.ndarray
     y_train: np.ndarray
@@ -64,7 +64,7 @@ class RawSplits:
     test_index: Optional[np.ndarray]
 
 
-@dataclass(slots=True)
+@dataclass
 class ProcessedSplits:
     X_train: np.ndarray
     y_train: np.ndarray
@@ -77,13 +77,13 @@ class ProcessedSplits:
     test_index: Optional[np.ndarray]
 
 
-@dataclass(slots=True)
+@dataclass
 class ScalerBundle:
     input_scaler: Optional[StandardScaler]
     output_scaler: Optional[StandardScaler]
 
 
-@dataclass(slots=True)
+@dataclass
 class ModelRunResult:
     """Structured record describing a single training run."""
 
@@ -361,7 +361,15 @@ class SurrogateEngine:
 
         start = time.perf_counter()
         y_train_for_fit = self._prepare_target_for_fit(proc.y_train)
-        adapter.fit(proc.X_train, y_train_for_fit)
+        if getattr(adapter, "backend", None) == "torch":
+            adapter.fit(
+                proc.X_train,
+                y_train_for_fit,
+                X_val=proc.X_val,
+                y_val=self._prepare_target_for_fit(proc.y_val),
+            )
+        else:
+            adapter.fit(proc.X_train, y_train_for_fit)
         adapter.mark_fitted()
         train_time = time.perf_counter() - start
 
