@@ -137,6 +137,7 @@ def viz_run(
     include_datastreamset_eval: bool = False,
     datastreamset_size: int = 50000,
     datastreamset_max: int = 10,
+    datastreamset_eval_set: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generate inference comparison plots for a SURGE run directory.
@@ -158,6 +159,8 @@ def viz_run(
         Rows per datastreamset for datastreamset evaluation.
     datastreamset_max : int, default=10
         Max datastreamsets to evaluate.
+    datastreamset_eval_set : str, optional
+        Override set_name for datastreamset eval (e.g. stack_b for cross-set eval).
 
     Returns
     -------
@@ -299,6 +302,7 @@ def viz_run(
                 output_dir,
                 datastreamset_size=datastreamset_size,
                 max_datastreamsets=datastreamset_max,
+                eval_set_name=datastreamset_eval_set,
             )
         except Exception as e:
             LOG.warning("Segment evaluation failed: %s", e)
@@ -755,6 +759,7 @@ def viz_datastreamset_evaluation(
     datastreamset_size: int = 50000,
     max_datastreamsets: int = 10,
     datastreamset_offset: int = 0,
+    eval_set_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Evaluate trained models on held-out datastreamsets of the dataset.
@@ -777,6 +782,9 @@ def viz_datastreamset_evaluation(
         Max number of datastreamsets to evaluate (datastreamset 0 = rows 0:datastreamset_size, etc.).
     datastreamset_offset : int, default=0
         Start from this datastreamset index (datastreamset_offset * datastreamset_size).
+    eval_set_name : str, optional
+        Override set_name when loading datastreamsets (e.g. stack_b for cross-set eval).
+        If None, uses spec.metadata_overrides.set_name (train set).
 
     Returns
     -------
@@ -834,14 +842,23 @@ def viz_datastreamset_evaluation(
     train_ranges = _load_or_build_train_ranges(
         run_dir, spec, dataset_path, summary, input_scaler, output_scaler
     )
+    train_set_name = (spec.metadata_overrides or {}).get("set_name", "set1")
+    effective_eval_set = eval_set_name if eval_set_name is not None else train_set_name
     if train_ranges:
         results: Dict[str, Any] = {
             "datastreamset_size": datastreamset_size,
             "train_ranges_path": str(run_dir / "train_data_ranges.json"),
+            "train_set_name": train_set_name,
+            "eval_set_name": effective_eval_set,
             "datastreamsets": {},
         }
     else:
-        results = {"datastreamset_size": datastreamset_size, "datastreamsets": {}}
+        results = {
+            "datastreamset_size": datastreamset_size,
+            "train_set_name": train_set_name,
+            "eval_set_name": effective_eval_set,
+            "datastreamsets": {},
+        }
 
     for datastreamset_idx in range(datastreamset_offset, datastreamset_offset + max_datastreamsets):
         start = datastreamset_idx * datastreamset_size
@@ -850,6 +867,7 @@ def viz_datastreamset_evaluation(
 
         try:
             hints = dict(spec.metadata_overrides or {})
+            hints["set_name"] = effective_eval_set
             hints["row_range"] = (start, end)
             dataset = SurrogateDataset.from_path(
                 dataset_path,
