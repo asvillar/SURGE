@@ -16,6 +16,7 @@ from .engine import (
 )
 from .registry import BaseModelAdapter, ModelRegistry, RegistryEntry, registry_summary
 from .dataset import SurrogateDataset
+from .datasets import MHD-codeDataset, XGCDataset
 from .utils import get_data_path, setup_surge_path
 from .datagen import DataGenerator
 from .workflow.run import run_surrogate_workflow
@@ -65,6 +66,8 @@ except ImportError:
 __all__ = [
     "SurrogateEngine",
     "SurrogateDataset",
+    "MHD-codeDataset",
+    "XGCDataset",
     "EngineRunConfig",
     "ModelSpec",
     "ModelRunResult",
