@@ -128,6 +128,7 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
         self.train()
         best_val_loss = float("inf")
         epochs_without_improvement = 0
+        self.training_history = []
 
         for epoch in range(self.n_epochs):
             epoch_loss = 0.0
@@ -138,6 +139,9 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
+
+            avg_train_loss = epoch_loss / len(dataloader)
+            entry = {"epoch": epoch + 1, "train_loss": avg_train_loss}
 
             if use_early_stop:
                 self.eval()
@@ -150,8 +154,13 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
                     epochs_without_improvement = 0
                 else:
                     epochs_without_improvement += 1
+                entry["val_loss"] = val_loss
                 if epochs_without_improvement >= patience:
+                    self.training_history.append(entry)
                     break
+            else:
+                entry["val_loss"] = None
+            self.training_history.append(entry)
 
         self.is_fitted = True
         return self
@@ -278,7 +287,7 @@ class PyTorchMLPModel:
         """
         Load a saved PyTorch model.
         """
-        checkpoint = torch.load(filepath)
+        checkpoint = torch.load(filepath, map_location="cpu", weights_only=False)
         config = checkpoint['model_config']
 
         # Recreate model with saved configuration
