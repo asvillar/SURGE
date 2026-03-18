@@ -18,7 +18,8 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-from .registry import BaseModelAdapter, ModelRegistry, MODEL_REGISTRY
+from .registry import BaseModelAdapter, ModelRegistry
+from .model.registry import MODEL_REGISTRY
 
 LOGGER = logging.getLogger(__name__)
 
@@ -428,9 +429,8 @@ class SurrogateEngine:
         if spec.key not in self.registry:
             raise KeyError(f"Model '{spec.key}' not found in registry.")
 
-        if pretrained_adapter is not None and getattr(
-            pretrained_adapter, "backend", None
-        ) == "torch":
+        _backend = getattr(pretrained_adapter, "backend", None) if pretrained_adapter else None
+        if pretrained_adapter is not None and _backend in ("torch", "pytorch"):
             adapter = pretrained_adapter
             # Scale LR for fine-tuning (optimizer lives on inner PyTorchMLP)
             inner = getattr(adapter._model, "model", None) if hasattr(adapter, "_model") else None
@@ -453,10 +453,9 @@ class SurrogateEngine:
 
         start = time.perf_counter()
         y_train_for_fit = self._prepare_target_for_fit(proc.y_train)
-        finetune = pretrained_adapter is not None and getattr(
-            adapter, "backend", None
-        ) == "torch"
-        if getattr(adapter, "backend", None) == "torch":
+        _adapter_backend = getattr(adapter, "backend", None)
+        finetune = pretrained_adapter is not None and _adapter_backend in ("torch", "pytorch")
+        if _adapter_backend in ("torch", "pytorch"):
             adapter.fit(
                 proc.X_train,
                 y_train_for_fit,
