@@ -162,15 +162,21 @@ def load_model_compat(
     """
     Load a model with compatibility for older sklearn (monotonic_cst) and PyTorch (persistent IDs).
 
-    Tries joblib.load first (with sklearn patch). On persistent ID errors for torch models,
-    falls back to torch.load and reconstructs the adapter.
+    For PyTorch models (backend pytorch or for_finetune), tries torch.load first to avoid
+    joblib "persistent IDs in protocol 0" errors. Falls back to joblib for sklearn models.
     When for_finetune=True, returns a full PyTorchMLPAdapter (with fit) for torch models.
     """
     _apply_sklearn_compat_patch()
     model_entry = model_entry or {}
     backend = model_entry.get("backend", "")
 
-    # Try joblib first (works for sklearn models and some torch if no protocol 0 issues)
+    # For torch models, try torch format first (avoids joblib persistent ID errors)
+    if backend == "pytorch" or (for_finetune and backend != "sklearn"):
+        adapter = _load_torch_model(model_path, model_entry, for_finetune=for_finetune)
+        if adapter is not None:
+            return adapter
+
+    # Try joblib (works for sklearn models and some torch if no protocol 0 issues)
     try:
         obj = joblib.load(model_path)
         # If we got a dict (torch checkpoint) or thin adapter without fit, use torch loader
