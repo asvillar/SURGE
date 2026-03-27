@@ -211,6 +211,7 @@ pscratch/
 !data/logos/SURGE.png
 !data/logos/surge_logo_panoramic.png
 !data/logos/SURGE_logo_cropped.png
+!mhd_code/figures/*.png
 
 # MHD-code interface/visualization outputs (explicitly excluded)
 comprehensive_eigenmode*.png

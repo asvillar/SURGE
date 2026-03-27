@@ -74,6 +74,11 @@ def _load_torch_model(
             return _TorchAdapter(model)
         except Exception as e:
             LOG.debug("Could not load PyTorchMLPModel format: %s", e)
+            # Fallback: infer architecture from state_dict (config may have wrong hidden_layers)
+            try:
+                return _reconstruct_from_model_state_dict(checkpoint)
+            except Exception as e2:
+                LOG.debug("Could not reconstruct from model_state_dict: %s", e2)
 
     # Format 2: state_dict + params (generic/custom MLP with net, scalers)
     if "state_dict" in checkpoint and "params" in checkpoint:
@@ -83,6 +88,69 @@ def _load_torch_model(
             LOG.debug("Could not reconstruct state_dict+params format: %s", e)
 
     return None
+
+
+def _infer_hidden_layers_from_state_dict(state_dict: dict) -> list:
+    """Infer hidden layer sizes from PyTorchMLP state_dict (network.0, network.3, network.6)."""
+    out = []
+    # network.0.weight: (h1, in), network.3.weight: (h2, h1), network.6.weight: (out, h2)
+    for key in ["network.0.weight", "network.3.weight"]:
+        if key in state_dict:
+            w = state_dict[key]
+            out.append(int(w.shape[0]))
+    return out
+
+
+def _reconstruct_from_model_state_dict(checkpoint: dict) -> Any:
+    """Reconstruct MLP from model_state_dict + model_config when config has wrong hidden_layers."""
+    import torch
+    import torch.nn as nn
+    import numpy as np
+
+    state_dict = checkpoint["model_state_dict"]
+    config = checkpoint.get("model_config", {})
+    hidden_layers = _infer_hidden_layers_from_state_dict(state_dict)
+    if not hidden_layers:
+        raise ValueError("Could not infer hidden_layers from state_dict")
+    input_size = config.get("input_size")
+    output_size = config.get("output_size")
+    if input_size is None or output_size is None:
+        raise ValueError("model_config missing input_size or output_size")
+    dropout_rate = config.get("dropout_rate", 0.1)
+    activation_fn = config.get("activation_fn")
+    if activation_fn is None or not callable(getattr(activation_fn, "__call__", None)):
+        activation_fn = nn.ReLU
+
+    layers = []
+    prev = input_size
+    for h in hidden_layers:
+        layers.append(nn.Linear(prev, h))
+        layers.append(activation_fn() if callable(activation_fn) else activation_fn)
+        if dropout_rate > 0:
+            layers.append(nn.Dropout(dropout_rate))
+        prev = h
+    layers.append(nn.Linear(prev, output_size))
+
+    class _NetMLP(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.network = nn.Sequential(*layers)
+
+        def forward(self, x):
+            return self.network(x)
+
+        def predict(self, X):
+            if isinstance(X, np.ndarray):
+                X = torch.tensor(X, dtype=torch.float32)
+            self.eval()
+            with torch.no_grad():
+                out = self.forward(X)
+            return out.cpu().numpy()
+
+    model = _NetMLP()
+    model.load_state_dict(state_dict, strict=True)
+    # Model expects scaled X (from run's input_scaler), returns scaled y (caller uses output_scaler)
+    return _TorchAdapter(model)
 
 
 def _TorchAdapter(model: Any) -> Any:

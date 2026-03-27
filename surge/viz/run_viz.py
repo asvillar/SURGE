@@ -583,13 +583,23 @@ def _load_or_build_train_ranges(
     if dataset.df is None or len(dataset.df) == 0:
         return None
 
+    # Use spec's input subset (n_inputs or input_columns) to match model/scaler
+    spec_input_cols = getattr(spec, "input_columns", None)
+    spec_n_inputs = getattr(spec, "n_inputs", None)
+    if spec_input_cols and len(spec_input_cols) > 0:
+        eff_input_cols = [c for c in spec_input_cols if c in dataset.df.columns]
+    elif spec_n_inputs and dataset.input_columns:
+        eff_input_cols = dataset.input_columns[: spec_n_inputs]
+    else:
+        eff_input_cols = dataset.input_columns
+
     # Get rows at train indices (indices are row positions in the sampled df)
     n_rows = len(dataset.df)
     valid = (indices >= 0) & (indices < n_rows)
     if not np.any(valid):
         return None
     idx = indices[valid]
-    X = dataset.df[dataset.input_columns].iloc[idx].values.astype(np.float64)
+    X = dataset.df[eff_input_cols].iloc[idx].values.astype(np.float64)
     y = dataset.df[dataset.output_columns].iloc[idx].values.astype(np.float64)
     if input_scaler is not None:
         X = input_scaler.transform(X)
@@ -598,7 +608,7 @@ def _load_or_build_train_ranges(
 
     ranges = {
         "inputs": {
-            "columns": dataset.input_columns,
+            "columns": eff_input_cols,
             "min": X.min(axis=0).tolist(),
             "max": X.max(axis=0).tolist(),
         },
@@ -884,7 +894,16 @@ def viz_datastreamset_evaluation(
             LOG.warning("%s empty. Skip.", datastreamset_key)
             continue
 
-        X = dataset.df[dataset.input_columns].values.astype(np.float64)
+        # Use spec's input subset (n_inputs or input_columns) to match model/scaler
+        spec_input_cols = getattr(spec, "input_columns", None)
+        spec_n_inputs = getattr(spec, "n_inputs", None)
+        if spec_input_cols and len(spec_input_cols) > 0:
+            eff_input_cols = [c for c in spec_input_cols if c in dataset.df.columns]
+        elif spec_n_inputs and dataset.input_columns:
+            eff_input_cols = dataset.input_columns[: spec_n_inputs]
+        else:
+            eff_input_cols = dataset.input_columns
+        X = dataset.df[eff_input_cols].values.astype(np.float64)
         y_true = dataset.df[dataset.output_columns].values.astype(np.float64)
         if input_scaler is not None:
             X = input_scaler.transform(X)
@@ -896,7 +915,7 @@ def viz_datastreamset_evaluation(
         # In-distribution check: are datastreamset min/max within training ranges?
         if train_ranges:
             in_range = _check_datastreamset_in_range(
-                X, y_true, train_ranges, dataset.input_columns, dataset.output_columns
+                X, y_true, train_ranges, eff_input_cols, dataset.output_columns
             )
             datastreamset_entry["in_range"] = in_range
 
