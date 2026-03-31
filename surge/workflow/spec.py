@@ -67,6 +67,9 @@ class SurrogateWorkflowSpec:
     batch_dir_psi_step: Optional[int] = None
     batch_dir_target_shape: Optional[tuple] = None  # (n_modes, n_psi) for fixed resolution
     batch_dir_include_eigenmodes: bool = False
+    # HDF5 leaf name under run*/case_data (default: sdata_pertfields_grid_complex_v2.h5).
+    # Use sdata_complex_v2.h5 on partner-style trees where that file holds nonsymmetric δp modes.
+    batch_dir_filename: Optional[str] = None
     notes: Optional[str] = None
     overwrite_existing_run: bool = False
     pretrained_run_dir: Optional[Union[str, Path]] = None

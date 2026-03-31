@@ -55,6 +55,9 @@ class ModelRegistry:
         keys = list(self._registry.keys()) + list(self._alias_map.keys())
         return sorted(dict.fromkeys(keys))
 
+    def __contains__(self, name: str) -> bool:
+        return name in self._registry or name in self._alias_map
+
 
 MODEL_REGISTRY = ModelRegistry()
 

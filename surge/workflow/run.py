@@ -101,6 +101,9 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
         batch_dir = Path(spec.dataset_path)
         if not batch_dir.is_dir():
             raise FileNotFoundError(f"dataset_source=mhd_code_batch requires a directory: {batch_dir}")
+        _batch_kw = {}
+        if spec.batch_dir_filename:
+            _batch_kw["filename"] = spec.batch_dir_filename
         dataset = MHD-codeDataset.from_batch_dir(
             batch_dir,
             mode_step=spec.batch_dir_mode_step,
@@ -108,6 +111,7 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
             target_shape=spec.batch_dir_target_shape,
             include_eigenmodes=spec.batch_dir_include_eigenmodes,
             verbose=True,
+            **_batch_kw,
         )
     elif spec.dataset_source == "mhd_code_batch_per_mode":
         from ..datasets import MHD-codeDataset
@@ -116,9 +120,13 @@ def run_surrogate_workflow(spec: SurrogateWorkflowSpec) -> Dict[str, Any]:
             raise FileNotFoundError(
                 f"dataset_source=mhd_code_batch_per_mode requires a directory: {batch_dir}"
             )
+        _batch_kw = {}
+        if spec.batch_dir_filename:
+            _batch_kw["filename"] = spec.batch_dir_filename
         dataset = MHD-codeDataset.from_batch_dir_per_mode(
             batch_dir,
             verbose=True,
+            **_batch_kw,
         )
         if spec.sample_rows:
             dataset.df = dataset.df.sample(n=min(spec.sample_rows, len(dataset.df)), random_state=spec.seed)

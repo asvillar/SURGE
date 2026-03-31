@@ -38,6 +38,9 @@ class BaseModelAdapter(ABC):
             raise ValueError("Model has not been initialized")
         return self._model.fit(X, y)
 
+    def mark_fitted(self) -> None:
+        """Called by SurrogateEngine after ``fit`` completes. Subclasses may override."""
+
     def predict(self, X: Any) -> Any:
         if self._model is None:
             raise ValueError("Model must be fitted before predicting")
