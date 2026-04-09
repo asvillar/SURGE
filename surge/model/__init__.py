@@ -12,7 +12,11 @@ from .registry import MODEL_REGISTRY, create_model, list_models, register_model
 register_model(RandomForestModel, key='sklearn.random_forest', aliases=['random_forest', 'rfr'])
 register_model(MLPModel, key='sklearn.mlp', aliases=['mlp'])
 register_model(GPRModel, key='sklearn.gpr', aliases=['gpr'])
-register_model(PyTorchMLPAdapter, key='pytorch.mlp', aliases=['torch_mlp'])
+register_model(
+    PyTorchMLPAdapter,
+    key='pytorch.mlp',
+    aliases=['torch_mlp', 'torch.mlp'],
+)
 register_model(GPflowGPRAdapter, key='gpflow.gpr', aliases=['gp_gpr'])
 register_model(GPflowMultiKernelAdapter, key='gpflow.multi_kernel', aliases=['gpflow_mk'])
 
