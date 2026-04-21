@@ -597,9 +597,15 @@ class SurrogateEngine:
         metrics: Dict[str, float] = {}
 
         if "r2" in self.config.metrics:
-            metrics["r2"] = float(
-                r2_score(y_true, y_pred, multioutput="uniform_average")
-            )
+            if y_true.ndim == 2 and y_true.shape[1] > 1:
+                metrics["r2"] = float(
+                    r2_score(y_true, y_pred, multioutput="variance_weighted")
+                )
+                metrics["r2_uniform_average"] = float(
+                    r2_score(y_true, y_pred, multioutput="uniform_average")
+                )
+            else:
+                metrics["r2"] = float(r2_score(y_true, y_pred))
         if "rmse" in self.config.metrics or "mse" in self.config.metrics:
             mse = mean_squared_error(y_true, y_pred, multioutput="uniform_average")
             if "mse" in self.config.metrics:
