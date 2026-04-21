@@ -182,7 +182,13 @@ def _run(args: argparse.Namespace) -> int:
     if getattr(args, "mlflow", False):
         spec.mlflow_tracking = True
 
-    summary = run_surrogate_workflow(spec)
+    invocation = {
+        "argv": [str(x) for x in sys.argv],
+        "executable": sys.executable,
+        "cwd": str(Path.cwd().resolve()),
+        "spec_path": str(spec_path.resolve()),
+    }
+    summary = run_surrogate_workflow(spec, invocation=invocation)
     print(json.dumps(summary, indent=2))
     return 0
 

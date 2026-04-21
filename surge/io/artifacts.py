@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -100,6 +101,37 @@ def save_environment_snapshot(paths: ArtifactPaths, extras: Optional[Mapping[str
     with paths.env_file.open("w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
     return paths.env_file
+
+
+def _batch_relevant_environ() -> dict[str, str]:
+    keys = [
+        k
+        for k in os.environ
+        if k.startswith(("SLURM_", "SURGE_")) or k in ("HOSTNAME", "CUDA_VISIBLE_DEVICES")
+    ]
+    return {k: os.environ[k] for k in sorted(keys)}
+
+
+def save_run_invocation(paths: ArtifactPaths, invocation: Mapping[str, Any]) -> Path:
+    """Write CLI / batch metadata (argv, cwd, spec path, SLURM_*, etc.) for reproducibility."""
+    payload = dict(invocation)
+    if "environment_batch" not in payload:
+        payload["environment_batch"] = _batch_relevant_environ()
+    target = paths.root / "invocation.json"
+    _write_json(target, payload)
+    return target
+
+
+def copy_invoked_config_source(paths: ArtifactPaths, spec_path: Union[str, Path]) -> Optional[Path]:
+    """Copy the original workflow YAML as invoked (preserves comments)."""
+    spec_path = Path(spec_path)
+    if not spec_path.is_file():
+        return None
+    dest_dir = paths.root / "inputs"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / spec_path.name
+    shutil.copy2(spec_path, dest)
+    return dest
 
 
 def save_git_revision(paths: ArtifactPaths, repo_dir: Optional[Union[str, Path]] = None) -> Path:
