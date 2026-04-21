@@ -47,3 +47,11 @@ class PyTorchMLPAdapter(BaseModelAdapter):
         if self._model is None:
             raise ValueError("Model must be fitted before predicting")
         return self._model.predict_with_dropout(X, n_samples=n_samples)
+
+    @property
+    def training_history(self):
+        """Per-epoch loss/RMSE records (PyTorch MLP); surfaced to the engine for artifacts."""
+        inner = getattr(self, "_model", None)
+        if inner is None or getattr(inner, "model", None) is None:
+            return None
+        return getattr(inner.model, "training_history", None)
