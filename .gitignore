@@ -266,3 +266,6 @@ TRAINER_COMPARISON_REPORT.md
 UNIFIED_FRAMEWORK_SUMMARY.md
 BRANCH_STRATEGY.md
 
+# Slurm tee logs from scripts/mhd_code/train_*_augstyle.slurm
+slurm_logs/
+
