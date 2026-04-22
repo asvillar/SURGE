@@ -148,18 +148,27 @@ reproduce or audit the run:
 
 ```text
 runs/quickstart/
-├── spec.yaml                  # exact workflow spec (for re-running)
-├── env.txt                    # pip freeze at run time
-├── git_rev.txt                # HEAD of the repo, or "unknown"
-├── workflow_summary.json      # metrics + profile + resources_used
-├── metrics.json               # per-model metrics (train/val/test + timings)
-├── scaler.joblib              # input scaler (needed for inference)
-├── predictions/               # train/val/test predictions as parquet
-└── sklearn.random_forest/
-    ├── model.joblib
-    ├── onnx/model.onnx        # if torch/onnx extras are installed
-    └── resources_used.json
+├── spec.yaml                                     # exact workflow spec (for re-running)
+├── env.txt                                       # pip freeze at run time
+├── git_rev.txt                                   # HEAD of the repo, or "unknown"
+├── run.log                                       # stdout capture
+├── workflow_summary.json                         # metrics + profile + resources_used
+├── metrics.json                                  # per-model train/val/test + timings
+├── train_data_ranges.json                        # input ranges (for OOD flagging)
+├── model_card_sklearn.random_forest.json         # data + model provenance card
+├── scalers/
+│   └── inputs.joblib                             # input scaler (needed for inference)
+├── models/
+│   └── sklearn.random_forest.joblib              # the trained estimator
+├── predictions/
+│   ├── sklearn.random_forest_train.parquet
+│   ├── sklearn.random_forest_val.parquet
+│   └── sklearn.random_forest_test.parquet
+└── hpo/                                          # populated only if HPO is enabled
 ```
+
+PyTorch adapters additionally drop an ONNX export under
+`models/<key>.onnx` when the `torch` + `onnx` extras are installed.
 
 During training SURGE also prints a one-line banner per model so you
 always know what backend, device, and worker count actually ran:
