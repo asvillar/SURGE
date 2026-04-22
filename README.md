@@ -253,6 +253,11 @@ The same fields are persisted to `workflow_summary.json` under
 ## Documentation
 
 - [`docs/README.md`](docs/README.md) — documentation index.
+- [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md) —
+  copy-paste-ready first-run walkthrough on `$SCRATCH` (clone → venv →
+  install → tests → CLI quickstart).
+- [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) — longer
+  install reference (extras, troubleshooting, NERSC tips).
 - [`docs/PRERELEASE.md`](docs/PRERELEASE.md) — what ships in `0.1.0`.
 - [`docs/RELEASE_DEMO_PLAN.md`](docs/RELEASE_DEMO_PLAN.md) — end-to-end tour.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — scheduled post-`0.1.0` work.

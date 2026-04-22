@@ -109,6 +109,9 @@ worked examples if you have access.
 
 ## Next steps
 
+- [`docs/setup/WALKTHROUGH.md`](WALKTHROUGH.md) — copy-paste-ready
+  first-run flow (clone → venv → install → tests → CLI quickstart)
+  against `$SCRATCH` or any other clean directory.
 - `python -m examples.quickstart --dataset california` — a bigger public
   regression benchmark (20k samples, typically R² > 0.8).
 - [`docs/RUNBOOK.md`](../RUNBOOK.md) — what each file under
