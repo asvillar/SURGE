@@ -48,13 +48,6 @@ except ImportError:
 # and polluted sys.path from import time, so it was removed.
 MHD-code_LOADER_AVAILABLE = False
 
-# Import helper functions for convenience
-try:
-    from .helpers import quick_train, train_and_compare, load_and_train
-    HELPERS_AVAILABLE = True
-except ImportError:
-    HELPERS_AVAILABLE = False
-
 __all__ = [
     "SurrogateEngine",
     "SurrogateDataset",
@@ -95,13 +88,11 @@ if DATASET_UTILS_AVAILABLE:
 # application-specific and live under scripts/mhd_code/. Use `MHD-codeDataset`
 # from `surge.datasets.mhd_code` (exported below) which imports them lazily.
 
-# Backward compatibility aliases
-MLTrainer = SurrogateEngine  # Legacy alias
-SurrogateTrainer = SurrogateEngine  # Legacy alias
-
-# Add helpers if available
-if HELPERS_AVAILABLE:
-    __all__.extend(["quick_train", "train_and_compare", "load_and_train"])
+# Backward compatibility aliases kept only so `import surge; surge.MLTrainer`
+# doesn't explode in downstream notebooks. The constructor/method signatures
+# differ from the pre-refactor trainer — use SurrogateEngine directly.
+MLTrainer = SurrogateEngine
+SurrogateTrainer = SurrogateEngine
 
 # Print availability status when package is imported
 def _print_availability():
