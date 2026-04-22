@@ -176,6 +176,18 @@ def run_surrogate_workflow(
             _progress_step(step, total_steps, msg)
 
         LOGGER.info("Starting SURGE workflow for dataset %s", spec.dataset_path)
+        if getattr(spec, "cv_folds", 0) and int(spec.cv_folds) > 0:
+            warnings.warn(
+                f"spec.cv_folds={spec.cv_folds} is not yet implemented in the unified "
+                "workflow (k-fold training and aggregated fold metrics; see docs/ROADMAP.md). "
+                "This run uses the usual single random train/val/test split; cv_folds is ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
+            LOGGER.warning(
+                "Ignoring spec.cv_folds=%s (cross-validation in workflow not implemented yet).",
+                spec.cv_folds,
+            )
         next_step("Loading dataset...")
         if spec.dataset_source == "mhd_code_batch":
             from ..datasets import MHD-codeDataset

@@ -625,7 +625,7 @@ def _load_or_build_train_ranges(
     return ranges
 
 
-# Drift detection policy (see docs/stacked/DRIFT_DETECTION_POLICY.md)
+# Drift detection policy (thresholds below; document in workflow outputs)
 DRIFT_R2_DROP_THRESHOLD = 0.1
 DRIFT_RMSE_RATIO_THRESHOLD = 1.5
 
@@ -690,7 +690,7 @@ def _apply_drift_detection(
             datastreamsets_with_drift.append(datastreamset_key)
 
     results["drift_detection"] = {
-        "policy": "docs/stacked/DRIFT_DETECTION_POLICY.md",
+        "policy": "surge.viz.run_viz drift thresholds (DRIFT_R2_DROP_THRESHOLD, DRIFT_RMSE_RATIO_THRESHOLD)",
         "drift_warning": len(datastreamsets_with_drift) > 0,
         "datastreamsets_with_drift": datastreamsets_with_drift,
         "n_datastreamsets_evaluated": len(results.get("datastreamsets", {})),

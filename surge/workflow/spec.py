@@ -54,6 +54,8 @@ class SurrogateWorkflowSpec:
     val_fraction: float = 0.1
     standardize_inputs: bool = True
     standardize_outputs: bool = False
+    # Optional, reserved for a future k-fold path: k>0 is accepted but the unified
+    # workflow currently performs a single random split only (see docs/ROADMAP.md).
     cv_folds: int = 0
     predictions_scope: Sequence[str] = field(default_factory=lambda: ("train", "val", "test"))
     predictions_format: str = "parquet"

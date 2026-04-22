@@ -414,8 +414,8 @@ class SurrogateDataset:
         raise ValueError(f"Unsupported dataset format '{fmt}' for file {path}")
 
     def _read_xgc(self, path: Path, **reader_kwargs: Any) -> pd.DataFrame:
-        """Load kinetic-code stacked layout .npy files via XGCDataset."""
-        from .datasets.stacked import _load_stacked_dir
+        """Load stacked-directory .npy layout via XGCDataset (see ``surge.datasets.stacked``)."""
+        from .datasets.stacked import _load_stacked_npy
 
         if not path.is_dir():
             raise ValueError(f"kinetic-code format requires a directory path, got: {path}")
@@ -425,7 +425,7 @@ class SurrogateDataset:
         random_state = reader_kwargs.get("random_state", 42)
         row_range = reader_kwargs.get("row_range")
 
-        df, _input_cols, _output_cols = _load_stacked_dir(
+        df, _input_cols, _output_cols = _load_stacked_npy(
             path,
             set_name=set_name,
             sample=sample,
