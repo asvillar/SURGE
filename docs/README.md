@@ -11,7 +11,11 @@ Use this page to navigate the SURGE documentation and repository.
 | [PRERELEASE.md](PRERELEASE.md) | Prerelease scope: what is ready, what is not, adoption paths |
 | [PUBLIC_OPEN_SOURCE_PLAN.md](PUBLIC_OPEN_SOURCE_PLAN.md) | **Public release + history hygiene** (DOE URL, filter-repo, exclusions) |
 | [RELEASE_DEMO_PLAN.md](RELEASE_DEMO_PLAN.md) | End-to-end demo tour the public release must ship (datagen → EDA → train → HPO → fine-tune → ONNX) |
+| [RELEASE_SPRINT.md](RELEASE_SPRINT.md) | Three-night release sprint (task list, stop-and-query protocol) |
+| [REFACTORING_PLAN.md](REFACTORING_PLAN.md) | Code-smell inventory, resource policy design, phased refactor |
 | [ROADMAP.md](ROADMAP.md) | Public priorities and known gaps (CV, large data, etc.) |
+| [AUDIT_NIGHT1.md](AUDIT_NIGHT1.md) | Disclosure-safety audit ahead of public repo |
+| [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | Human-in-the-loop decision queue during the sprint |
 | [SURGE_OVERVIEW.md](SURGE_OVERVIEW.md) | Framework overview, philosophy, key modules |
 | [quickstart.rst](quickstart.rst) | Installation and first run |
 | [setup/QUICKSTART.md](setup/QUICKSTART.md) | Environment setup quick reference |
