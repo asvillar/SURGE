@@ -13,10 +13,10 @@ sys.path.insert(0, os.path.abspath('..'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'SURGE'
-copyright = '2025, SURGE Team'
-author = 'SURGE Team'
-release = '1.0.0'
-version = '1.0'
+copyright = '2026, Princeton Plasma Physics Laboratory and SURGE contributors'
+author = 'S. Villar and contributors'
+release = '0.1.0'
+version = '0.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -41,7 +41,28 @@ source_suffix = {
 }
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = [
+    '_build', 'Thumbs.db', '.DS_Store',
+    # Internal content — kept local for the authors but never shipped
+    # on ReadTheDocs. Matches the .gitignore entries in docs/internal/.
+    'internal/**',
+    # Dev / agent / prerelease planning — useful in the repo, not in
+    # the user-facing documentation site.
+    'dev/**',
+    'agents/**',
+    'setup/**',
+    'AUDIT_NIGHT1.md',
+    'OPEN_QUESTIONS.md',
+    'PRERELEASE.md',
+    'PUBLIC_OPEN_SOURCE_PLAN.md',
+    'REFACTORING_PLAN.md',
+    'RELEASE_DEMO_PLAN.md',
+    'RELEASE_SPRINT.md',
+    'ROADMAP.md',
+    'plan.md',
+    'status.md',
+    'README.md',
+]
 
 language = 'en'
 

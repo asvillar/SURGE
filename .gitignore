@@ -299,6 +299,10 @@ logs/
 # MHD-code_PYTHON_PATH if they need eigenmode_features' optional import.
 notebooks/**/mhd_code_python_code/
 
+# Sphinx autosummary regenerates these on every build.
+docs/_build/
+docs/api_reference/generated/
+
 # Legacy / shadow `surge/models/` package directory. The canonical
 # module is the tracked `surge/models.py`; the local `surge/models/`
 # directory is an older/alternative layout kept on some checkouts.

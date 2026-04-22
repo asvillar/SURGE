@@ -1,12 +1,12 @@
-.. image:: ../data/logos/surge_logo_panoramic.png
+.. image:: ../data/logos/Fulllogo.png
    :align: center
-   :alt: SURGE Logo
-   :width: 400px
+   :alt: SURGE — Surrogate Unified Robust Generation Engine
+   :width: 520px
 
 SURGE
 =====
 
-*A Surrogate Unified Robust Generation Engine*
+*Surrogate Unified Robust Generation Engine*
 
 **SURGE** is a modular AI/ML framework for building fast, accurate, and uncertainty-aware 
 surrogate models that emulate complex scientific simulations. The latest refactor consolidates
@@ -64,30 +64,42 @@ Core Functionalities
    :maxdepth: 2
    :caption: Contents:
 
-   SURGE_OVERVIEW
    overview
    installation
    quickstart
+   SURGE_OVERVIEW
+   comparison
    api_reference/index
-   examples/index
 
-🚀 Quick Start
---------------
+Quick Start
+-----------
 
-.. code-block:: bash
+SURGE runs end-to-end on any tabular CSV. Here's a complete train →
+evaluate → profile cycle on scikit-learn's 442-row diabetes dataset,
+which runs in under 5 seconds on a laptop:
 
-   # Baseline MHD-code workflow (1k-row sample)
-   conda run -n surge python -m examples.mhd_code_workflow \
-       --spec configs/mhd_code_demo.yaml --run-tag mhd_code_demo_cli
+.. code-block:: python
 
-   # Augmented workflow (all 9,981 samples + 50 Optuna trials/model)
-   conda run -n surge python -m examples.mhd_code_workflow \
-       --spec configs/mhd_code_demo_augmented.yaml --run-tag mhd_code_demo_full
+   from sklearn.datasets import load_diabetes
+   from surge import SurrogateWorkflowSpec, run_surrogate_workflow
+   from surge.hpc import ResourceSpec
 
-   # Notebook exploration
-   conda run -n surge jupyter lab notebooks/MHD-code_demo.ipynb
+   load_diabetes(as_frame=True).frame.to_csv("diabetes.csv", index=False)
 
-Programmatic usage mirrors the CLI by loading ``SurrogateWorkflowSpec`` from YAML and passing it to ``run_surrogate_workflow``.
+   spec = SurrogateWorkflowSpec(
+       dataset_path="diabetes.csv",
+       models=[{"key": "sklearn.random_forest",
+                "params": {"n_estimators": 200}}],
+       resources=ResourceSpec(device="cpu", num_workers=4),
+       output_dir=".",
+       run_tag="quickstart",
+       overwrite_existing_run=True,
+   )
+   summary = run_surrogate_workflow(spec)
+
+All artifacts (trained model, scaler, metrics, predictions, provenance)
+land in ``runs/quickstart/``. See :doc:`quickstart` for a full tour and
+the project README for a verbatim output transcript.
 
 Indices and tables
 ==================
