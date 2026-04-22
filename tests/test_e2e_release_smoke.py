@@ -108,6 +108,10 @@ def test_torch_export_onnx_roundtrip(sample_xy, tmp_path) -> None:
     """Tiny MLP -> torch.onnx.export -> onnxruntime -> numeric parity."""
     torch = pytest.importorskip("torch")
     ort = pytest.importorskip("onnxruntime")
+    # torch>=2.11 routes torch.onnx.export through onnxscript. Skip cleanly
+    # (don't fail) when it's missing — common on minimal installs.
+    if tuple(int(p) for p in torch.__version__.split(".")[:2]) >= (2, 11):
+        pytest.importorskip("onnxscript")
 
     X, y, _, _ = sample_xy
     n_in = X.shape[1]
