@@ -1,5 +1,13 @@
 # SURGE
 
+[![CI](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml/badge.svg)](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](./pyproject.toml)
+[![PyPI](https://img.shields.io/pypi/v/surge-ml.svg?label=PyPI&color=informational)](https://pypi.org/project/surge-ml/)
+[![Last commit](https://img.shields.io/github/last-commit/S-Villar/SURGE.svg)](https://github.com/S-Villar/SURGE/commits)
+[![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![uv](https://img.shields.io/badge/uv-ready-261230.svg?logo=astral&logoColor=white)](https://github.com/astral-sh/uv)
+
 **Surrogate Regression Engine** — a surrogate modeling framework for
 scientific workflows that integrates Scientific Machine Learning (SciML)
 and AutoML features, uncertainty quantification (UQ), and MLOps-style
@@ -52,6 +60,14 @@ From a clone:
 git clone https://github.com/S-Villar/SURGE.git
 cd SURGE
 python -m pip install -e ".[torch]"   # core + PyTorch MLP; omit [torch] if not needed
+```
+
+With [`uv`](https://github.com/astral-sh/uv) (faster, isolated):
+
+```bash
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip install -e ".[torch]"
 ```
 
 Or from a published tag (once `0.1.0` is on PyPI):
