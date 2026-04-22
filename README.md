@@ -122,8 +122,10 @@ inference.
 # 442-row diabetes benchmark, random forest (~5 s on a laptop)
 python -m examples.quickstart --dataset diabetes --model rf
 
-# 20,640-row California housing benchmark, PyTorch MLP (~90 s on CPU)
-python -m examples.quickstart --dataset california --model mlp --infer
+# 20,640-row California housing benchmark, PyTorch MLP (~90 s on CPU).
+# --viz writes predicted-vs-true regression-map plots under plots/.
+# --infer round-trips the saved model on the first 5 rows.
+python -m examples.quickstart --dataset california --model mlp --viz --infer
 
 # Add a small Optuna HPO sweep (MLP only)
 python -m examples.quickstart --dataset california --model mlp --n-trials 20

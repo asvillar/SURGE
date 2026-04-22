@@ -123,6 +123,115 @@ def _build_model_entry(model: str, n_trials: int) -> Dict[str, Any]:
     return entry
 
 
+# --------------------------------------------------------------- artifacts --
+
+def _fmt_bytes(n: int) -> str:
+    """Compact, byte-accurate human rendering (B / KB / MB / GB)."""
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}" if unit != "B" else f"{n} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
+# Annotations for the most common artifacts; unknown files just get sized.
+_ARTIFACT_NOTES: Dict[str, str] = {
+    "spec.yaml":               "workflow spec (re-runnable)",
+    "env.txt":                 "pip freeze at run time",
+    "git_rev.txt":             "repo HEAD or 'unknown'",
+    "run.log":                 "stdout capture",
+    "workflow_summary.json":   "metrics + profile + resources_used",
+    "metrics.json":            "per-model train/val/test + timings",
+    "train_data_ranges.json":  "canonical input column order + min/max",
+}
+
+# Suffix- or prefix-based fallbacks for files whose stems include the model key.
+_ARTIFACT_NOTE_PATTERNS: Tuple[Tuple[str, str], ...] = (
+    ("model_card_",        "data + model provenance card"),
+    ("training_history_",  "per-epoch loss / metric curves"),
+    ("training_progress_", "streaming JSONL progress log"),
+)
+_ARTIFACT_NOTE_SUFFIXES: Tuple[Tuple[str, str], ...] = (
+    (".onnx",              "ONNX export for cross-runtime inference"),
+)
+
+
+def _print_artifact_tree(run_dir: Path) -> None:
+    """Walk runs/<tag>/ and render a tree with sizes + annotations.
+
+    Mirrors the layout shown in the README quickstart so the CLI output is
+    self-describing: a user can tell at a glance which file carries which
+    piece of the run.
+    """
+    if not run_dir.is_dir():
+        print(f"[artifacts] (no directory at {run_dir})")
+        return
+
+    print(f"\n[artifacts] {run_dir}")
+
+    entries = sorted(run_dir.iterdir(), key=lambda p: (p.is_file(), p.name))
+    for idx, entry in enumerate(entries):
+        is_last = idx == len(entries) - 1
+        branch = "└── " if is_last else "├── "
+        if entry.is_file():
+            note = _ARTIFACT_NOTES.get(entry.name, "")
+            if not note:
+                for prefix, pref_note in _ARTIFACT_NOTE_PATTERNS:
+                    if entry.name.startswith(prefix):
+                        note = pref_note
+                        break
+            if not note:
+                for suffix, suf_note in _ARTIFACT_NOTE_SUFFIXES:
+                    if entry.name.endswith(suffix):
+                        note = suf_note
+                        break
+            size = _fmt_bytes(entry.stat().st_size)
+            extra = f"  — {note}" if note else ""
+            print(f"  {branch}{entry.name:36s}  {size:>9s}{extra}")
+            continue
+
+        print(f"  {branch}{entry.name}/")
+        prefix = "      " if is_last else "  │   "
+        sub_entries = sorted(entry.iterdir())
+        for j, sub in enumerate(sub_entries):
+            sub_last = j == len(sub_entries) - 1
+            sub_branch = "└── " if sub_last else "├── "
+            if sub.is_file():
+                size = _fmt_bytes(sub.stat().st_size)
+                print(f"{prefix}{sub_branch}{sub.name:32s}  {size:>9s}")
+            else:
+                print(f"{prefix}{sub_branch}{sub.name}/")
+
+
+# ---------------------------------------------------------- visualization ---
+
+def _demo_viz(run_dir: Path) -> None:
+    """Generate parity plots (predicted vs ground truth) under runs/<tag>/plots/.
+
+    Wraps ``surge.viz.viz_run``, which reads every
+    ``predictions/<model>_<split>.parquet`` and builds a 2D-density
+    "regression map" per output with R² annotations and a diagonal
+    reference.
+    """
+    try:
+        import matplotlib  # type: ignore
+        matplotlib.use("Agg")
+        from surge.viz.run_viz import viz_run  # type: ignore
+    except ImportError as exc:
+        print(f"\n[viz] matplotlib / surge.viz unavailable: {exc}")
+        return
+
+    result = viz_run(run_dir=run_dir, dpi=120, include_hpo=True)
+    paths = result.get("saved_paths") or []
+    if not paths:
+        print("\n[viz] no plots saved (no predictions found?)")
+        return
+
+    print("\n[viz] parity plots (predictions vs ground truth):")
+    for p in paths:
+        print(f"        {Path(p).relative_to(run_dir)}")
+
+
 # --------------------------------------------------------------- inference ---
 
 def _demo_inference(run_dir: Path, csv_path: Path, target_col: str) -> None:
@@ -244,6 +353,13 @@ def main(argv: list[str] | None = None) -> int:
         "--infer", action="store_true",
         help="After training, round-trip the saved model on the first 5 rows.",
     )
+    parser.add_argument(
+        "--viz", action="store_true",
+        help=(
+            "Generate parity / regression-map plots under runs/<tag>/plots/ "
+            "via surge.viz.viz_run (requires matplotlib)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     # Lazy imports: keep argparse --help fast and avoid surfacing backend
@@ -302,7 +418,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  inference   = {inf_ms:.2f} ms/sample")
 
         run_dir = out_dir / "runs" / run_tag
-        print(f"\n[quickstart] artifacts -> {run_dir}")
     else:
         # --skip-train: discover the most recent run under runs/ for --infer
         run_tag = args.run_tag or f"{args.dataset}_{args.model}"
@@ -311,6 +426,11 @@ def main(argv: list[str] | None = None) -> int:
         if not run_dir.is_dir():
             print(f"[quickstart] no run at {run_dir} — omit --skip-train or set --run-tag")
             return 1
+
+    if args.viz:
+        _demo_viz(run_dir)
+
+    _print_artifact_tree(run_dir)
 
     if args.infer:
         _demo_inference(run_dir, csv_path, target_col)
