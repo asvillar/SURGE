@@ -16,38 +16,32 @@ only have the sklearn baseline installed.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
-
-SAMPLE_CSV = (
-    Path(__file__).resolve().parent.parent
-    / "data"
-    / "datasets"
-    / "MHD-code"
-    / "mhd_code_synthetic_profiles_sample.csv"
-)
 
 
 # ---------------------------------------------------------------------------
 # Data fixture (shared across sub-tests)
 # ---------------------------------------------------------------------------
+# Uses scikit-learn's diabetes benchmark (442 rows, 10 inputs, 1 output). It
+# ships with scikit-learn, so CI does not depend on any dataset being vendored
+# into the repo.
 @pytest.fixture(scope="module")
 def sample_xy() -> tuple[np.ndarray, np.ndarray, list[str], list[str]]:
-    assert SAMPLE_CSV.is_file(), (
-        f"Sample CSV not found at {SAMPLE_CSV}. The release-tracked sample "
-        "dataset is required for the E2E regression. See "
-        "data/datasets/SAMPLES_README.md."
-    )
-    df = pd.read_csv(SAMPLE_CSV)
+    from sklearn.datasets import load_diabetes
 
-    # Canonical schema for the synthetic MHD-code sample
-    input_cols = ["eq_beta", "eq_q95", "shape_kappa", "shape_delta", "mode_m", "mode_n"]
-    # Keep the smoke test fast: use the first 4 output channels only.
-    output_cols = [c for c in df.columns if c.startswith("gamma_")][:4]
-    assert input_cols and output_cols, "Sample CSV schema changed; update this test."
+    bunch = load_diabetes(as_frame=True)
+    df = bunch.frame
+
+    input_cols = list(bunch.feature_names)
+    # Fan out the single regression target into a small multi-output problem
+    # so the PyTorch -> ONNX export path exercises n_out > 1, matching the
+    # shape constraints used by SURGE's multi-output adapters.
+    df = df.copy()
+    df["target_b"] = df["target"] * 0.5 + 1.0
+    df["target_c"] = df["target"] * -0.25 + 0.5
+    output_cols = ["target", "target_b", "target_c"]
 
     X = df[input_cols].to_numpy(dtype=np.float64)
     y = df[output_cols].to_numpy(dtype=np.float64)

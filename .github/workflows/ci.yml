@@ -58,10 +58,10 @@ jobs:
           # All three extras are required for the end-to-end regression job.
           pip install -e ".[dev,torch,onnx]"
 
-      - name: Run E2E smoke (sklearn + torch + ONNX) on sample CSV
+      - name: Run E2E smoke (sklearn + torch + ONNX) on public sklearn dataset
         run: |
           # This single pytest target IS the end-to-end demo for CI purposes:
-          # it loads data/datasets/MHD-code/mhd_code_synthetic_profiles_sample.csv,
+          # it loads scikit-learn's diabetes benchmark (no vendored data),
           # trains an sklearn model, trains a tiny PyTorch MLP, exports to ONNX,
           # re-loads with onnxruntime, and verifies outputs match within tolerance.
           pytest -q tests/test_e2e_release_smoke.py -v

@@ -218,12 +218,10 @@ runs
 
 # Reference runs archive (local only, not committed)
 data/runs/
-data/datasets/MHD-code/*.csv
-!data/datasets/MHD-code/*_sample.csv
-data/datasets/device/*.pkl
-!data/datasets/device/*_sample.pkl
-# partner bulk δp Parquet (~GB; build via scripts/mhd_code/build_per_mode.py)
-data/datasets/device/per_mode_cfs_sdata_complex_v2.parquet
+
+# internal/ is the local sandbox for proprietary datasets, Slurm templates,
+# and anything else we don't redistribute. Nothing under it is tracked.
+internal/
 # Local Slurm launch logs (job IDs, tmp copies)
 logs/
 pscratch/
