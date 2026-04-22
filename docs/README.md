@@ -8,6 +8,10 @@ Use this page to navigate the SURGE documentation and repository.
 
 | Document | Description |
 |----------|-------------|
+| [PRERELEASE.md](PRERELEASE.md) | Prerelease scope: what is ready, what is not, adoption paths |
+| [PUBLIC_OPEN_SOURCE_PLAN.md](PUBLIC_OPEN_SOURCE_PLAN.md) | **Public release + history hygiene** (DOE URL, filter-repo, exclusions) |
+| [RELEASE_DEMO_PLAN.md](RELEASE_DEMO_PLAN.md) | End-to-end demo tour the public release must ship (datagen → EDA → train → HPO → fine-tune → ONNX) |
+| [ROADMAP.md](ROADMAP.md) | Public priorities and known gaps (CV, large data, etc.) |
 | [SURGE_OVERVIEW.md](SURGE_OVERVIEW.md) | Framework overview, philosophy, key modules |
 | [quickstart.rst](quickstart.rst) | Installation and first run |
 | [setup/QUICKSTART.md](setup/QUICKSTART.md) | Environment setup quick reference |
