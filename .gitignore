@@ -228,12 +228,10 @@ data/datasets/device/per_mode_cfs_sdata_complex_v2.parquet
 logs/
 pscratch/
 
-# Exclude all PNG files except the main logos
+# Exclude all PNGs (research plots, run figures, etc.) except the
+# design-system logos we ship in data/logos/.
 *.png
-!data/logos/SURGE.png
-!data/logos/surge_logo_panoramic.png
-!data/logos/SURGE_logo_cropped.png
-!mhd_code/figures/*.png
+!data/logos/*.png
 
 # MHD-code interface/visualization outputs (explicitly excluded)
 comprehensive_eigenmode*.png
