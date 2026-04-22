@@ -54,10 +54,9 @@ jobs:
       - name: Install project + torch/onnx (required for this job)
         run: |
           python -m pip install --upgrade pip
-          # [dev] -> pytest; [torch] -> torch; both are required for this job.
-          pip install -e ".[dev,torch]"
-          # onnxscript is required by torch>=2.11 for torch.onnx.export
-          pip install onnx onnxruntime onnxscript
+          # [dev] -> pytest; [torch] -> torch; [onnx] -> onnx + onnxscript + onnxruntime.
+          # All three extras are required for the end-to-end regression job.
+          pip install -e ".[dev,torch,onnx]"
 
       - name: Run E2E smoke (sklearn + torch + ONNX) on sample CSV
         run: |
