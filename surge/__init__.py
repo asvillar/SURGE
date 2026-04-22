@@ -37,24 +37,16 @@ try:
 except ImportError:
     DATASET_UTILS_AVAILABLE = False
 
-# Optional MHD-code loader (now in scripts/mhd_code/)
-try:
-    import sys
-    from pathlib import Path
-    # Add scripts/mhd_code to path for optional imports
-    scripts_mhd_code = Path(__file__).parent.parent / "scripts" / "mhd_code"
-    if str(scripts_mhd_code) not in sys.path:
-        sys.path.insert(0, str(scripts_mhd_code))
-    from loader import (
-        load_mhd_code_hdf5,
-        convert_to_dataframe,
-        convert_sdata_complex_v2_to_dataframe,
-        read_mhd_code_hdf5_structure,
-        read_sdata_complex_v2_structure,
-    )
-    MHD-code_LOADER_AVAILABLE = True
-except ImportError:
-    MHD-code_LOADER_AVAILABLE = False
+# MHD-code HDF5 loaders live in scripts/mhd_code/loader.py and are NOT part of
+# the installable wheel: they are application-specific HDF5 readers that
+# depend on the scripts/mhd_code tree alongside a working SURGE checkout.
+# `MHD-codeDataset` (exported below) imports them lazily when a dataset is
+# actually constructed, so pip-installed users get a clean `import surge`
+# and a clear ImportError only if they try to use the MHD-code loader
+# without the scripts/ tree on sys.path. Prior versions attempted an
+# eager sys.path injection here; that silently failed for wheel installs
+# and polluted sys.path from import time, so it was removed.
+MHD-code_LOADER_AVAILABLE = False
 
 # Import helper functions for convenience
 try:
@@ -99,15 +91,9 @@ if DATASET_UTILS_AVAILABLE:
         "print_validation_report",
     ])
 
-# Add MHD-code loader if available
-if MHD-code_LOADER_AVAILABLE:
-    __all__.extend([
-        "load_mhd_code_hdf5",
-        "convert_to_dataframe",
-        "convert_sdata_complex_v2_to_dataframe",
-        "read_mhd_code_hdf5_structure",
-        "read_sdata_complex_v2_structure",
-    ])
+# MHD-code HDF5 loader functions are intentionally NOT exported: they are
+# application-specific and live under scripts/mhd_code/. Use `MHD-codeDataset`
+# from `surge.datasets.mhd_code` (exported below) which imports them lazily.
 
 # Backward compatibility aliases
 MLTrainer = SurrogateEngine  # Legacy alias

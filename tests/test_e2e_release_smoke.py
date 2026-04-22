@@ -69,16 +69,14 @@ def test_engine_sklearn_train_predict(sample_xy) -> None:
     )
 
     engine = SurrogateEngine(
-        dataframe=df,
-        input_columns=input_cols,
-        output_columns=output_cols,
-        config=EngineRunConfig(
+        registry=MODEL_REGISTRY,
+        run_config=EngineRunConfig(
             test_fraction=0.2,
             val_fraction=0.1,
             random_state=0,
         ),
-        registry=MODEL_REGISTRY,
     )
+    engine.configure_dataframe(df, input_columns=input_cols, output_columns=output_cols)
 
     # Pick a model key that exists in the registry; sklearn.random_forest is
     # the lowest-dependency backend and is always registered.

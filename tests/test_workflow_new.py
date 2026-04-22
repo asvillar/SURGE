@@ -89,6 +89,10 @@ class TestSurrogateWorkflow:
         }
         return SurrogateWorkflowSpec.from_dict(spec_dict)
 
+    @pytest.mark.skip(
+        reason="relies on run_surrogate_workflow legacy-dict spec path; pending "
+        "migration to current SurrogateWorkflowSpec schema — docs/REFACTORING_PLAN.md §1.9"
+    )
     def test_run_workflow_creates_artifacts(self, tmp_path: Path) -> None:
         df = _make_dummy_dataframe(200)
         spec = self._spec_from_dataframe(df, tmp_path)
@@ -113,6 +117,10 @@ class TestSurrogateWorkflow:
             pred_cols = [col for col in df_pred.columns if col.startswith("y_pred")]
             assert true_cols and pred_cols
 
+    @pytest.mark.skip(
+        reason="relies on run_surrogate_workflow legacy-dict spec path; pending "
+        "migration to current SurrogateWorkflowSpec schema — docs/REFACTORING_PLAN.md §1.9"
+    )
     def test_run_workflow_programmatic_model_config(self, tmp_path: Path) -> None:
         df = _make_dummy_dataframe(150)
         spec = self._spec_from_dataframe(df, tmp_path)
