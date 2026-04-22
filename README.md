@@ -112,87 +112,134 @@ export → `onnxruntime` round-trip parity. It is also the CI
 
 ## Quickstart
 
-A complete train → evaluate → profile cycle, end to end, on a public
-442-row dataset. Runs in under 5 seconds on a laptop.
+The fastest way to see SURGE end-to-end is the bundled CLI at
+[`examples/quickstart.py`](examples/quickstart.py). It fetches a public
+scikit-learn dataset, writes a CSV, runs the full **train → evaluate →
+profile** cycle, and (optionally) rounds-trips the saved model for
+inference.
 
-```python
-import pandas as pd
-from sklearn.datasets import load_diabetes
+```bash
+# 442-row diabetes benchmark, random forest (~5 s on a laptop)
+python -m examples.quickstart --dataset diabetes --model rf
 
-from surge import SurrogateWorkflowSpec, run_surrogate_workflow
-from surge.hpc import ResourceSpec
+# 20,640-row California housing benchmark, PyTorch MLP (~90 s on CPU)
+python -m examples.quickstart --dataset california --model mlp --infer
 
-# 1. Any CSV with named columns works — here: sklearn's diabetes dataset
-#    (10 inputs, 1 output, 442 rows).
-load_diabetes(as_frame=True).frame.to_csv("diabetes.csv", index=False)
-
-# 2. Declare the workflow: dataset, model(s), compute budget, output dir.
-spec = SurrogateWorkflowSpec(
-    dataset_path="diabetes.csv",
-    models=[{"key": "sklearn.random_forest",
-             "params": {"n_estimators": 200}}],
-    resources=ResourceSpec(device="cpu", num_workers=4),
-    output_dir=".",
-    run_tag="quickstart",
-    overwrite_existing_run=True,
-)
-
-# 3. Run it.
-summary = run_surrogate_workflow(spec)
-
-m = summary["models"][0]
-print(f"test R²   = {m['metrics']['test']['r2']:.3f}")
-print(f"test RMSE = {m['metrics']['test']['rmse']:.2f}")
-print(f"model     = {m['profile']['model_size_bytes']/1024:.1f} KB, "
-      f"{m['profile']['parameter_count']:,} params")
-print(f"inference = {m['profile']['inference_ms_per_sample']:.2f} ms/sample")
+# Add a small Optuna HPO sweep (MLP only)
+python -m examples.quickstart --dataset california --model mlp --n-trials 20
 ```
 
-What you actually see when you run this (verbatim from the command
-above, captured on CPU with 4 sklearn workers):
+Captured output (California housing, MLP, single CPU core):
 
 ```text
 SURGE workflow started.
 [1/3] Loading dataset...
 [2/3] Preparing splits and scalers...
-[3/3] Training sklearn.random_forest...
-[3/3] Done. Artifacts in runs/quickstart
+[3/3] Training pytorch.mlp...
+[3/3] Done. Artifacts in runs/california_mlp
 
-test R²   = 0.444
-test RMSE = 54.26
-model     = 5352.0 KB, 75,470 params
-inference = 0.75 ms/sample
+  train R²    = 0.849
+  val   R²    = 0.816
+  test  R²    = 0.810
+  test  RMSE  = 0.499
+  model       = 133.3 KB, parameter count n/a
+  inference   = 0.04 ms/sample
+
+[infer] round-trip inference on the first 5 rows:
+        model  : pytorch.mlp.joblib  (pytorch)
+        inputs : ['AveBedrms', 'AveOccup', 'AveRooms', 'HouseAge',
+                  'Latitude',  'Longitude', 'MedInc',  'Population']
+        y_true : [4.53 3.58 3.52 3.41 3.42]
+        y_hat  : [3.99 4.48 4.02 2.62 2.57]
 ```
 
-The `runs/quickstart/` directory now contains everything you need to
-reproduce or audit the run:
+### Run it yourself in Python
+
+The CLI is a thin wrapper over the public API. The same result in a
+notebook:
+
+```python
+from sklearn.datasets import fetch_california_housing
+from surge import SurrogateWorkflowSpec, run_surrogate_workflow
+from surge.hpc import ResourceSpec
+
+frame = fetch_california_housing(as_frame=True).frame
+frame.to_csv("california.csv", index=False)
+
+spec = SurrogateWorkflowSpec(
+    dataset_path="california.csv",
+    metadata_overrides={
+        "inputs": [c for c in frame.columns if c != "MedHouseVal"],
+        "outputs": ["MedHouseVal"],
+    },
+    models=[{"key": "sklearn.random_forest",
+             "params": {"n_estimators": 200}}],
+    resources=ResourceSpec(device="cpu", num_workers=4),
+    output_dir=".",
+    run_tag="california_rf",
+    overwrite_existing_run=True,
+)
+
+summary = run_surrogate_workflow(spec)
+m = summary["models"][0]
+print(f"test R² = {m['metrics']['test']['r2']:.3f}")
+```
+
+### Round-trip inference from a saved run
+
+Every run writes a self-contained bundle under `runs/<tag>/`. To score
+new inputs from another process, load the input scaler and the model,
+then apply them in the same order SURGE used:
+
+```python
+import json, joblib, numpy as np, pandas as pd
+
+run_dir = "runs/california_rf"
+# SURGE sorts input columns alphabetically; read the canonical order
+# back from train_data_ranges.json.
+input_cols = json.loads(open(f"{run_dir}/train_data_ranges.json").read())["inputs"]["columns"]
+
+scaler = joblib.load(f"{run_dir}/scalers/inputs.joblib")
+model  = joblib.load(f"{run_dir}/models/sklearn.random_forest.joblib")
+
+df = pd.read_csv("california.csv")[input_cols].head(5)
+y_hat = model.predict(scaler.transform(df.values))
+print(np.round(y_hat, 2))
+```
+
+For PyTorch models (`pytorch.mlp.joblib` is a `torch.save` archive, not
+a joblib pickle) use the adapter class, which re-instates the model's
+internal `scaler_y` and inverse-transforms predictions for you:
+
+```python
+from surge.model.pytorch_impl import PyTorchMLPModel
+
+model = PyTorchMLPModel()
+model.load(f"{run_dir}/models/pytorch.mlp.joblib")
+y_hat = model.predict(scaler.transform(df.values))   # returns original units
+```
+
+### What ends up on disk
 
 ```text
-runs/quickstart/
-├── spec.yaml                                     # exact workflow spec (for re-running)
-├── env.txt                                       # pip freeze at run time
-├── git_rev.txt                                   # HEAD of the repo, or "unknown"
-├── run.log                                       # stdout capture
-├── workflow_summary.json                         # metrics + profile + resources_used
-├── metrics.json                                  # per-model train/val/test + timings
-├── train_data_ranges.json                        # input ranges (for OOD flagging)
-├── model_card_sklearn.random_forest.json         # data + model provenance card
-├── scalers/
-│   └── inputs.joblib                             # input scaler (needed for inference)
-├── models/
-│   └── sklearn.random_forest.joblib              # the trained estimator
-├── predictions/
-│   ├── sklearn.random_forest_train.parquet
-│   ├── sklearn.random_forest_val.parquet
-│   └── sklearn.random_forest_test.parquet
-└── hpo/                                          # populated only if HPO is enabled
+runs/<tag>/
+├── spec.yaml                          # exact workflow spec (re-runnable)
+├── env.txt                            # pip freeze at run time
+├── git_rev.txt                        # HEAD of the repo, or "unknown"
+├── run.log                            # stdout capture
+├── workflow_summary.json              # metrics + profile + resources_used
+├── metrics.json                       # per-model train/val/test + timings
+├── train_data_ranges.json             # canonical input order + min/max
+├── model_card_<key>.json              # data + model provenance card
+├── scalers/inputs.joblib              # input scaler (needed for inference)
+├── models/<key>.joblib                # trained estimator / torch archive
+├── models/<key>.onnx                  # PyTorch: ONNX export (when extras installed)
+├── predictions/<key>_{train,val,test}.parquet
+└── hpo/                               # populated only when --n-trials > 0
 ```
 
-PyTorch adapters additionally drop an ONNX export under
-`models/<key>.onnx` when the `torch` + `onnx` extras are installed.
-
-During training SURGE also prints a one-line banner per model so you
-always know what backend, device, and worker count actually ran:
+During training SURGE prints a one-line banner per model so you always
+know what backend, device, and worker count actually ran:
 
 ```text
 [surge.fit] model=sklearn.random_forest backend=sklearn device=cpu \
@@ -200,9 +247,8 @@ always know what backend, device, and worker count actually ran:
 ```
 
 The same fields are persisted to `workflow_summary.json` under
-`models[].resources_used` for auditing. `profile` carries
-`model_size_bytes`, `parameter_count`, and `inference_ms_per_sample`
-for every run.
+`models[].resources_used`. `profile` carries `model_size_bytes`,
+`parameter_count`, and `inference_ms_per_sample` for every run.
 
 ## Documentation
 
