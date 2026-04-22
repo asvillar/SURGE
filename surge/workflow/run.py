@@ -387,6 +387,10 @@ def run_surrogate_workflow(
                 "val": result.val_metrics,
                 "test": result.test_metrics,
                 "timings": result.timings,
+                # profile lands in metrics.json too so leaderboards/CI can
+                # compare model size and latency without reading the full
+                # workflow_summary.json.
+                "profile": (result.extra or {}).get("profile"),
             }
             if hpo_artifact:
                 model_entry["artifacts"]["hpo"] = hpo_artifact
@@ -533,6 +537,10 @@ def _persist_model_artifacts(
     resources_used = getattr(result.adapter, "_last_fit_resources", None)
     if resources_used:
         entry["resources_used"] = resources_used
+    # Model-size + inference-latency profile (see surge.model.profiling).
+    profile = (result.extra or {}).get("profile")
+    if profile:
+        entry["profile"] = profile
     return entry
 
 

@@ -599,6 +599,20 @@ class SurrogateEngine:
         if training_history:
             extra_payload["training_history"] = training_history
 
+        # Lightweight post-training profile: pickled size, parameter count,
+        # and median predict() latency on a validation sub-batch. Timed in
+        # the scaled-feature space the adapter was actually trained on
+        # (proc.X_val), so numbers reflect the real deployment path.
+        try:
+            from .model.profiling import measure_model_profile
+
+            probe_X = proc.X_val if proc.X_val is not None and len(proc.X_val) else proc.X_train
+            extra_payload["profile"] = measure_model_profile(adapter, probe_X)
+        except Exception:  # never let profiling block a fit
+            self.logger.warning(
+                "profile measurement failed for %s", spec.name or spec.key, exc_info=True
+            )
+
         return ModelRunResult(
             spec=spec,
             train_metrics=metrics_train,
