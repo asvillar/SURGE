@@ -38,13 +38,23 @@ def load_predictions(
     run_dir: Path,
     datasets: Tuple[str, ...] = ("train", "val", "test"),
 ) -> Dict[str, Dict[str, Dict[int, Tuple[Any, Any]]]]:
-    """Load predictions from a SURGE workflow run. Supports multi-output."""
+    """Load predictions from a SURGE workflow run. Supports multi-output.
+
+    Accepts both ``*.parquet`` (current workflow default) and ``*.csv``
+    (legacy runs). When both exist for the same model/split, parquet
+    wins because it round-trips dtypes losslessly.
+    """
     predictions_dir = run_dir / "predictions"
     if not predictions_dir.exists():
         return {}
 
+    # Parquet first so it overwrites csv entries for the same model/split.
+    pred_files = sorted(
+        list(predictions_dir.glob("*.parquet")) + list(predictions_dir.glob("*.csv"))
+    )
+
     results: Dict[str, Dict[str, Dict[int, Tuple[Any, Any]]]] = {}
-    for pred_file in sorted(predictions_dir.glob("*.csv")):
+    for pred_file in pred_files:
         if "_uq" in pred_file.stem:
             continue
         stem = pred_file.stem
@@ -57,7 +67,10 @@ def load_predictions(
             continue
         model_name = stem.replace("_train", "").replace("_val", "").replace("_test", "")
 
-        df = pd.read_csv(pred_file)
+        if pred_file.suffix == ".parquet":
+            df = pd.read_parquet(pred_file)
+        else:
+            df = pd.read_csv(pred_file)
         y_true_cols = sorted([c for c in df.columns if c.startswith("y_true_")])
         y_pred_cols = sorted([c for c in df.columns if c.startswith("y_pred_")])
         if not y_true_cols or not y_pred_cols:
