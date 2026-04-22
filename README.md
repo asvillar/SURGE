@@ -104,9 +104,22 @@ git clone git@github.com:S-Villar/SURGE.git
 
 Keeping the venv alongside the repo (not inside it) keeps
 `git status` clean and lets you nuke the venv without touching the
-source.
+source. We use [`uv`](https://github.com/astral-sh/uv) because it
+resolves the `torch + onnx + dev` extras in ~30 s instead of the
+3-5 min that bare `pip` takes.
 
 ```bash
+# 2a. Install uv once, if you don't already have it. Primary path:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc to persist
+uv --version
+
+# If curl is blocked (rare, but happens during HPC maintenance),
+# the same binary is available through pip:
+# python3.11 -m pip install --user uv
+# export PATH="$HOME/.local/bin:$PATH"
+
+# 2b. Create and activate the venv.
 uv venv --python 3.11 .venv
 source .venv/bin/activate
 
@@ -114,8 +127,9 @@ python --version        # -> Python 3.11.x
 which python            # -> $TEST_DIR/.venv/bin/python
 ```
 
-`python3.11 -m venv .venv` works too if `uv` is unavailable; installs
-are just slower.
+If you prefer the stdlib and don't mind the slower install, swap
+step 2b for `python3.11 -m venv .venv` and replace every `uv pip`
+below with plain `pip`.
 
 ### 3. Editable install + import sanity check *(optional)*
 
