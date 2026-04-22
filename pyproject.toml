@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "surge-ml"
 version = "0.1.0"
-description = "Surrogate Unified Robust Generation Engine — tabular scientific surrogates, workflow, and MLOps-style artifacts"
+description = "Surrogate modeling framework for scientific workflows: SciML, AutoML, UQ, and MLOps-style provenance in a declarative pipeline"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
@@ -43,9 +43,10 @@ dev = ["pytest>=6.0", "pytest-cov", "ruff>=0.1.0"]
 docs = ["sphinx>=5.0", "furo", "myst-parser"]
 
 [project.urls]
-Homepage = "https://github.com/REPLACE_ORG/surge"
-Documentation = "https://github.com/REPLACE_ORG/surge/blob/main/docs/README.md"
-Repository = "https://github.com/REPLACE_ORG/surge"
+Homepage = "https://github.com/S-Villar/SURGE"
+Documentation = "https://github.com/S-Villar/SURGE/blob/main/docs/README.md"
+Repository = "https://github.com/S-Villar/SURGE"
+Issues = "https://github.com/S-Villar/SURGE/issues"
 
 # Install the `surge` Python package from the `surge/` directory.
 # Package name on PyPI is `surge-ml` to reduce clash with other projects named "surge".

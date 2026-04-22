@@ -12,7 +12,7 @@ in [`SECURITY.md`](./SECURITY.md) rather than a public issue.
 ## Quickstart for developers
 
 ```bash
-git clone https://github.com/asvillar/SURGE.git
+git clone https://github.com/S-Villar/SURGE.git
 cd SURGE
 python -m pip install -e ".[dev]"
 pytest -q tests/

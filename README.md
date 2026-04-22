@@ -1,9 +1,20 @@
 # SURGE
 
-**Surrogate Regression Engine** — a Python framework for building, training,
-evaluating, and deploying scientific surrogate regression models.
+**Surrogate Regression Engine** — a surrogate modeling framework for
+scientific workflows that integrates Scientific Machine Learning (SciML)
+and AutoML features, uncertainty quantification (UQ), and MLOps-style
+provenance in a single declarative pipeline.
 
-SURGE provides:
+SURGE unifies data generation and ingestion, an extensible registry of
+model adapters (classical, neural, probabilistic, and ensemble), held-out
+evaluation with UQ, automated hyperparameter optimization, structured
+artifact and lineage tracking, diagnostic visualization, and portable
+inference and deployment. Configuration-as-code specifications parameterize
+a composable, end-to-end surrogate development cycle and emit
+machine-readable provenance, exposing APIs suitable for agent-based
+orchestration.
+
+Concretely, the shipping pieces are:
 
 - A unified **engine** (`SurrogateEngine`) covering scikit-learn, PyTorch, and
   GPflow backends through a single adapter interface.
@@ -38,7 +49,7 @@ pre-refactor tests tracked in
 From a clone:
 
 ```bash
-git clone https://github.com/asvillar/SURGE.git
+git clone https://github.com/S-Villar/SURGE.git
 cd SURGE
 python -m pip install -e ".[torch]"   # core + PyTorch MLP; omit [torch] if not needed
 ```

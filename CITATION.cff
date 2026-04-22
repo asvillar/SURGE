@@ -5,24 +5,36 @@ type: software
 version: "0.1.0"
 date-released: "2026-04-21"
 license: BSD-3-Clause
-url: "https://github.com/asvillar/SURGE"
-repository-code: "https://github.com/asvillar/SURGE"
+url: "https://github.com/S-Villar/SURGE"
+repository-code: "https://github.com/S-Villar/SURGE"
 keywords:
   - surrogate-models
-  - regression
-  - machine-learning
   - scientific-machine-learning
+  - automl
   - uncertainty-quantification
+  - mlops
+  - hyperparameter-optimization
   - pytorch
   - scikit-learn
   - onnx
 abstract: >-
-  SURGE is a Python framework for building, training, evaluating, and deploying
-  scientific surrogate regression models. It provides a unified engine for
-  scikit-learn, PyTorch, and GPflow backends; a declarative workflow spec;
-  lightweight hyperparameter optimization via Optuna; ONNX export for
-  inference; and a per-run provenance bundle (resources_used, model profile,
-  scalers, model card) aimed at reproducibility in HPC environments.
+  SURGE is a surrogate modeling framework for scientific workflows that
+  integrates Scientific Machine Learning (SciML) and AutoML features,
+  uncertainty quantification (UQ), and MLOps-style provenance in a single
+  declarative pipeline. It unifies data generation and ingestion, an
+  extensible registry of model adapters (classical, neural, probabilistic,
+  and ensemble), held-out evaluation with UQ, automated hyperparameter
+  optimization, structured artifact and lineage tracking, diagnostic
+  visualization, and portable inference and deployment. Configuration-as-code
+  specifications parameterize a composable, end-to-end surrogate development
+  cycle and emit machine-readable provenance. This standardizes methodology,
+  reducing domain-expert adaptation effort and accelerating the surrogate
+  development cycle, while exposing APIs suitable for agent-based
+  orchestration. By combining an automated, composable surrogate pipeline
+  with an extensible adapter registry, disciplined artifact lineage, and
+  agent-ready interfaces, SURGE provides a robust substrate for training,
+  validating, comparing, and operationalizing surrogate models across
+  scientific domains.
 authors:
   - given-names: "Álvaro"
     family-names: "Sánchez Villar"
