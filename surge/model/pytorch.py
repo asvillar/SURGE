@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..hpc import ResourceProfile
 from .base import BaseModelAdapter
 from .pytorch_impl import PyTorchMLPModel
 
@@ -13,6 +14,15 @@ except ImportError:  # pragma: no cover - optional dependency
     PYTORCH_AVAILABLE = False
 
 
+_TORCH_MLP_PROFILE = ResourceProfile(
+    name="pytorch.mlp",
+    supports_cpu=True,
+    supports_gpu=True,
+    worker_semantics="dataloader_workers",
+    notes="num_workers -> torch DataLoader num_workers; device respected.",
+)
+
+
 class PyTorchMLPAdapter(BaseModelAdapter):
     """PyTorch-based MLP model with enhanced capabilities."""
 
@@ -20,6 +30,7 @@ class PyTorchMLPAdapter(BaseModelAdapter):
     backend = "pytorch"
     uses_internal_preprocessing = True
     handles_output_scaling = True
+    resource_profile = _TORCH_MLP_PROFILE
 
     def __init__(self, **kwargs: Any) -> None:
         if not PYTORCH_AVAILABLE:

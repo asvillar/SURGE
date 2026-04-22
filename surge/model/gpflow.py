@@ -3,8 +3,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..hpc import ResourceProfile
 from .base import BaseModelAdapter
 from .gpflow_impl import GPFLOW_AVAILABLE, GPflowGPRModel, GPflowMultiKernelGPR
+
+
+_GPFLOW_PROFILE = ResourceProfile(
+    name="gpflow.gpr",
+    supports_cpu=True,
+    supports_gpu=True,  # TF handles device placement; single-device in v0.1.0
+    worker_semantics="none",
+    notes="GPflow follows TensorFlow's device placement; workers unused.",
+)
 
 
 class GPflowGPRAdapter(BaseModelAdapter):
@@ -12,6 +22,7 @@ class GPflowGPRAdapter(BaseModelAdapter):
 
     name = "gpflow.gpr"
     backend = "gpflow"
+    resource_profile = _GPFLOW_PROFILE
 
     def __init__(self, **kwargs: Any) -> None:
         if not GPFLOW_AVAILABLE:

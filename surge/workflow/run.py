@@ -240,6 +240,7 @@ def run_surrogate_workflow(
                 standardize_inputs=spec.standardize_inputs,
                 standardize_outputs=spec.standardize_outputs,
                 random_state=spec.seed,
+                resources=spec.resources,
             )
         )
         engine.configure_dataframe(
@@ -510,7 +511,7 @@ def _persist_model_artifacts(
     if ck_dir.is_dir() and any(ck_dir.glob("*.pt")):
         artifact_extra["checkpoints_dir"] = str(ck_dir.resolve())
 
-    return {
+    entry: Dict[str, Any] = {
         "name": model_name,
         "backend": result.adapter.backend,
         "params": result.spec.params,
@@ -526,6 +527,13 @@ def _persist_model_artifacts(
             **artifact_extra,
         },
     }
+    # Persist the resolved ResourceSpec + concrete backend knobs that the
+    # engine emitted in the [surge.fit] banner, so every run records the
+    # exact device/n_jobs/num_workers combination that trained the model.
+    resources_used = getattr(result.adapter, "_last_fit_resources", None)
+    if resources_used:
+        entry["resources_used"] = resources_used
+    return entry
 
 
 def _run_hpo(

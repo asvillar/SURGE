@@ -6,6 +6,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
+from ..hpc import ResourceSpec
+
 
 @dataclass
 class HPOConfig:
@@ -78,12 +80,20 @@ class SurrogateWorkflowSpec:
     finetune_lr_scale: float = 0.1
     mlflow_tracking: bool = False
     mlflow_experiment: Optional[str] = None
+    # Declarative compute request applied to every model in this workflow.
+    # See surge.hpc.policy.ResourceSpec for field semantics. Omitting this
+    # block (or passing {}) preserves v0.0.x behaviour (auto device, default
+    # n_jobs).
+    resources: ResourceSpec = field(default_factory=ResourceSpec)
 
     @staticmethod
     def from_dict(payload: Mapping[str, Any]) -> "SurrogateWorkflowSpec":
         data = dict(payload)
         model_dicts = data.get("models", [])
         data["models"] = [ModelConfig.from_dict(model) for model in model_dicts]
+        # Accept resources as dict, ResourceSpec, or absent.
+        if "resources" in data and not isinstance(data["resources"], ResourceSpec):
+            data["resources"] = ResourceSpec.from_dict(data["resources"])
         return SurrogateWorkflowSpec(**data)
 
     def to_dict(self) -> Dict[str, Any]:

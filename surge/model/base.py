@@ -4,6 +4,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type
 
+from ..hpc import (
+    DEFAULT_RESOURCE_PROFILE,
+    ResourceProfile,
+    ResourceSpec,
+    apply_policy,
+    log_fit_banner,
+)
+
 
 class BaseModelAdapter(ABC):
     """Unified interface shared by all SURGE model implementations."""
@@ -13,10 +21,16 @@ class BaseModelAdapter(ABC):
     uses_internal_preprocessing: bool = False
     handles_output_scaling: bool = False
     supports_sklearn_interface: bool = False
+    # Per-adapter capability advertisement. Subclasses override to declare
+    # whether they support GPU, and what the ``num_workers`` knob means
+    # for them. Defaults to CPU-only, no worker knob (safest).
+    resource_profile: ResourceProfile = DEFAULT_RESOURCE_PROFILE
 
     def __init__(self, **kwargs: Any) -> None:
         self.params: Dict[str, Any] = dict(kwargs)
         self._model: Any = None
+        # Populated by :meth:`prepare_for_fit`; persisted in run summaries.
+        self._last_fit_resources: Optional[Dict[str, Any]] = None
         self._initialize()
 
     def _initialize(self) -> None:
@@ -37,6 +51,61 @@ class BaseModelAdapter(ABC):
         if self._model is None:
             raise ValueError("Model has not been initialized")
         return self._model.fit(X, y)
+
+    def prepare_for_fit(
+        self,
+        *,
+        resources: Optional[ResourceSpec] = None,
+        X_shape: Optional[Any] = None,
+        y_shape: Optional[Any] = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Resolve the user's ``ResourceSpec`` against this adapter's
+        ``resource_profile``, emit the ``[surge.fit] ...`` banner, and
+        return the resolved fields so the engine can persist them.
+
+        Subclasses do **not** need to override this. They only need to set
+        ``resource_profile`` (class attribute) and, if they accept
+        runtime knobs like ``n_jobs`` / ``num_workers``, read them out of
+        ``self._last_fit_resources`` inside ``_build_model`` or ``fit``.
+
+        Parameters
+        ----------
+        resources
+            User-supplied ``ResourceSpec``. ``None`` triggers defaults.
+        X_shape, y_shape
+            ``(n, f)`` / ``(n, o)`` shapes used for banner fields.
+        extra
+            Optional extra key/value pairs added to the banner (e.g.
+            ``{"epochs": 200, "batch_size": 256}`` for torch adapters).
+        """
+        spec = resources or ResourceSpec()
+        effective, concrete = apply_policy(
+            spec,
+            self.resource_profile,
+            model_name=self.name,
+        )
+        n_train = int(X_shape[0]) if X_shape is not None and len(X_shape) >= 1 else 0
+        n_features = int(X_shape[1]) if X_shape is not None and len(X_shape) >= 2 else 0
+        n_outputs = int(y_shape[1]) if y_shape is not None and len(y_shape) >= 2 else (
+            1 if y_shape is not None and len(y_shape) == 1 else 0
+        )
+        fields = log_fit_banner(
+            model_name=self.name,
+            backend=self.backend,
+            concrete=concrete,
+            n_train=n_train,
+            n_features=n_features,
+            n_outputs=n_outputs,
+            extra=extra,
+        )
+        self._last_fit_resources = {
+            "requested": spec.to_dict(),
+            "effective": effective.to_dict(),
+            "concrete": dict(concrete),
+            "banner": fields,
+        }
+        return self._last_fit_resources
 
     def mark_fitted(self) -> None:
         """Called by SurrogateEngine after ``fit`` completes. Subclasses may override."""

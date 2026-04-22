@@ -18,6 +18,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
+from .hpc import ResourceSpec
 from .registry import BaseModelAdapter, ModelRegistry
 from .model.registry import MODEL_REGISTRY
 
@@ -35,6 +36,10 @@ class EngineRunConfig:
     shuffle: bool = True
     random_state: Optional[int] = 42
     metrics: Tuple[str, ...] = ("r2", "rmse", "mae", "mape")
+    # Declarative compute request propagated into every model trained by
+    # this engine (device, num_workers, strict policy). See
+    # surge.hpc.policy.ResourceSpec for semantics.
+    resources: ResourceSpec = field(default_factory=ResourceSpec)
 
     def with_updates(self, **overrides: Any) -> "EngineRunConfig":
         return replace(self, **overrides)
@@ -453,6 +458,25 @@ class SurrogateEngine:
 
         start = time.perf_counter()
         y_train_for_fit = self._prepare_target_for_fit(proc.y_train)
+
+        # Resource-policy banner: resolves user ResourceSpec against this
+        # adapter's resource_profile, emits one [surge.fit] ... line, and
+        # stores the resolved fields on adapter._last_fit_resources so the
+        # run summary can persist them under "resources_used".
+        if hasattr(adapter, "prepare_for_fit"):
+            try:
+                adapter.prepare_for_fit(
+                    resources=getattr(self.config, "resources", None),
+                    X_shape=getattr(proc.X_train, "shape", None),
+                    y_shape=getattr(y_train_for_fit, "shape", None),
+                )
+            except Exception:  # never let banner/policy block a fit
+                self.logger.warning(
+                    "prepare_for_fit failed for %s; continuing without banner",
+                    getattr(adapter, "name", "adapter"),
+                    exc_info=True,
+                )
+
         _adapter_backend = getattr(adapter, "backend", None)
         finetune = pretrained_adapter is not None and _adapter_backend in ("torch", "pytorch")
         if _adapter_backend in ("torch", "pytorch"):
