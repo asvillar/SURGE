@@ -18,8 +18,8 @@ Examples
     # PyTorch MLP, 80 epochs (no HPO), same dataset
     python -m examples.quickstart --dataset california --model mlp
 
-    # Add a short Optuna HPO sweep over the MLP
-    python -m examples.quickstart --dataset diabetes --model mlp --n-trials 20
+    # Add a short Optuna HPO sweep over the MLP (5 trials, 50 epochs each).
+    python -m examples.quickstart --dataset diabetes --model mlp --n-trials 5
 
     # Only run the inference round-trip against an existing run
     python -m examples.quickstart --dataset diabetes --skip-train --infer
@@ -105,6 +105,11 @@ def _build_model_entry(model: str, n_trials: int) -> Dict[str, Any]:
             "sampler": "tpe",
         }
         if model == "mlp":
+            # Shrink per-trial epoch budget during HPO so a handful of trials
+            # finish in a minute or two on CPU and the demo stays fast.
+            # A full quality retrain (200 epochs) is still what
+            # `--model mlp` without --n-trials uses.
+            entry["params"]["n_epochs"] = 50
             entry["hpo"]["search_space"] = {
                 "learning_rate": {"type": "loguniform", "low": 1e-4, "high": 1e-2},
                 "dropout_rate":  {"type": "float",      "low": 0.05, "high": 0.5},
@@ -146,10 +151,15 @@ _ARTIFACT_NOTES: Dict[str, str] = {
 }
 
 # Suffix- or prefix-based fallbacks for files whose stems include the model key.
+# Order matters: more specific prefixes must come before shorter ones
+# (e.g. "training_progress_hpo_" before "training_progress_").
 _ARTIFACT_NOTE_PATTERNS: Tuple[Tuple[str, str], ...] = (
-    ("model_card_",        "data + model provenance card"),
-    ("training_history_",  "per-epoch loss / metric curves"),
-    ("training_progress_", "streaming JSONL progress log"),
+    ("model_card_",                  "data + model provenance card"),
+    ("hpo_trial_",                   "per-trial training history (HPO)"),
+    ("hpo_trials_manifest",          "Optuna trial manifest (params + metrics)"),
+    ("training_progress_hpo_",       "streaming HPO progress log"),
+    ("training_history_",            "per-epoch loss / metric curves"),
+    ("training_progress_",           "streaming JSONL progress log"),
 )
 _ARTIFACT_NOTE_SUFFIXES: Tuple[Tuple[str, str], ...] = (
     (".onnx",              "ONNX export for cross-runtime inference"),

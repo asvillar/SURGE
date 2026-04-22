@@ -86,36 +86,43 @@ venv → verify → tests → run), see the Quickstart immediately below.
 
 ## Quickstart
 
-Copy-paste-ready end-to-end recipe: clone the repo, set up a clean
-Python 3.11 venv, install the extras, verify the imports, run the
-test suite, and execute the CLI on two public datasets. Expect total
-wall time < 3 minutes on a laptop or HPC login node. For the NERSC /
-`$SCRATCH` variant (login-node gotchas, module system notes, etc.),
-see [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md).
+Copy-paste-ready end-to-end recipe. If SURGE is already installed in
+a venv, **skip to step 4** — steps 1-3 only need to be run once per
+machine. For the NERSC / `$SCRATCH` variant (login-node gotchas,
+module system notes, etc.) see
+[`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md).
 
-### 1. Clone + Python 3.11 venv
+### 1. Pick a location and clone the repo *(optional — first-time setup)*
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git
-cd SURGE
+export TEST_DIR=$HOME/surge-release-test     # any directory; $SCRATCH on HPC
+mkdir -p "$TEST_DIR" && cd "$TEST_DIR"
+git clone git@github.com:S-Villar/SURGE.git
+```
 
-# uv is fastest; python3.11 -m venv .venv works too
+### 2. Create a clean Python 3.11 venv *next to* the checkout *(optional)*
+
+Keeping the venv alongside the repo (not inside it) keeps
+`git status` clean and lets you nuke the venv without touching the
+source.
+
+```bash
 uv venv --python 3.11 .venv
 source .venv/bin/activate
 
-python --version       # -> Python 3.11.x
-which python           # -> <repo>/.venv/bin/python
+python --version        # -> Python 3.11.x
+which python            # -> $TEST_DIR/.venv/bin/python
 ```
 
-### 2. Editable install with `torch + onnx + dev` extras
+`python3.11 -m venv .venv` works too if `uv` is unavailable; installs
+are just slower.
+
+### 3. Editable install + import sanity check *(optional)*
 
 ```bash
+cd "$TEST_DIR/SURGE"
 uv pip install -e ".[torch,onnx,dev]"
-```
 
-### 3. Verify the import surface
-
-```bash
 python - <<'PY'
 import surge, torch, onnx, onnxruntime, sklearn
 print(f"surge       {surge.__version__}")
@@ -126,49 +133,42 @@ print(f"sklearn     {sklearn.__version__}")
 PY
 ```
 
-Expected:
-
-```text
-surge       0.1.0
-torch       2.x
-onnx        1.x
-onnxruntime 1.x
-sklearn     1.x
-```
-
 ### 4. Run the test suite
 
 ```bash
 pytest -q
 ```
 
-Expected: **`47 passed, 6 skipped`** (the 6 skips are environmental
-gates — 5 need optional `h5py`, 1 is a legacy visualization flag).
-The end-to-end regression job that CI runs is:
+Expected: **`47 passed, 6 skipped`**. The 6 skips are environmental
+gates (5 need optional `h5py` for MHD-code batch mode, 1 is a legacy
+visualization flag). The single end-to-end regression job that CI
+also runs is:
 
 ```bash
 pytest -q tests/test_e2e_release_smoke.py
 ```
 
-It exercises: CSV → `SurrogateEngine` → fit → predict → ONNX export →
+which exercises CSV → `SurrogateEngine` → fit → predict → ONNX export →
 `onnxruntime` round-trip parity.
 
-### 5. Run the CLI quickstart
+### 5. End-to-end CLI quickstart
 
-The bundled CLI at [`examples/quickstart.py`](examples/quickstart.py)
-fetches a public scikit-learn dataset, writes a CSV, runs the full
-**train → evaluate → profile** cycle, and optionally produces parity
-plots and a round-trip inference demo.
+Must be run **from inside the SURGE checkout** so `python -m
+examples.quickstart` can resolve the package. Artifacts always land
+under `<repo>/runs/<tag>/` regardless of what subdirectory you're in.
 
 ```bash
-# 5a. Diabetes + Random Forest (~5 s), with plots and inference round-trip
+cd "$TEST_DIR/SURGE"
+
+# 5a. Diabetes + Random Forest (~5 s), with plots and inference round-trip.
 python -m examples.quickstart --dataset diabetes --model rf --viz --infer
 
-# 5b. California housing + PyTorch MLP (~60-90 s on CPU)
+# 5b. California housing + PyTorch MLP (~60-90 s on CPU), same options.
 python -m examples.quickstart --dataset california --model mlp --viz --infer
 
-# 5c. (Optional) short Optuna HPO sweep on the MLP
-python -m examples.quickstart --dataset california --model mlp --n-trials 20 --viz
+# 5c. (Optional) short Optuna HPO sweep (5 trials × 50 epochs each,
+#     ~1-2 min on CPU). Each trial prints its epoch loss inline.
+python -m examples.quickstart --dataset california --model mlp --n-trials 5 --viz
 ```
 
 ### 6. Expected output
@@ -217,6 +217,16 @@ SURGE workflow started.
                   'Latitude',  'Longitude', 'MedInc',  'Population']
         y_true : [4.53 3.58 3.52 3.41 3.42]
         y_hat  : [3.81 4.20 3.88 2.69 2.45]
+```
+
+### 7. Inspect the artifacts
+
+```bash
+ls runs/california_mlp/
+
+python -c "import json; \
+           d = json.load(open('runs/california_mlp/metrics.json')); \
+           print(json.dumps(d['pytorch.mlp']['test'], indent=2))"
 ```
 
 To regenerate the parity plots for an existing run without retraining:
