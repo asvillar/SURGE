@@ -22,8 +22,8 @@ from .datagen import DataGenerator
 from .workflow.run import run_surrogate_workflow
 from .workflow.spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
-# Ensure adapter modules register themselves on import
-from .models import adapters as _adapters  # noqa: F401
+# Adapter registration happens eagerly inside `surge.model.__init__`
+# (see line 10 above); no extra import is required.
 
 # Optional dataset utilities
 try:
