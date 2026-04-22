@@ -1,141 +1,117 @@
-# SURGE Installation Guide
+# Installation
 
-## Quick Installation (Recommended)
+SURGE is published as the `surge-ml` distribution on PyPI; the import name is
+`surge`. The README covers the 30-second install; this page is the longer
+reference for people setting up a fresh environment on a workstation or HPC
+login node.
 
-### 1. Clone the Repository
+## 1. Pick an environment
+
+SURGE targets **Python 3.10 or 3.11**. CI tests both. You can use any
+environment manager you like; the two we test routinely are [`uv`](https://github.com/astral-sh/uv)
+and `venv`+`pip`.
 
 ```bash
-git clone <your-surge-repo-url>
+# Option A — uv (fastest, isolated; what the CI does)
+uv venv --python 3.11 .venv
+source .venv/bin/activate
+
+# Option B — plain venv
+python3.11 -m venv .venv
+source .venv/bin/activate
+```
+
+## 2. Install SURGE
+
+From a clone (recommended while `0.1.0` is still pre-release on PyPI):
+
+```bash
+git clone https://github.com/S-Villar/SURGE.git
 cd SURGE
+pip install -e ".[torch,onnx]"
 ```
 
-### 2. Create Conda Environment
+Or, once `0.1.0` is tagged on PyPI:
 
 ```bash
-# Create environment with all dependencies
-conda env create -f environment.yml
-
-# Activate the environment
-conda activate surge
+pip install "surge-ml[torch,onnx]==0.1.0"
 ```
 
-### 3. Install SURGE Package
+### Optional extras
+
+SURGE keeps heavy dependencies opt-in. The extras are additive.
+
+| Extra   | Pulls in                                         | Install when you want to…                   |
+|---------|--------------------------------------------------|---------------------------------------------|
+| (none)  | sklearn / pandas / pyarrow / optuna / matplotlib | train classical regressors (RF, MLP-sklearn)|
+| `torch` | `torch>=1.9`                                     | train the PyTorch MLP surrogate             |
+| `onnx`  | `onnx`, `onnxscript`, `onnxruntime`              | export trained models for deployment        |
+| `dev`   | `pytest`, `pytest-cov`, `ruff`                   | run the test suite + lint locally           |
+| `docs`  | `sphinx`, `furo`, `myst-parser`                  | build the documentation                     |
+
+The full developer install used by CI is:
 
 ```bash
-# Install SURGE in development mode
-pip install -e .
+pip install -e ".[dev,torch,onnx]"
 ```
 
-The `-e` flag installs SURGE in "editable" mode, meaning:
-- ✅ You can import SURGE from anywhere: `from surge import MLTrainer`
-- ✅ Changes to the code are immediately available (no reinstall needed)
-- ✅ No need to manually set PYTHONPATH or modify sys.path
+## 3. Verify the install
 
-## Verify Installation
+The bundled checker prints a one-screen diagnostic:
 
 ```bash
-# Test that SURGE is installed
-python -c "import surge; print(surge.__version__)"
-
-# Check available backends
-python -c "from surge import PYTORCH_AVAILABLE; print(f'PyTorch: {PYTORCH_AVAILABLE}')"
-
-# Run tests
-pytest tests/ -v
+python scripts/utils/check_installation.py
 ```
 
-## Alternative: Manual Path Setup (Not Recommended)
-
-If you prefer not to install SURGE as a package, you can set the environment variable:
+Or quickly by hand:
 
 ```bash
-# Add to your ~/.bashrc or ~/.zshrc
-export PYTHONPATH="${PYTHONPATH}:/path/to/SURGE"
-export SURGE_DIR="/path/to/SURGE"
+python -c "import surge; print('surge', surge.__version__)"
+python -c "from surge import SurrogateWorkflowSpec, run_surrogate_workflow; print('workflow API OK')"
 ```
 
-Then reload your shell:
-```bash
-source ~/.bashrc  # or ~/.zshrc
-```
-
-## Directory Structure After Installation
-
-```
-SURGE/                          # Your cloned repository
-├── environment.yml             # Main conda environment
-├── envs/                       # Alternative environments
-│   ├── environment_minimal.yml
-│   └── environment_gpu.yml
-├── setup.py                    # Python package setup
-├── surge/                      # Main package code
-│   ├── __init__.py
-│   ├── trainer.py
-│   ├── models.py
-│   └── ...
-├── tests/                      # Test suite
-├── examples/                   # Example scripts
-└── docs/                       # Documentation
-```
-
-## How Python Finds SURGE
-
-After `pip install -e .`, Python automatically knows where SURGE is because:
-
-1. A `.egg-link` file is created in your conda environment's `site-packages/`
-2. This file points to your SURGE directory
-3. Python can now import SURGE from anywhere
-
-## Uninstalling
+Then run the quickstart (uses scikit-learn's 442-row diabetes dataset, under
+5 seconds on a laptop):
 
 ```bash
-# Remove SURGE package
-pip uninstall surge-surrogate
-
-# Remove conda environment
-conda deactivate
-conda env remove -n surge
+python -m examples.quickstart --dataset diabetes
 ```
+
+## 4. Run the tests
+
+```bash
+pytest -q
+```
+
+`pytest` is scoped to the `tests/` directory via `pyproject.toml`. CI runs the
+same command plus a dedicated end-to-end smoke test that trains an sklearn
+model, trains a tiny PyTorch MLP, exports to ONNX, and verifies round-trip
+parity.
 
 ## Troubleshooting
 
-### "ModuleNotFoundError: No module named 'surge'"
+**`ModuleNotFoundError: No module named 'surge'`** — you forgot `pip install
+-e .` (or installed it into a different environment). Double-check with
+`which python` and `which pip`.
 
-**Solution**: Install SURGE as a package:
-```bash
-cd /path/to/SURGE
-pip install -e .
-```
+**`torch.onnx.export` silently produces no file** — `torch>=2.11` dispatches
+ONNX export through `onnxscript`, which lives in the `onnx` extra. Install
+with `.[torch,onnx]`.
 
-### "Command 'pip install -e .' fails"
+**`Warning: GPflow not available or incompatible`** — cosmetic. GPflow is an
+optional backend that requires a legacy TensorFlow; the warning is emitted
+once at import and the sklearn / torch / onnx paths are unaffected. If you
+do need GPflow, uncomment its extra in `pyproject.toml` and install.
 
-**Solution**: Make sure you're in the SURGE directory and conda environment is activated:
-```bash
-conda activate surge
-cd /path/to/SURGE
-pip install -e .
-```
+**Running on NERSC / Perlmutter** — create the venv on `$SCRATCH` rather than
+`$HOME` (quota pressure); see `docs/internal/SURGE_SLURM_BEST_PRACTICES.md` for
+worked examples if you have access.
 
-### "ImportError: cannot import name 'MLTrainer'"
+## Next steps
 
-**Solution**: Check your import statement:
-```python
-# Correct
-from surge.trainer import MLTrainer
-
-# Also correct
-from surge import MLTrainer
-```
-
-## Next Steps
-
-1. ✅ Repository cloned
-2. ✅ Environment created
-3. ✅ SURGE installed
-4. 👉 **Try the examples**: `python examples/simple_optuna_demo.py`
-5. 👉 **Read the docs**: Check `docs/` for tutorials
-6. 👉 **Run tests**: `pytest tests/ -v`
-
----
-
-**Ready to build surrogate models? 🚀**
+- `python -m examples.quickstart --dataset california` — a bigger public
+  regression benchmark (20k samples, typically R² > 0.8).
+- [`docs/RUNBOOK.md`](../RUNBOOK.md) — what each file under
+  `runs/<tag>/` means and how to consume it downstream.
+- The README's *Quickstart* section for a verbatim output transcript and a
+  full artifact listing.
