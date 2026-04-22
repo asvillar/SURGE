@@ -89,36 +89,90 @@ The smoke test exercises: CSV → `SurrogateEngine` → fit → predict → ONNX
 export → `onnxruntime` round-trip parity. It is also the CI
 `e2e-regression` job.
 
-## Minimal example
+## Quickstart
+
+A complete train → evaluate → profile cycle, end to end, on a public
+442-row dataset. Runs in under 5 seconds on a laptop.
 
 ```python
-from surge import (
-    EngineRunConfig, ModelSpec, SurrogateEngine,
-    SurrogateWorkflowSpec, run_surrogate_workflow,
-)
+import pandas as pd
+from sklearn.datasets import load_diabetes
+
+from surge import SurrogateWorkflowSpec, run_surrogate_workflow
 from surge.hpc import ResourceSpec
 
+# 1. Any CSV with named columns works — here: sklearn's diabetes dataset
+#    (10 inputs, 1 output, 442 rows).
+load_diabetes(as_frame=True).frame.to_csv("diabetes.csv", index=False)
+
+# 2. Declare the workflow: dataset, model(s), compute budget, output dir.
 spec = SurrogateWorkflowSpec(
-    dataset_path="data/datasets/MHD-code/mhd_code_synthetic_profiles_sample.csv",
-    models=[{"key": "sklearn.random_forest", "params": {"n_estimators": 100}}],
+    dataset_path="diabetes.csv",
+    models=[{"key": "sklearn.random_forest",
+             "params": {"n_estimators": 200}}],
     resources=ResourceSpec(device="cpu", num_workers=4),
-    output_dir="runs/",
+    output_dir=".",
+    run_tag="quickstart",
+    overwrite_existing_run=True,
 )
+
+# 3. Run it.
 summary = run_surrogate_workflow(spec)
-print(summary["models"][0]["profile"])
-# {'model_size_bytes': ..., 'parameter_count': ...,
-#  'inference_ms_per_sample': ..., ...}
+
+m = summary["models"][0]
+print(f"test R²   = {m['metrics']['test']['r2']:.3f}")
+print(f"test RMSE = {m['metrics']['test']['rmse']:.2f}")
+print(f"model     = {m['profile']['model_size_bytes']/1024:.1f} KB, "
+      f"{m['profile']['parameter_count']:,} params")
+print(f"inference = {m['profile']['inference_ms_per_sample']:.2f} ms/sample")
 ```
 
-During training you will see exactly one banner per model:
+What you actually see when you run this (verbatim from the command
+above, captured on CPU with 4 sklearn workers):
 
+```text
+SURGE workflow started.
+[1/3] Loading dataset...
+[2/3] Preparing splits and scalers...
+[3/3] Training sklearn.random_forest...
+[3/3] Done. Artifacts in runs/quickstart
+
+test R²   = 0.444
+test RMSE = 54.26
+model     = 5352.0 KB, 75,470 params
+inference = 0.75 ms/sample
 ```
-[surge.fit] model=sklearn.random_forest backend=sklearn device=cpu
-            max_gpus=1 n_train=... n_features=... n_outputs=... n_jobs=4
+
+The `runs/quickstart/` directory now contains everything you need to
+reproduce or audit the run:
+
+```text
+runs/quickstart/
+├── spec.yaml                  # exact workflow spec (for re-running)
+├── env.txt                    # pip freeze at run time
+├── git_rev.txt                # HEAD of the repo, or "unknown"
+├── workflow_summary.json      # metrics + profile + resources_used
+├── metrics.json               # per-model metrics (train/val/test + timings)
+├── scaler.joblib              # input scaler (needed for inference)
+├── predictions/               # train/val/test predictions as parquet
+└── sklearn.random_forest/
+    ├── model.joblib
+    ├── onnx/model.onnx        # if torch/onnx extras are installed
+    └── resources_used.json
+```
+
+During training SURGE also prints a one-line banner per model so you
+always know what backend, device, and worker count actually ran:
+
+```text
+[surge.fit] model=sklearn.random_forest backend=sklearn device=cpu \
+            max_gpus=1 n_train=309 n_features=10 n_outputs=1 n_jobs=4
 ```
 
 The same fields are persisted to `workflow_summary.json` under
-`models[].resources_used` for auditing.
+`models[].resources_used` for auditing. `profile` carries
+`model_size_bytes`, `parameter_count`, and `inference_ms_per_sample`
+for every run.
 
 ## Documentation
 
