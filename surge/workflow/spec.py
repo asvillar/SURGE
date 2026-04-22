@@ -86,6 +86,28 @@ class SurrogateWorkflowSpec:
     # n_jobs).
     resources: ResourceSpec = field(default_factory=ResourceSpec)
 
+    def __post_init__(self) -> None:
+        # Allow the ergonomic dict form in `models=[{...}, ...]` and
+        # `resources={...}` — users who construct a spec directly in Python
+        # (README example, notebooks) should get the same coercion that
+        # from_dict() does for YAML-loaded dicts. Entries that are already
+        # typed are passed through untouched.
+        coerced_models: List[ModelConfig] = []
+        for m in self.models:
+            if isinstance(m, ModelConfig):
+                coerced_models.append(m)
+            elif isinstance(m, Mapping):
+                coerced_models.append(ModelConfig.from_dict(m))
+            else:
+                raise TypeError(
+                    f"SurrogateWorkflowSpec.models entries must be ModelConfig "
+                    f"or dict; got {type(m).__name__}"
+                )
+        self.models = coerced_models
+
+        if not isinstance(self.resources, ResourceSpec):
+            self.resources = ResourceSpec.from_dict(self.resources)  # type: ignore[arg-type]
+
     @staticmethod
     def from_dict(payload: Mapping[str, Any]) -> "SurrogateWorkflowSpec":
         data = dict(payload)
