@@ -32,13 +32,11 @@ pytest -q -rs
 pytest -q tests/test_e2e_release_smoke.py
 ```
 
-Expected in a fresh `.[torch,onnx,dev]` env: **47 passed, 6 skipped**.
-The 6 skips are environmental:
+Expected in a fresh `.[torch,onnx,dev]` env: **52 passed, 1 skipped**
+(`h5py` is included in `dev` so the MHD-code batch tests run). The skip:
 
-- 5 × `test_mhd_code_workflow_modes.py` — require `h5py` (optional dep).
-- 1 × `test_model_comparison.py` — guarded on the legacy
-  `surge.engine.VISUALIZATION_AVAILABLE` flag; pending migration to
-  `surge.viz.run_viz`.
+- 1 × `test_model_comparison.py` — legacy visualization scaffold;
+  pending migration to `surge.viz.run_viz`.
 
 ## Test data
 
