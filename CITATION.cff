@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "SURGE: Surrogate Regression Engine"
+title: "SURGE: Surrogate Unified Robust Generation Engine"
 message: "If you use SURGE in your research, please cite this software."
 type: software
 version: "0.1.0"
@@ -42,7 +42,7 @@ authors:
     email: "asvillar@princeton.edu"
 preferred-citation:
   type: software
-  title: "SURGE: Surrogate Regression Engine"
+  title: "SURGE: Surrogate Unified Robust Generation Engine"
   version: "0.1.0"
   year: 2026
   authors:

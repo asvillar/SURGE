@@ -1,5 +1,9 @@
 # SURGE
 
+<p align="center">
+  <img src="data/logos/SURGE_logo_cropped.png" alt="SURGE — Surrogate Unified Robust Generation Engine" width="420"/>
+</p>
+
 [![CI](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml/badge.svg)](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](./pyproject.toml)
@@ -8,10 +12,10 @@
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/badge/uv-ready-261230.svg?logo=astral&logoColor=white)](https://github.com/astral-sh/uv)
 
-**Surrogate Regression Engine** — a surrogate modeling framework for
-scientific workflows that integrates Scientific Machine Learning (SciML)
-and AutoML features, uncertainty quantification (UQ), and MLOps-style
-provenance in a single declarative pipeline.
+**Surrogate Unified Robust Generation Engine** — a surrogate modeling
+framework for scientific workflows that integrates Scientific Machine
+Learning (SciML) and AutoML features, uncertainty quantification (UQ),
+and MLOps-style provenance in a single declarative pipeline.
 
 SURGE unifies data generation and ingestion, an extensible registry of
 model adapters (classical, neural, probabilistic, and ensemble), held-out
