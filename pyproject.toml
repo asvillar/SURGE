@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "surge-ml"
+version = "0.1.0"
+description = "Surrogate Unified Robust Generation Engine — tabular scientific surrogates, workflow, and MLOps-style artifacts"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [{ name = "Álvaro Sánchez Villar" }]
+keywords = ["surrogate", "machine learning", "scientific computing", "MLOps"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: BSD License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+
+dependencies = [
+  "numpy>=1.20.0",
+  "scipy>=1.5.0",
+  "scikit-learn>=1.0.0",
+  "joblib>=1.0.0",
+  "pandas>=1.5.0",
+  "pyarrow>=10.0.0",
+  "pyyaml>=6.0.0",
+  "matplotlib>=3.5.0",
+  "optuna>=3.0.0",
+  "scikit-optimize>=0.9.0",
+]
+
+[project.optional-dependencies]
+torch = ["torch>=1.9.0"]
+# gpflow = ["tensorflow>=2.8.0,<2.16", "tensorflow-probability>=0.19.0", "gpflow>=2.5.0"]
+dev = ["pytest>=6.0", "pytest-cov", "ruff>=0.1.0"]
+docs = ["sphinx>=5.0", "furo", "myst-parser"]
+
+[project.urls]
+Homepage = "https://github.com/REPLACE_ORG/surge"
+Documentation = "https://github.com/REPLACE_ORG/surge/blob/main/docs/README.md"
+Repository = "https://github.com/REPLACE_ORG/surge"
+
+# Install the `surge` Python package from the `surge/` directory.
+# Package name on PyPI is `surge-ml` to reduce clash with other projects named "surge".
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["surge*"]
