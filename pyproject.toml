@@ -38,6 +38,12 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = ["torch>=1.9.0"]
+# ONNX export of torch models. onnxscript is the exporter backend that
+# torch>=2.11 dispatches to when you call torch.onnx.export; without it
+# the export silently skips. onnxruntime is the inference runtime used
+# by the E2E smoke test to verify numeric parity. Installing the `onnx`
+# extra gets you the full export → reload → parity path.
+onnx = ["onnx>=1.14", "onnxscript>=0.1", "onnxruntime>=1.17"]
 # gpflow = ["tensorflow>=2.8.0,<2.16", "tensorflow-probability>=0.19.0", "gpflow>=2.5.0"]
 dev = ["pytest>=6.0", "pytest-cov", "ruff>=0.1.0"]
 docs = ["sphinx>=5.0", "furo", "myst-parser"]

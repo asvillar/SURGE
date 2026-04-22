@@ -59,24 +59,36 @@ From a clone:
 ```bash
 git clone https://github.com/S-Villar/SURGE.git
 cd SURGE
-python -m pip install -e ".[torch]"   # core + PyTorch MLP; omit [torch] if not needed
+python -m pip install -e ".[torch,onnx]"   # core + PyTorch + ONNX export
 ```
+
+The extras are additive and optional:
+
+| Extra   | Adds                                            | Use when…                                    |
+|---------|-------------------------------------------------|----------------------------------------------|
+| (none)  | sklearn / pandas / parquet / MLflow / plotting  | you only want classical regressors           |
+| `torch` | PyTorch 1.9+ (MLP adapter, MC-Dropout)          | you want neural surrogates                   |
+| `onnx`  | `onnx`, `onnxscript`, `onnxruntime`             | you want to export + deploy trained models   |
+| `dev`   | `pytest`, `pytest-cov`, `ruff`                  | you plan to run the test suite / lint        |
+| `docs`  | `sphinx`, `furo`, `myst-parser`                 | you plan to build the docs locally           |
 
 With [`uv`](https://github.com/astral-sh/uv) (faster, isolated):
 
 ```bash
 uv venv --python 3.11
 source .venv/bin/activate
-uv pip install -e ".[torch]"
+uv pip install -e ".[torch,onnx]"
 ```
 
 Or from a published tag (once `0.1.0` is on PyPI):
 
 ```bash
-python -m pip install "surge-ml==0.1.0"
+python -m pip install "surge-ml[torch,onnx]==0.1.0"
 ```
 
 `surge-ml` is the PyPI distribution name; the import name is `surge`.
+A clean `pip install .` (no extras) pulls ~25 packages and completes
+in under 5 seconds on a typical laptop.
 
 ## Smoke test
 
