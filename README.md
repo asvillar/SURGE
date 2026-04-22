@@ -56,22 +56,14 @@ Pre-`0.1.0`. The core `engine → adapters → workflow → artifacts` path is
 stable and green in CI; see
 [`docs/PRERELEASE.md`](docs/PRERELEASE.md) for the exact scope.
 
-Test suite (on a clean clone): **`pytest -q tests/`** → *51 passed,
-38 skipped, 0 failed* on Python 3.11/3.13. Skipped tests are legacy
-pre-refactor tests tracked in
-[`docs/REFACTORING_PLAN.md`](docs/REFACTORING_PLAN.md) §1.9.
+Test suite (on a clean clone): **`pytest -q`** → *47 passed,
+6 skipped, 0 failed* on Python 3.11. The 6 skips are all legitimate
+environmental gates (5 need `h5py` for MHD-code batch mode, 1 guards a
+legacy visualization flag pending migration to `surge.viz`).
 
-## Install
+## Install (extras reference)
 
-From a clone:
-
-```bash
-git clone https://github.com/S-Villar/SURGE.git
-cd SURGE
-python -m pip install -e ".[torch,onnx]"   # core + PyTorch + ONNX export
-```
-
-The extras are additive and optional:
+Optional extras layer on top of the base install:
 
 | Extra   | Adds                                            | Use when…                                    |
 |---------|-------------------------------------------------|----------------------------------------------|
@@ -81,15 +73,7 @@ The extras are additive and optional:
 | `dev`   | `pytest`, `pytest-cov`, `ruff`                  | you plan to run the test suite / lint        |
 | `docs`  | `sphinx`, `furo`, `myst-parser`                 | you plan to build the docs locally           |
 
-With [`uv`](https://github.com/astral-sh/uv) (faster, isolated):
-
-```bash
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip install -e ".[torch,onnx]"
-```
-
-Or from a published tag (once `0.1.0` is on PyPI):
+From a published tag (once `0.1.0` is on PyPI):
 
 ```bash
 python -m pip install "surge-ml[torch,onnx]==0.1.0"
@@ -97,41 +81,99 @@ python -m pip install "surge-ml[torch,onnx]==0.1.0"
 
 `surge-ml` is the PyPI distribution name; the import name is `surge`.
 A clean `pip install .` (no extras) pulls ~25 packages and completes
-in under 5 seconds on a typical laptop.
-
-## Smoke test
-
-```bash
-python -c "import surge; print(surge.__version__)"
-pytest -q tests/test_e2e_release_smoke.py
-```
-
-The smoke test exercises: CSV → `SurrogateEngine` → fit → predict → ONNX
-export → `onnxruntime` round-trip parity. It is also the CI
-`e2e-regression` job.
+in under 5 seconds on a typical laptop. For the full recipe (clone →
+venv → verify → tests → run), see the Quickstart immediately below.
 
 ## Quickstart
 
-The fastest way to see SURGE end-to-end is the bundled CLI at
-[`examples/quickstart.py`](examples/quickstart.py). It fetches a public
-scikit-learn dataset, writes a CSV, runs the full **train → evaluate →
-profile** cycle, and (optionally) rounds-trips the saved model for
-inference.
+Copy-paste-ready end-to-end recipe: clone the repo, set up a clean
+Python 3.11 venv, install the extras, verify the imports, run the
+test suite, and execute the CLI on two public datasets. Expect total
+wall time < 3 minutes on a laptop or HPC login node. For the NERSC /
+`$SCRATCH` variant (login-node gotchas, module system notes, etc.),
+see [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md).
+
+### 1. Clone + Python 3.11 venv
 
 ```bash
-# 442-row diabetes benchmark, random forest (~5 s on a laptop)
-python -m examples.quickstart --dataset diabetes --model rf
+git clone https://github.com/S-Villar/SURGE.git
+cd SURGE
 
-# 20,640-row California housing benchmark, PyTorch MLP (~90 s on CPU).
-# --viz writes predicted-vs-true regression-map plots under plots/.
-# --infer round-trips the saved model on the first 5 rows.
-python -m examples.quickstart --dataset california --model mlp --viz --infer
+# uv is fastest; python3.11 -m venv .venv works too
+uv venv --python 3.11 .venv
+source .venv/bin/activate
 
-# Add a small Optuna HPO sweep (MLP only)
-python -m examples.quickstart --dataset california --model mlp --n-trials 20
+python --version       # -> Python 3.11.x
+which python           # -> <repo>/.venv/bin/python
 ```
 
-Captured output (California housing, MLP, single CPU core):
+### 2. Editable install with `torch + onnx + dev` extras
+
+```bash
+uv pip install -e ".[torch,onnx,dev]"
+```
+
+### 3. Verify the import surface
+
+```bash
+python - <<'PY'
+import surge, torch, onnx, onnxruntime, sklearn
+print(f"surge       {surge.__version__}")
+print(f"torch       {torch.__version__}")
+print(f"onnx        {onnx.__version__}")
+print(f"onnxruntime {onnxruntime.__version__}")
+print(f"sklearn     {sklearn.__version__}")
+PY
+```
+
+Expected:
+
+```text
+surge       0.1.0
+torch       2.x
+onnx        1.x
+onnxruntime 1.x
+sklearn     1.x
+```
+
+### 4. Run the test suite
+
+```bash
+pytest -q
+```
+
+Expected: **`47 passed, 6 skipped`** (the 6 skips are environmental
+gates — 5 need optional `h5py`, 1 is a legacy visualization flag).
+The end-to-end regression job that CI runs is:
+
+```bash
+pytest -q tests/test_e2e_release_smoke.py
+```
+
+It exercises: CSV → `SurrogateEngine` → fit → predict → ONNX export →
+`onnxruntime` round-trip parity.
+
+### 5. Run the CLI quickstart
+
+The bundled CLI at [`examples/quickstart.py`](examples/quickstart.py)
+fetches a public scikit-learn dataset, writes a CSV, runs the full
+**train → evaluate → profile** cycle, and optionally produces parity
+plots and a round-trip inference demo.
+
+```bash
+# 5a. Diabetes + Random Forest (~5 s), with plots and inference round-trip
+python -m examples.quickstart --dataset diabetes --model rf --viz --infer
+
+# 5b. California housing + PyTorch MLP (~60-90 s on CPU)
+python -m examples.quickstart --dataset california --model mlp --viz --infer
+
+# 5c. (Optional) short Optuna HPO sweep on the MLP
+python -m examples.quickstart --dataset california --model mlp --n-trials 20 --viz
+```
+
+### 6. Expected output
+
+Captured tail of step 5b (California housing, MLP, single CPU core):
 
 ```text
 SURGE workflow started.
@@ -140,19 +182,47 @@ SURGE workflow started.
 [3/3] Training pytorch.mlp...
 [3/3] Done. Artifacts in runs/california_mlp
 
-  train R²    = 0.849
-  val   R²    = 0.816
-  test  R²    = 0.810
-  test  RMSE  = 0.499
+  train R²    = 0.961
+  val   R²    = 0.822
+  test  R²    = 0.813
+  test  RMSE  = 0.495
   model       = 133.3 KB, parameter count n/a
-  inference   = 0.04 ms/sample
+  inference   = 0.01 ms/sample
+
+[viz] parity plots (predictions vs ground truth):
+        plots/inference_comparison_output_0.png
+        plots/inference_comparison_grid.png
+
+[artifacts] runs/california_mlp
+  ├── hpo/
+  ├── models/
+  │   └── pytorch.mlp.joblib                  50.6 KB
+  ├── plots/
+  │   ├── inference_comparison_grid.png       69.7 KB
+  │   └── inference_comparison_output_0.png   69.7 KB
+  ├── predictions/
+  │   ├── pytorch.mlp_test.parquet            63.4 KB
+  │   ├── pytorch.mlp_train.parquet          201.3 KB
+  │   └── pytorch.mlp_val.parquet             33.6 KB
+  ├── scalers/inputs.joblib                      775 B
+  ├── env.txt / git_rev.txt / run.log
+  ├── metrics.json / workflow_summary.json / spec.yaml
+  ├── train_data_ranges.json / model_card_pytorch.mlp.json
+  ├── training_history_pytorch.mlp.json       38.4 KB  — per-epoch loss
+  └── training_progress_pytorch.mlp.jsonl     32.3 KB  — streaming progress
 
 [infer] round-trip inference on the first 5 rows:
         model  : pytorch.mlp.joblib  (pytorch)
         inputs : ['AveBedrms', 'AveOccup', 'AveRooms', 'HouseAge',
                   'Latitude',  'Longitude', 'MedInc',  'Population']
         y_true : [4.53 3.58 3.52 3.41 3.42]
-        y_hat  : [3.99 4.48 4.02 2.62 2.57]
+        y_hat  : [3.81 4.20 3.88 2.69 2.45]
+```
+
+To regenerate the parity plots for an existing run without retraining:
+
+```bash
+python -m surge.cli viz --run-dir runs/california_mlp
 ```
 
 ### Run it yourself in Python
