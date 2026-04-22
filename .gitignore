@@ -187,9 +187,27 @@ Temporary Items
 .apdisk
 
 # Project specific
-models/
+# NOTE: originally a blanket `models/` rule; narrowed 2026-04-21 to only
+# ignore runtime artifact trees (runs/<tag>/models/, data/**/models/), not
+# the tracked `surge/model*` source packages. A bare `models/` here caused
+# CI on a fresh clone to pick up `surge/models.py` while local checkouts
+# loaded an untracked `surge/models/` package — see commit 6f33d89.
+runs/**/models/
+data/**/models/
 *.joblib
 results.json
+
+# Internal / project-local trees (data-generation runbooks, per-experiment
+# configs, Slurm launchers, investigative notebooks, internal design docs).
+# Kept on local disks for reference; not shipped in the public v0.1.0 tree.
+# Lessons extracted from these live in docs/internal/ (also ignored, but
+# maintained as a separate local-only reference — back it up yourself).
+docs/internal/
+scripts/**/internal/
+configs/internal/
+examples/internal/
+notebooks/**/internal/
+templates/internal/
 
 # DataGenerator batch outputs (generated data, not tracked)
 examples/datagen/batch*/
@@ -267,3 +285,25 @@ BRANCH_STRATEGY.md
 # Slurm tee logs from scripts/mhd_code/train_*_augstyle.slurm
 slurm_logs/
 
+
+# Local HPC scratch links / accidental staging dirs (never public)
+pscratch/
+/src/
+slurm_logs/
+/mhd_code/
+
+# Slurm batch logs accumulate in logs/ — already ignored via runs/ but
+# logs/ is a separate convention used by scripts/mhd_code/internal/launch_*.sh
+logs/
+
+# Vendored external simulator python packages (e.g. mhd_code unstructured)
+# should never be in the public tree; users with HPC access set
+# MHD-code_PYTHON_PATH if they need eigenmode_features' optional import.
+notebooks/**/mhd_code_python_code/
+
+# Legacy / shadow `surge/models/` package directory. The canonical
+# module is the tracked `surge/models.py`; the local `surge/models/`
+# directory is an older/alternative layout kept on some checkouts.
+# Keeping it ignored is what avoids the CI vs local collision (see
+# commits 6f33d89 and ead0177 for the bug and fix).
+/surge/models/
