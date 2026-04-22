@@ -59,3 +59,11 @@ Issues = "https://github.com/S-Villar/SURGE/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["surge*"]
+
+# Scope `pytest` to the actual test suite. Without this, `pytest -q` from the
+# repo root walks into scripts/ and examples/ and trips over legacy tutorial
+# scripts whose imports reference older SURGE APIs. CI passes because it
+# invokes `pytest -q tests/` explicitly; this keeps local runs consistent.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

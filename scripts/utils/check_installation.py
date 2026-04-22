@@ -76,17 +76,23 @@ def check_surge_installation():
     if surge_imported:
         print("5. Checking SURGE components...")
         try:
-            from surge.trainer import MLTrainer
-            print("   ✅ MLTrainer available")
-        except ImportError:
-            print("   ❌ MLTrainer not available")
-        
+            from surge import SurrogateEngine, SurrogateWorkflowSpec, run_surrogate_workflow
+            print("   ✅ SurrogateEngine, SurrogateWorkflowSpec, run_surrogate_workflow importable")
+        except ImportError as exc:
+            print(f"   ❌ Workflow API missing: {exc}")
+
         try:
             from surge import PYTORCH_AVAILABLE, GPFLOW_AVAILABLE
             print(f"   {'✅' if PYTORCH_AVAILABLE else '❌'} PyTorch: {PYTORCH_AVAILABLE}")
             print(f"   {'✅' if GPFLOW_AVAILABLE else '❌'} GPflow: {GPFLOW_AVAILABLE}")
         except ImportError:
             print("   ❌ Backend flags not available")
+
+        try:
+            import onnxruntime  # noqa: F401
+            print("   ✅ onnxruntime present (ONNX export path available)")
+        except ImportError:
+            print("   ⚠  onnxruntime missing — reinstall with '.[onnx]' if you need ONNX export")
         print()
     
     # 6. Recommendations
@@ -106,9 +112,9 @@ def check_surge_installation():
         print("✅ SURGE is properly installed and working!")
         print()
         print("Next steps:")
-        print("  • Try examples: python examples/simple_optuna_demo.py")
-        print("  • Run tests: pytest tests/ -v")
-        print("  • Check docs: docs/setup/INSTALLATION.md")
+        print("  • Run the quickstart:  python -m examples.quickstart --dataset diabetes")
+        print("  • Try a bigger one:    python -m examples.quickstart --dataset california")
+        print("  • Run the test suite:  pytest -q")
         print()
     
     # 7. Environment variable suggestion
