@@ -3,10 +3,19 @@
 [![CI](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml/badge.svg)](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](./pyproject.toml)
-[![PyPI](https://img.shields.io/pypi/v/surge-ml.svg?label=PyPI&color=informational)](https://pypi.org/project/surge-ml/)
-[![Last commit](https://img.shields.io/github/last-commit/S-Villar/SURGE.svg)](https://github.com/S-Villar/SURGE/commits)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/badge/uv-ready-261230.svg?logo=astral&logoColor=white)](https://github.com/astral-sh/uv)
+
+<!--
+  The two badges below (PyPI version and GitHub last-commit) depend on
+  data that shields.io can only read when the repo is PUBLIC *and*
+  the package is published. Uncomment them at the same time you flip
+  the repo visibility to public and run `twine upload` for 0.1.0.
+
+  [![PyPI](https://img.shields.io/pypi/v/surge-ml.svg?label=PyPI&color=informational)](https://pypi.org/project/surge-ml/)
+  [![Last commit](https://img.shields.io/github/last-commit/S-Villar/SURGE.svg)](https://github.com/S-Villar/SURGE/commits)
+-->
+
 
 **Surrogate Unified Robust Generation Engine** — a surrogate modeling
 framework for scientific workflows that integrates Scientific Machine
