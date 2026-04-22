@@ -1,7 +1,7 @@
-.. image:: ../data/logos/Fulllogo_banner.png
+.. image:: ../data/logos/surge_logo_os_expanded.png
    :align: center
    :alt: SURGE — Surrogate Unified Robust Generation Engine
-   :width: 560px
+   :width: 640px
 
 SURGE
 =====

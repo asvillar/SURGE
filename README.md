@@ -1,4 +1,4 @@
-# <img src="data/logos/logoClassic.png" width="56" alt="" align="absmiddle"/>&nbsp;&nbsp;SURGE
+# <img src="data/logos/surge_logo_os.png" width="56" alt="" align="absmiddle"/>&nbsp;&nbsp;SURGE
 
 [![CI](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml/badge.svg)](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
@@ -269,7 +269,7 @@ The same fields are persisted to `workflow_summary.json` under
   *Cite this repository* once `0.1.0` is tagged.
 
 <p align="center">
-  <img src="data/logos/Fulllogo_banner.png" alt="SURGE — Surrogate Unified Robust Generation Engine" width="560"/>
+  <img src="data/logos/surge_logo_os_expanded.png" alt="SURGE — Surrogate Unified Robust Generation Engine" width="640"/>
 </p>
 
 ## License and funding
