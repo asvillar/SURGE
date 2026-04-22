@@ -137,8 +137,16 @@ def copy_invoked_config_source(paths: ArtifactPaths, spec_path: Union[str, Path]
 def save_git_revision(paths: ArtifactPaths, repo_dir: Optional[Union[str, Path]] = None) -> Path:
     repo_dir = Path(repo_dir or ".")
     try:
+        # Redirect stderr so users running SURGE outside a git repo don't see
+        # the "fatal: not a git repository" line in the training output. We
+        # already fall back to "unknown" silently; users can always inspect
+        # git_rev.txt if they care.
         rev = (
-            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_dir)
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_dir,
+                stderr=subprocess.DEVNULL,
+            )
             .decode("utf-8")
             .strip()
         )
