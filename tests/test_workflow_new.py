@@ -1,18 +1,20 @@
-"""Tests for the unified SURGE workflow API."""
+"""Tests for the unified SURGE workflow API.
+
+Exercises the current ``SurrogateDataset`` + ``SurrogateEngine`` surface.
+End-to-end ``run_surrogate_workflow`` coverage lives in
+``tests/test_e2e_release_smoke.py``; here we stay at the unit level so
+these tests are fast and don't touch disk beyond ``tmp_path``.
+"""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from surge.dataset import SurrogateDataset
 from surge.engine import EngineRunConfig, ModelSpec, SurrogateEngine
-from surge.workflow.run import run_surrogate_workflow
-from surge.workflow.spec import HPOConfig, ModelConfig as WorkflowModelConfig, SurrogateWorkflowSpec
 
 
 def _make_dummy_dataframe(n_rows: int = 100) -> pd.DataFrame:
@@ -59,86 +61,6 @@ class TestSurrogateDataset:
         assert dataset.output_columns == ["output_x"]
         assert dataset.df is not None
         assert len(dataset.df) == len(df)
-
-
-class TestSurrogateWorkflow:
-    """High-level workflow execution tests (no Optuna for speed)."""
-
-    def _spec_from_dataframe(self, df: pd.DataFrame, tmp_path: Path) -> SurrogateWorkflowSpec:
-        data_path = tmp_path / "dummy.pkl"
-        df.to_pickle(data_path)
-
-        spec_dict = {
-            "dataset_path": str(data_path),
-            "test_fraction": 0.2,
-            "val_fraction": 0.2,
-            "standardize_inputs": True,
-            "standardize_outputs": True,
-            "predictions_scope": ["train", "val", "test"],
-            "predictions_format": "csv",
-            "output_dir": str(tmp_path),
-            "run_tag": "unit_workflow",
-            "models": [
-                {
-                    "key": "sklearn.random_forest",
-                    "name": "rf_unit",
-                    "request_uncertainty": True,
-                    "hpo": {"enabled": False},
-                }
-            ],
-        }
-        return SurrogateWorkflowSpec.from_dict(spec_dict)
-
-    @pytest.mark.skip(
-        reason="relies on run_surrogate_workflow legacy-dict spec path; pending "
-        "migration to current SurrogateWorkflowSpec schema — docs/REFACTORING_PLAN.md §1.9"
-    )
-    def test_run_workflow_creates_artifacts(self, tmp_path: Path) -> None:
-        df = _make_dummy_dataframe(200)
-        spec = self._spec_from_dataframe(df, tmp_path)
-
-        summary = run_surrogate_workflow(spec)
-        artifacts = summary["artifacts"]
-        root = Path(artifacts["root"])
-
-        metrics = json.loads((root / "metrics.json").read_text())
-        workflow_summary = json.loads((root / "workflow_summary.json").read_text())
-
-        assert metrics
-        assert workflow_summary["splits"]["train"] > 0
-
-        model_name = summary["models"][0]["name"]
-        pred_dir = root / "predictions"
-        for split in ("train", "val", "test"):
-            pred_file = pred_dir / f"{model_name}_{split}.csv"
-            assert pred_file.exists()
-            df_pred = pd.read_csv(pred_file)
-            true_cols = [col for col in df_pred.columns if col.startswith("y_true")]
-            pred_cols = [col for col in df_pred.columns if col.startswith("y_pred")]
-            assert true_cols and pred_cols
-
-    @pytest.mark.skip(
-        reason="relies on run_surrogate_workflow legacy-dict spec path; pending "
-        "migration to current SurrogateWorkflowSpec schema — docs/REFACTORING_PLAN.md §1.9"
-    )
-    def test_run_workflow_programmatic_model_config(self, tmp_path: Path) -> None:
-        df = _make_dummy_dataframe(150)
-        spec = self._spec_from_dataframe(df, tmp_path)
-
-        spec.models = [
-            WorkflowModelConfig(
-                key="torch.mlp",
-                name="torch_unit",
-                request_uncertainty=True,
-                params={"epochs": 5, "batch_size": 32, "hidden_layers": [32, 16]},
-                hpo=HPOConfig(enabled=False),
-            )
-        ]
-        spec.run_tag = "unit_workflow_torch"
-
-        summary = run_surrogate_workflow(spec)
-        assert summary["models"][0]["name"] == "torch_unit"
-        assert summary["models"][0]["artifacts"]["model"].endswith(".joblib")
 
 
 class TestSurrogateEngine:
