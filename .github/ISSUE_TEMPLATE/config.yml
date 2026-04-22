@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/asvillar/SURGE/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately per SECURITY.md, not as public issues.
+  - name: Release plan and open questions
+    url: https://github.com/asvillar/SURGE/blob/main/docs/RELEASE_SPRINT.md
+    about: Before filing a large feature request, check whether it is already scoped in the release sprint or roadmap.

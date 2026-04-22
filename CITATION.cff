@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+title: "SURGE: Surrogate Regression Engine"
+message: "If you use SURGE in your research, please cite this software."
+type: software
+version: "0.1.0"
+date-released: "2026-04-21"
+license: BSD-3-Clause
+url: "https://github.com/asvillar/SURGE"
+repository-code: "https://github.com/asvillar/SURGE"
+keywords:
+  - surrogate-models
+  - regression
+  - machine-learning
+  - scientific-machine-learning
+  - uncertainty-quantification
+  - pytorch
+  - scikit-learn
+  - onnx
+abstract: >-
+  SURGE is a Python framework for building, training, evaluating, and deploying
+  scientific surrogate regression models. It provides a unified engine for
+  scikit-learn, PyTorch, and GPflow backends; a declarative workflow spec;
+  lightweight hyperparameter optimization via Optuna; ONNX export for
+  inference; and a per-run provenance bundle (resources_used, model profile,
+  scalers, model card) aimed at reproducibility in HPC environments.
+authors:
+  - given-names: "Álvaro"
+    family-names: "Sánchez Villar"
+    orcid: "https://orcid.org/0000-0003-3727-9319"
+    email: "asvillar@princeton.edu"
+preferred-citation:
+  type: software
+  title: "SURGE: Surrogate Regression Engine"
+  version: "0.1.0"
+  year: 2026
+  authors:
+    - given-names: "Álvaro"
+      family-names: "Sánchez Villar"
+      orcid: "https://orcid.org/0000-0003-3727-9319"
