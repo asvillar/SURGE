@@ -230,10 +230,8 @@ scripts/mhd_code/interfaces/artifacts/
 # MHD-code Python support code (pulled from external repo; see docs/dev/MHD-code_PYTHON_CODE.md)
 notebooks/mhd_code/mhd_code_python_code/
 
-# Include specific datasets for demos and testing
-# Note: These are relatively large files (~41MB each) but essential for examples
-!data/datasets/example-data/target_.pkl
-!data/datasets/example-data/PwIF_.pkl
+# RF pickles: not shipped in public releases; keep local only under policy.
+data/datasets/example-data/*.pkl
 
 # Specific notebook files
 notebooks/Test_Botorch_Pe_Compare.ipynb
