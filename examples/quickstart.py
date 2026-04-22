@@ -221,8 +221,12 @@ def main(argv: list[str] | None = None) -> int:
              "Defaults to '<dataset>_<model>[_hpo<N>]'.",
     )
     parser.add_argument(
-        "--output-dir", default=".",
-        help="Parent directory for runs/ and the generated CSV (default: .).",
+        "--output-dir", default=str(_REPO),
+        help=(
+            "Parent directory for runs/ and the generated CSV. "
+            "Defaults to the SURGE repo root so `runs/<tag>/` lands next to "
+            "the source tree regardless of where you run python from."
+        ),
     )
     parser.add_argument(
         "--device", choices=["auto", "cpu", "cuda"], default="cpu",
