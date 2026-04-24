@@ -262,12 +262,12 @@ The same fields are persisted to `workflow_summary.json` under
 - Citing: registered in [DOE CODE](https://www.osti.gov/doecode) as **Code ID
   [179819](https://www.osti.gov/doecode/biblio/179819)**, with DOI
   [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5). **MLA
-  (as on OSTI):** *Sanchez-Villar, Alvaro, Churchill, R. Michael, Jha,
-  Shantenu, Churchill, R. Michael, and Jha, Shantenu. SURGE - Surrogate
-  Unified Robust Generation Engine. Computer Software.
-  https://github.com/S-Villar/SURGE. USDOE Office of Science (SC), Fusion
-  Energy Sciences (FES). 22 Apr. 2026. Web. doi:10.11578/dc.20260422.5.*
-  Also [`CITATION.cff`](CITATION.cff) and the [`docs/citation.rst`](docs/citation.rst) page (*Citing SURGE* in the HTML docs).
+  (recommended — each author once):** *Sanchez-Villar, Alvaro, Churchill,
+  R. Michael, and Jha, Shantenu. SURGE - Surrogate Unified Robust Generation
+  Engine. Computer Software. https://github.com/S-Villar/SURGE. USDOE Office
+  of Science (SC), Fusion Energy Sciences (FES). 22 Apr. 2026. Web.
+  doi:10.11578/dc.20260422.5.* Also [`CITATION.cff`](CITATION.cff) and the
+  [`docs/citation.rst`](docs/citation.rst) page (*Citing SURGE* in the HTML docs).
 
 <p align="center">
   <img src="data/logos/surge_logo_os_expanded.png" alt="SURGE — Surrogate Unified Robust Generation Engine" width="640"/>
@@ -288,6 +288,6 @@ on that page under *Citation Formats*.
 
 Cite alongside [`CITATION.cff`](CITATION.cff) and the
 [`pyproject.toml`](pyproject.toml) / GitHub *About* metadata for version and
-URL consistency. The machine-readable CFF file lists each person once; the
-MLA string above is the OSTI export, which names Churchill and Jha twice
-(developer + project member).
+URL consistency. The author list above matches `CITATION.cff` (OSTI’s
+auto-MLA may still show duplicate names; use the recommended line for
+citations).

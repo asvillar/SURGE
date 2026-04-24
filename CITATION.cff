@@ -43,10 +43,7 @@ abstract: >-
   agent-ready interfaces, SURGE provides a robust substrate for training,
   validating, comparing, and operationalizing surrogate models across
   scientific domains.
-# Unique authors (CFF 1.2 requires no duplicate people). The OSTI MLA
-# string duplicates Churchill and Jha because they are listed as both
-# developers and project members — that verbatim line is in docs/citation.rst
-# and the README. See: https://www.osti.gov/doecode/biblio/179819
+# Authors (each person once). See docs/citation.rst for recommended MLA.
 authors:
   - family-names: "Sanchez-Villar"
     given-names: "Alvaro"
