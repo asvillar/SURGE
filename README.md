@@ -5,6 +5,8 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](./pyproject.toml)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/badge/uv-ready-261230.svg?logo=astral&logoColor=white)](https://github.com/astral-sh/uv)
+[![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
+[![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
 
 <!--
   The two badges below (PyPI version and GitHub last-commit) depend on
@@ -55,6 +57,9 @@ end-to-end user walkthrough the `0.1.0` release must support.
 Pre-`0.1.0`. The core `engine → adapters → workflow → artifacts` path is
 stable and green in CI; see
 [`docs/PRERELEASE.md`](docs/PRERELEASE.md) for the exact scope.
+
+**DOE record:** [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819) ·
+[DOI 10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
 
 Test suite (on a clean clone with `.[torch,onnx,dev]`): **`pytest -q`**
 → *52 passed, 1 skipped, 0 failed* on Python 3.11. The skip is a
@@ -254,8 +259,11 @@ The same fields are persisted to `workflow_summary.json` under
 - Security: please use the private channel in [`SECURITY.md`](SECURITY.md),
   **not** a public issue.
 - Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
-- Citing: [`CITATION.cff`](CITATION.cff) — GitHub surfaces this as
-  *Cite this repository* once `0.1.0` is tagged.
+- Citing: registered in [DOE CODE](https://www.osti.gov/doecode) as **Code ID
+  [179819](https://www.osti.gov/doecode/biblio/179819)**, with DOI
+  [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5). See
+  also [`CITATION.cff`](CITATION.cff) (GitHub *Cite this repository* with a
+  tagged release).
 
 <p align="center">
   <img src="data/logos/surge_logo_os_expanded.png" alt="SURGE — Surrogate Unified Robust Generation Engine" width="640"/>
@@ -267,5 +275,13 @@ The same fields are persisted to `workflow_summary.json` under
 - **Notice / funding:** see [`NOTICE`](NOTICE) for the DOE acknowledgement
   and the customary disclaimer.
 
-After DOE CODE registration, cite SURGE using the identifier and URL your
-publications office provides, together with `CITATION.cff`.
+**DOE / OSTI:** the canonical software record is
+[osti.gov/…/doecode/biblio/179819](https://www.osti.gov/doecode/biblio/179819)
+(**DOE CODE 179819**; DOI
+[10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)). OSTI also
+exposes [MLA, APA, Chicago, and BibTeX](https://www.osti.gov/doecode/biblio/179819)
+on that page under *Citation Formats*.
+
+Cite alongside [`CITATION.cff`](CITATION.cff) and the
+[`pyproject.toml`](pyproject.toml) / GitHub *About* metadata for version and
+URL consistency.
