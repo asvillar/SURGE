@@ -1,71 +1,32 @@
-# SURGE Documentation
+# SURGE documentation (Sphinx / Read the Docs)
 
-## Navigation
+## Current status (v0.1.0)
 
-Use this page to navigate the SURGE documentation and repository.
+- **Source:** public repository [github.com/S-Villar/SURGE](https://github.com/S-Villar/SURGE).
+- **DOE record:** [DOE Code 179819](https://www.osti.gov/doecode/biblio/179819), DOI [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5).
+- **Build:** `.readthedocs.yaml` at the repo root; Python 3.11; install path + `[docs]` extra.
+- **Formal citation:** see [citation.rst](citation.rst) (*Citing SURGE*) and the root [CITATION.cff](../CITATION.cff).
 
-### Getting Started
+## Where to start
 
-| Document | Description |
-|----------|-------------|
-| [PRERELEASE.md](PRERELEASE.md) | Prerelease scope: what is ready, what is not, adoption paths |
-| [PUBLIC_OPEN_SOURCE_PLAN.md](PUBLIC_OPEN_SOURCE_PLAN.md) | **Public release + history hygiene** (DOE URL, filter-repo, exclusions) |
-| [RELEASE_DEMO_PLAN.md](RELEASE_DEMO_PLAN.md) | End-to-end demo tour the public release must ship (datagen → EDA → train → HPO → fine-tune → ONNX) |
-| [RELEASE_SPRINT.md](RELEASE_SPRINT.md) | Three-night release sprint (task list, stop-and-query protocol) |
-| [REFACTORING_PLAN.md](REFACTORING_PLAN.md) | Code-smell inventory, resource policy design, phased refactor |
-| [ROADMAP.md](ROADMAP.md) | Public priorities and known gaps (CV, large data, etc.) |
-| [AUDIT_NIGHT1.md](AUDIT_NIGHT1.md) | Disclosure-safety audit ahead of public repo |
-| [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | Human-in-the-loop decision queue during the sprint |
-| [SURGE_OVERVIEW.md](SURGE_OVERVIEW.md) | Framework overview, philosophy, key modules |
-| [quickstart.rst](quickstart.rst) | Installation and first run |
-| [setup/QUICKSTART.md](setup/QUICKSTART.md) | Environment setup quick reference |
-| [setup/INSTALLATION.md](setup/INSTALLATION.md) | Full installation |
+| Page | Role |
+|------|------|
+| [index.rst](index.rst) | Landing page, status, pipeline overview |
+| [installation.rst](installation.rst) | `surge-ml`, extras, verify |
+| [quickstart.rst](quickstart.rst) | CLI + `examples/quickstart.py` |
+| [citation.rst](citation.rst) | OSTI / MLA and DOE Code |
+| [SURGE_OVERVIEW.md](SURGE_OVERVIEW.md) | Deeper tour of the codebase |
+| [setup/INSTALLATION.md](setup/INSTALLATION.md) | Long-form install and tips |
 
-### Framework Usage
-
-| Document | Description |
-|----------|-------------|
-| [overview.rst](overview.rst) | Architecture, entry points, dataset/engine |
-| [ADDING_NEW_MODEL_ADAPTER.md](ADDING_NEW_MODEL_ADAPTER.md) | How to add a new model adapter |
-| [QUICK_START_NEW_MODEL.md](QUICK_START_NEW_MODEL.md) | Quick start for new models |
-| [MODEL_EXTENSION_SUMMARY.md](MODEL_EXTENSION_SUMMARY.md) | Model extension summary |
-
-### Workflows & Data
-
-| Document | Description |
-|----------|-------------|
-| [BATCH_GENERATION_WORKFLOW.md](BATCH_GENERATION_WORKFLOW.md) | Batch generation workflow |
-| [BATCH_GENERATION_RECIPE.md](BATCH_GENERATION_RECIPE.md) | Batch generation recipe |
-| [DATAGEN_USER_MANUAL.md](DATAGEN_USER_MANUAL.md) | Data generation manual |
-
-### Application-Specific
-
-| Document | Description |
-|----------|-------------|
-| [mhd_code/](mhd_code/) | MHD-code-specific docs (delta-p spectra, etc.) |
-
-### Development & Modifications
-
-| Document | Description |
-|----------|-------------|
-| [dev/README.md](dev/README.md) | Modification tracking, status, potential features |
-
-### Build Documentation
+## Build locally
 
 ```bash
+cd /path/to/SURGE
+python -m pip install -e ".[docs]"
 make -C docs html
 # Open docs/_build/html/index.html
 ```
 
-## Repository Layout
+## Navigation index
 
-```
-SURGE/
-├── surge/           # Core framework
-├── configs/         # YAML configs (templates, application-specific)
-├── examples/        # Example scripts
-├── notebooks/       # Jupyter notebooks
-├── scripts/         # Utility scripts (e.g. mhd_code loaders)
-├── tests/           # Test suite
-└── docs/            # Documentation (this folder)
-```
+Internal planning and prerelease checklists (PRERELEASE, ROADMAP, etc.) are **excluded** in `conf.py` so they are not published on Read the Docs; they remain in the repository for maintainers.

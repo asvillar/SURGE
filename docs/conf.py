@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 project = 'SURGE'
 copyright = '2026, Princeton Plasma Physics Laboratory and SURGE contributors'
-author = 'S. Villar and contributors'
+author = 'Álvaro Sánchez Villar, R. Michael Churchill, Shantenu Jha'
 release = '0.1.0'
 version = '0.1'
 

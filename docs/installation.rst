@@ -1,72 +1,62 @@
 Installation
 ============
 
-🚀 Getting Started
-------------------
-
-From PyPI (when published)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   pip install surge-surrogate
-
-For Development
-~~~~~~~~~~~~~~~
-
-Clone the repository and install in development mode:
-
-.. code-block:: bash
-
-   git clone https://github.com/your-username/SURGE.git
-   cd SURGE
-   pip install -e .
-
-Or install with development dependencies:
-
-.. code-block:: bash
-
-   pip install -e ".[dev]"
-
 Requirements
 ------------
 
-SURGE requires Python 3.7+ and the following core dependencies:
+* **Python:** 3.10 or 3.11 (see ``requires-python`` in the root ``pyproject.toml``).
+* **Install name:** the PyPI distribution is **surge-ml**; the import name is **surge**.
 
-* numpy >= 1.19.0
-* scipy >= 1.5.0
-* scikit-learn >= 0.24.0
-* matplotlib >= 3.3.0
-* pandas
-* optuna >= 2.10.0 (for hyperparameter optimization)
+From PyPI (after publish)
+-------------------------
 
-Optional Dependencies
----------------------
+.. code-block:: bash
 
-For extended functionality, install optional dependencies:
+   python -m pip install "surge-ml[torch,onnx,dev]"
 
-* **Gaussian Process models**: ``pip install gpflow tensorflow``
-* **PyTorch neural networks**: ``pip install torch torchvision``
-* **Bayesian optimization with BoTorch**: ``pip install optuna-integration[botorch]``
-* **Jupyter notebooks**: ``pip install jupyter``
+The ``dev`` extra pulls ``pytest``, ``ruff``, and ``h5py`` (HDF5 / MHD-code-related tests). For documentation builds, add the ``docs`` extra or install Sphinx dependencies (see the ``[docs]`` extra in ``pyproject.toml``).
 
-Development Dependencies
-------------------------
+From a clone (recommended for development)
+-------------------------------------------
 
-For development work, the following additional packages are included:
+.. code-block:: bash
 
-* pytest (for testing)
-* ruff (for linting and formatting)
-* sphinx (for documentation)
-* mypy (for type checking)
+   git clone https://github.com/S-Villar/SURGE.git
+   cd SURGE
+   python -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   python -m pip install --upgrade pip
+   python -m pip install -e ".[torch,onnx,dev]"
 
-Verify Installation
--------------------
+Using `uv <https://github.com/astral-sh/uv>`__ is supported and faster; see
+:doc:`index` and the
+`README <https://github.com/S-Villar/SURGE/blob/main/README.md>`__ for a
+copy-paste recipe.
 
-To verify your installation:
+Core and optional stack
+-----------------------
+
+SURGE’s base install includes NumPy, SciPy, scikit-learn, pandas, Parquet
+support, PyYAML, Matplotlib, Optuna, and related tooling. Optional extras
+include:
+
+* **torch** — PyTorch (MLP adapter, etc.)
+* **onnx** — export and ONNX Runtime checks
+* **dev** — test and lint tools plus ``h5py``
+* **docs** — Sphinx, Furo, MyST (for this site)
+
+Verify
+------
 
 .. code-block:: python
 
    import surge
-   from surge import SurrogateTrainer
-   print("SURGE installation successful!")
+   from surge import SurrogateWorkflowSpec
+   assert surge.__version__
+   print("SURGE", surge.__version__, "— OK")
+
+HPC / NERSC
+-----------
+
+See the walkthrough in the repository:
+``docs/setup/WALKTHROUGH.md`` (also summarized from the project README).

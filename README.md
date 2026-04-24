@@ -54,9 +54,9 @@ end-to-end user walkthrough the `0.1.0` release must support.
 
 ## Status
 
-Pre-`0.1.0`. The core `engine → adapters → workflow → artifacts` path is
-stable and green in CI; see
-[`docs/PRERELEASE.md`](docs/PRERELEASE.md) for the exact scope.
+**v0.1.0** — open on GitHub; the `engine → adapters → workflow → artifacts`
+path is stable and green in CI. See [`docs/PRERELEASE.md`](docs/PRERELEASE.md)
+and [`docs/ROADMAP.md`](docs/ROADMAP.md) for scope and what comes next.
 
 **DOE record:** [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819) ·
 [DOI 10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
@@ -261,9 +261,13 @@ The same fields are persisted to `workflow_summary.json` under
 - Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Citing: registered in [DOE CODE](https://www.osti.gov/doecode) as **Code ID
   [179819](https://www.osti.gov/doecode/biblio/179819)**, with DOI
-  [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5). See
-  also [`CITATION.cff`](CITATION.cff) (GitHub *Cite this repository* with a
-  tagged release).
+  [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5). **MLA
+  (as on OSTI):** *Sanchez-Villar, Alvaro, Churchill, R. Michael, Jha,
+  Shantenu, Churchill, R. Michael, and Jha, Shantenu. SURGE - Surrogate
+  Unified Robust Generation Engine. Computer Software.
+  https://github.com/S-Villar/SURGE. USDOE Office of Science (SC), Fusion
+  Energy Sciences (FES). 22 Apr. 2026. Web. doi:10.11578/dc.20260422.5.*
+  Also [`CITATION.cff`](CITATION.cff) and the [`docs/citation.rst`](docs/citation.rst) page (*Citing SURGE* in the HTML docs).
 
 <p align="center">
   <img src="data/logos/surge_logo_os_expanded.png" alt="SURGE — Surrogate Unified Robust Generation Engine" width="640"/>
@@ -284,4 +288,6 @@ on that page under *Citation Formats*.
 
 Cite alongside [`CITATION.cff`](CITATION.cff) and the
 [`pyproject.toml`](pyproject.toml) / GitHub *About* metadata for version and
-URL consistency.
+URL consistency. The machine-readable CFF file lists each person once; the
+MLA string above is the OSTI export, which names Churchill and Jha twice
+(developer + project member).

@@ -3,16 +3,29 @@
    :alt: SURGE — Surrogate Unified Robust Generation Engine
    :width: 640px
 
+.. |doi_surge| replace:: `10.11578/dc.20260422.5 <https://doi.org/10.11578/dc.20260422.5>`__
+
 SURGE
 =====
 
 *Surrogate Unified Robust Generation Engine*
 
-**SURGE** is a modular AI/ML framework for building fast, accurate, and uncertainty-aware 
-surrogate models that emulate complex scientific simulations. The latest refactor consolidates
-the codebase under the ``surge/`` package and centers around a single configuration-driven
-workflow (``surge.workflow``) that handles datasets, splitting, standardization, model training,
-Optuna HPO, artifact tracking, and visualization.
+**Current status (v0.1.0):** the code is open source on
+`GitHub <https://github.com/S-Villar/SURGE>`__, registered in
+`U.S. DOE OSTI / DOE Code <https://www.osti.gov/doecode/biblio/179819>`__
+(``179819``, DOI |doi_surge|), with continuous integration on
+``main`` and a `documented
+<https://github.com/S-Villar/SURGE/blob/main/README.md>`__ install +
+quickstart (``uv``, ``.[torch,onnx,dev]``, including ``h5py`` for
+HDF5/MHD-code tests). The test suite: **52 passed, 1 skipped** in a full
+dev environment (see :doc:`citation` for the formal cite).
+
+**SURGE** is a scientific surrogate-modeling library: a single
+**declarative pipeline** (``run_surrogate_workflow``,
+``SurrogateWorkflowSpec``) that covers data ingest, train/val/test
+splits, model adapters (scikit-learn, PyTorch MLP, optional GPflow), Optuna
+HPO, **artifact lineage** (``runs/<tag>/``), optional ONNX export, and
+diagnostic plots (``surge.viz``).
 
 .. _surge-pipeline:
 
@@ -67,6 +80,7 @@ Core Functionalities
    overview
    installation
    quickstart
+   citation
    SURGE_OVERVIEW
    comparison
    api_reference/index

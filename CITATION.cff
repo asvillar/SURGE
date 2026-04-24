@@ -43,11 +43,21 @@ abstract: >-
   agent-ready interfaces, SURGE provides a robust substrate for training,
   validating, comparing, and operationalizing surrogate models across
   scientific domains.
+# Unique authors (CFF 1.2 requires no duplicate people). The OSTI MLA
+# string duplicates Churchill and Jha because they are listed as both
+# developers and project members — that verbatim line is in docs/citation.rst
+# and the README. See: https://www.osti.gov/doecode/biblio/179819
 authors:
-  - given-names: "Álvaro"
-    family-names: "Sánchez Villar"
+  - family-names: "Sanchez-Villar"
+    given-names: "Alvaro"
     orcid: "https://orcid.org/0000-0003-3727-9319"
     email: "asvillar@princeton.edu"
+  - family-names: "Churchill"
+    given-names: "R. Michael"
+    orcid: "https://orcid.org/0000-0001-5711-746X"
+  - family-names: "Jha"
+    given-names: "Shantenu"
+    orcid: "https://orcid.org/0000-0002-5040-026X"
 preferred-citation:
   type: software
   title: "SURGE: Surrogate Unified Robust Generation Engine"
@@ -57,6 +67,12 @@ preferred-citation:
   url: "https://doi.org/10.11578/dc.20260422.5"
   repository-code: "https://github.com/S-Villar/SURGE"
   authors:
-    - given-names: "Álvaro"
-      family-names: "Sánchez Villar"
+    - family-names: "Sanchez-Villar"
+      given-names: "Alvaro"
       orcid: "https://orcid.org/0000-0003-3727-9319"
+    - family-names: "Churchill"
+      given-names: "R. Michael"
+      orcid: "https://orcid.org/0000-0001-5711-746X"
+    - family-names: "Jha"
+      given-names: "Shantenu"
+      orcid: "https://orcid.org/0000-0002-5040-026X"
