@@ -3,10 +3,18 @@ title: "SURGE: Surrogate Unified Robust Generation Engine"
 message: "If you use SURGE in your research, please cite this software."
 type: software
 version: "0.1.0"
-date-released: "2026-04-21"
+date-released: "2026-04-22"
 license: BSD-3-Clause
 url: "https://github.com/S-Villar/SURGE"
 repository-code: "https://github.com/S-Villar/SURGE"
+doi: 10.11578/dc.20260422.5
+identifiers:
+  - type: url
+    value: "https://www.osti.gov/doecode/biblio/179819"
+    description: "U.S. DOE OSTI / DOE Code bibliographic record (Code ID 179819)"
+  - type: other
+    value: "DOE-CODE-179819"
+    description: "U.S. Department of Energy DOE Code software identifier"
 keywords:
   - surrogate-models
   - scientific-machine-learning
@@ -44,7 +52,10 @@ preferred-citation:
   type: software
   title: "SURGE: Surrogate Unified Robust Generation Engine"
   version: "0.1.0"
-  year: 2026
+  date-released: "2026-04-22"
+  doi: 10.11578/dc.20260422.5
+  url: "https://doi.org/10.11578/dc.20260422.5"
+  repository-code: "https://github.com/S-Villar/SURGE"
   authors:
     - given-names: "Álvaro"
       family-names: "Sánchez Villar"
