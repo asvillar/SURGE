@@ -7,7 +7,7 @@ __version__ = "0.1.0"
 __author__ = "Álvaro Sánchez Villar"
 
 from .metrics import summarize
-from .model import GPFLOW_AVAILABLE, MODEL_REGISTRY, PYTORCH_AVAILABLE
+from .model import MODEL_REGISTRY, PYTORCH_AVAILABLE
 from .engine import (
     EngineRunConfig,
     ModelRunResult,
@@ -24,6 +24,15 @@ from .workflow.spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
 # Adapter registration happens eagerly inside `surge.model.__init__`
 # (see line 10 above); no extra import is required.
+
+
+def __getattr__(name: str):  # PEP 562: lazy GPflow probe (keeps lightweight CLIs quiet)
+    if name == "GPFLOW_AVAILABLE":
+        from . import model as _model
+
+        return _model.GPFLOW_AVAILABLE
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Optional dataset utilities
 try:

@@ -22,6 +22,15 @@ _DEFAULTS: dict[str, str] = {
     "tabular.breast_cancer": "sklearn.random_forest_classifier",
     "tabular.wine": "sklearn.random_forest_classifier",
     "tabular.digits": "sklearn.random_forest_classifier",
+    "sequence.lorenz63": "sklearn.random_forest",
+    "pde.burgers_1d": "sklearn.random_forest",
+    "classification.flow_regime": "sklearn.random_forest_classifier",
+    "tabular.airfoil_noise": "sklearn.random_forest",
+    "tabular.yacht_dynamics": "sklearn.random_forest",
+    "classification.plasma_stability": "sklearn.random_forest_classifier",
+    "vision.mnist": "pytorch.lenet5",
+    "vision.cifar10": "pytorch.resnet20",
+    "fusion.mhd_sample": "sklearn.random_forest",
 }
 
 # Which task type each benchmark expects of its model.
@@ -37,6 +46,18 @@ _TASK_TYPE: dict[str, str] = {
     "tabular.breast_cancer": "classification",
     "tabular.wine": "classification",
     "tabular.digits": "classification",
+    "sequence.lorenz63": "regression",
+    "pde.burgers_1d": "regression",
+    "classification.flow_regime": "classification",
+    "tabular.airfoil_noise": "regression",
+    "tabular.yacht_dynamics": "regression",
+    "classification.plasma_stability": "classification",
+    "vision.mnist": "classification",
+    "vision.cifar10": "classification",
+    "fusion.mhd_sample": "regression",
+    "thewell.gray_scott": "regression",
+    "thewell.turbulence_2d": "regression",
+    "thewell.mhd": "regression",
 }
 
 
@@ -426,4 +447,786 @@ def run_tabular_digits(*, seed: int = 42, model_key: str | None = None) -> Bench
         passed=metrics["test_accuracy"] >= 0.95,
         message="Optical digits / sklearn.datasets (Alpaydin 1998)",
         extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sequence benchmarks (Phase C)
+# ---------------------------------------------------------------------------
+
+
+def _lorenz_rk4_step(state: np.ndarray, dt: float, sigma: float = 10.0, rho: float = 28.0, beta: float = 8.0 / 3.0) -> np.ndarray:
+    """Single RK-4 step of the Lorenz-63 system — no scipy dependency."""
+    x, y, z = state[0], state[1], state[2]
+
+    def f(s):
+        return np.array([sigma * (s[1] - s[0]), s[0] * (rho - s[2]) - s[1], s[0] * s[1] - beta * s[2]])
+
+    k1 = f(state)
+    k2 = f(state + 0.5 * dt * k1)
+    k3 = f(state + 0.5 * dt * k2)
+    k4 = f(state + dt * k3)
+    return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+
+def _generate_lorenz_trajectories(
+    n_trajectories: int,
+    T_in: int,
+    T_out: int,
+    dt: float = 0.01,
+    warmup: int = 500,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Generate ``n_trajectories`` Lorenz-63 windows.
+
+    Returns
+    -------
+    X : (n_trajectories, T_in * 3)  — input windows (flattened)
+    y : (n_trajectories, T_out * 3) — prediction targets (flattened)
+    """
+    rng = np.random.default_rng(seed)
+    n_state = 3
+    X_list, y_list = [], []
+    for _ in range(n_trajectories):
+        # Random IC near the attractor.
+        state = rng.uniform(low=-10.0, high=10.0, size=(n_state,))
+        # Warm-up to attract to the chaotic attractor.
+        for _ in range(warmup):
+            state = _lorenz_rk4_step(state, dt)
+        # Collect T_in + T_out steps.
+        total = T_in + T_out
+        traj = np.empty((total, n_state))
+        for t in range(total):
+            traj[t] = state
+            state = _lorenz_rk4_step(state, dt)
+        X_list.append(traj[:T_in].ravel())
+        y_list.append(traj[T_in:].ravel())
+    return np.array(X_list), np.array(y_list)
+
+
+def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """Lorenz-63 one-step and short-horizon prediction (Tier 0, inline ODE).
+
+    Data
+    ----
+    1 200 trajectories of the Lorenz-63 attractor integrated with RK-4
+    (dt=0.01).  Input = 20-step window (T_in=20), target = next 20 steps
+    (T_out=20), state dim = 3.  Total feature dim: 60 → 60.
+
+    Metric
+    ------
+    ``test_nrmse`` = ||y_pred - y_true||_F / ||y_true||_F  (lower is better).
+    Pass threshold: NRMSE < 0.30 (well above random, reachable by RF).
+    """
+    from sklearn.model_selection import train_test_split
+
+    T_in, T_out = 20, 20
+    X, y = _generate_lorenz_trajectories(
+        n_trajectories=1200, T_in=T_in, T_out=T_out, dt=0.01, warmup=500, seed=seed
+    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    key = model_key or "sklearn.random_forest"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    # NRMSE over all predicted steps and state dimensions.
+    nrmse = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
+    metrics: dict = {"test_nrmse": nrmse, "runtime_s": elapsed}
+    return BenchmarkResult(
+        benchmark_key="sequence.lorenz63",
+        model_key=adapter.name,
+        tier="0",
+        task_type="regression",
+        metrics=metrics,
+        passed=nrmse < 0.30,
+        message="Lorenz-63 RK-4 short-horizon prediction (inline, no download)",
+        extra={"n_train": len(X_train), "n_test": len(X_test), "T_in": T_in, "T_out": T_out},
+    )
+
+
+# ---------------------------------------------------------------------------
+# PDE benchmarks (Phase D1)
+# ---------------------------------------------------------------------------
+
+
+def _burgers_solve_fd(u0: np.ndarray, n_x: int, dt: float, nt: int, nu: float = 0.01) -> np.ndarray:
+    """
+    Integrate viscous Burgers' equation: ∂u/∂t + u ∂u/∂x = ν ∂²u/∂x²
+    using first-order upwind (advection) and central (diffusion) finite
+    differences on a periodic domain ``[0, 2π]``.
+    """
+    dx = 2.0 * np.pi / n_x
+    u = u0.copy()
+    for _ in range(nt):
+        u_left = np.roll(u, 1)
+        u_right = np.roll(u, -1)
+        # Upwind advection: forward diff for u < 0, backward for u >= 0.
+        adv = np.where(u >= 0, u * (u - u_left) / dx, u * (u_right - u) / dx)
+        diff = nu * (u_right - 2 * u + u_left) / dx**2
+        u = u + dt * (-adv + diff)
+    return u
+
+
+def _generate_burgers_dataset(
+    n_samples: int = 1024,
+    n_x: int = 64,
+    nt: int = 100,
+    dt: float = 1e-3,
+    nu: float = 0.01,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Generate Burgers' equation dataset.
+
+    Initial conditions: sum of random Fourier modes on ``[0, 2π]``.
+    Input: u(x, 0) on ``n_x`` grid points.
+    Output: u(x, T) after ``nt`` time steps.
+    """
+    rng = np.random.default_rng(seed)
+    x = np.linspace(0, 2 * np.pi, n_x, endpoint=False)
+    X_list, y_list = [], []
+    for _ in range(n_samples):
+        n_modes = rng.integers(3, 8)
+        u0 = np.zeros(n_x)
+        for k in range(1, n_modes + 1):
+            amp = rng.uniform(-1.0, 1.0)
+            phase = rng.uniform(0, 2 * np.pi)
+            u0 += amp * np.sin(k * x + phase)
+        u_T = _burgers_solve_fd(u0, n_x=n_x, dt=dt, nt=nt, nu=nu)
+        X_list.append(u0)
+        y_list.append(u_T)
+    return np.array(X_list), np.array(y_list)
+
+
+def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """Viscous Burgers 1D operator learning (Tier 1, inline solver, no download).
+
+    Data
+    ----
+    1 024 trajectories of viscous Burgers' equation (ν=0.01) on a 64-pt
+    periodic grid, integrated for 100 steps (dt=0.001).  Input = initial
+    condition u(x, 0); target = u(x, T).
+
+    Metric
+    ------
+    ``test_relative_l2`` = relative L² error (lower is better).
+    Pass threshold: < 0.10 (a simple RandomForest can beat this with 64 features).
+
+    Published FNO baseline (Li et al. 2021 with n_x=1024): ≈ 0.64%.
+    Our inline task uses n_x=64 so RF/MLP baselines are also informative.
+    """
+    from sklearn.model_selection import train_test_split
+
+    X, y = _generate_burgers_dataset(n_samples=1024, n_x=64, nt=100, dt=1e-3, nu=0.01, seed=seed)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    key = model_key or "sklearn.random_forest"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    rel_l2 = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
+    metrics: dict = {"test_relative_l2": rel_l2, "runtime_s": elapsed}
+    return BenchmarkResult(
+        benchmark_key="pde.burgers_1d",
+        model_key=adapter.name,
+        tier="1",
+        task_type="regression",
+        metrics=metrics,
+        passed=rel_l2 < 0.10,
+        message="Viscous Burgers 1D inline FD solver (n_x=64, ν=0.01)",
+        extra={"n_train": len(X_train), "n_test": len(X_test), "n_x": 64, "nt": 100},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase F — SURGE-native Scientific Benchmarks (early part)
+# ---------------------------------------------------------------------------
+
+
+def run_classification_flow_regime(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """CFD flow regime classification (Tier 0, inline fixture, no download).
+
+    Data
+    ----
+    800 synthetic samples with 3 features: Mach number, Reynolds number
+    (log-scaled), and angle of attack.  Four flow regime classes:
+    0 = subsonic laminar, 1 = subsonic turbulent,
+    2 = transonic, 3 = supersonic.
+
+    Metric
+    ------
+    ``test_accuracy``  Pass threshold: ≥ 0.85.
+    """
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
+
+    rng = np.random.default_rng(seed)
+    n = 800
+
+    # Feature 1: Mach number, Feature 2: log10(Re), Feature 3: AoA (deg)
+    mach = rng.uniform(0.1, 3.0, n)
+    log_re = rng.uniform(4.0, 8.0, n)
+    aoa = rng.uniform(-5.0, 25.0, n)
+
+    # Rule-based labelling with some overlap noise.
+    labels = np.zeros(n, dtype=int)
+    labels[(mach < 0.8) & (log_re < 5.5)] = 0  # subsonic laminar
+    labels[(mach < 0.8) & (log_re >= 5.5)] = 1  # subsonic turbulent
+    labels[(mach >= 0.8) & (mach < 1.2)] = 2     # transonic
+    labels[(mach >= 1.2)] = 3                      # supersonic
+    # Add 5% random label noise.
+    noise_idx = rng.choice(n, size=int(0.05 * n), replace=False)
+    labels[noise_idx] = rng.integers(0, 4, size=len(noise_idx))
+
+    X = np.column_stack([mach, log_re, aoa])
+    y = labels
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=seed, stratify=y
+    )
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+
+    key = model_key or "sklearn.random_forest_classifier"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    y_prob = None
+    if hasattr(adapter, "_model") and hasattr(adapter._model, "predict_proba"):
+        try:
+            y_prob = adapter._model.predict_proba(X_test)
+        except Exception:
+            pass
+    metrics = _clf_metrics(y_test, y_pred, y_prob)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="classification.flow_regime",
+        model_key=adapter.name,
+        tier="0",
+        task_type="classification",
+        metrics=metrics,
+        passed=metrics["test_accuracy"] >= 0.85,
+        message="CFD flow regime 4-class labeling (inline fixture, no download)",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_tabular_airfoil_noise(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """NASA Airfoil Self-Noise — 5→1 regression (Tier 1, requires internet on first run).
+
+    Source: UCI via fetch_openml (ID 4544).
+    Published RF R² ≈ 0.96 (1 503 samples, 5 features → scaled sound pressure).
+    Pass threshold: R² ≥ 0.80.
+    """
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+
+    data = fetch_openml(name="airfoil-self-noise", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y_raw = data.target
+    y = y_raw.values.astype(float) if hasattr(y_raw, "values") else np.asarray(y_raw, dtype=float)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    adapter = _resolve_model(model_key, "tabular.airfoil_noise")
+    y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
+    metrics = _reg_metrics(y_test, y_pred)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="tabular.airfoil_noise",
+        model_key=adapter.name,
+        tier="1",
+        task_type="regression",
+        metrics=metrics,
+        passed=metrics["test_r2"] >= 0.80,
+        message="NASA Airfoil Self-Noise (Brooks et al. 1989) — UCI",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_tabular_yacht_dynamics(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """Yacht Hydrodynamics — 6→1 regression (Tier 1, requires internet on first run).
+
+    Source: UCI via fetch_openml.  Residuary resistance of sailing yachts.
+    308 samples, 6 features.  Published RF R² > 0.99.
+    Pass threshold: R² ≥ 0.80.
+    """
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+
+    data = fetch_openml(name="yacht_hydrodynamics", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y_raw = data.target
+    y = y_raw.values.astype(float) if hasattr(y_raw, "values") else np.asarray(y_raw, dtype=float)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    adapter = _resolve_model(model_key, "tabular.yacht_dynamics")
+    y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
+    metrics = _reg_metrics(y_test, y_pred)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="tabular.yacht_dynamics",
+        model_key=adapter.name,
+        tier="1",
+        task_type="regression",
+        metrics=metrics,
+        passed=metrics["test_r2"] >= 0.80,
+        message="UCI Yacht Hydrodynamics (Gerritsma 1981) — residuary resistance",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """UCI Electrical Grid Stability (plasma-like) — 12→2 classification (Tier 2, requires internet).
+
+    Source: UCI Electrical Grid Stability Simulated Data Set via fetch_openml.
+    12 features, 10 000 rows, 2 classes (stable / unstable).
+    Published RF accuracy ≈ 97.8%.  Pass threshold: ≥ 0.92.
+    """
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
+
+    data = fetch_openml(name="electricalGrid_stability_simulated", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y_raw = data.target
+    # Map classes to ints.
+    from sklearn.preprocessing import LabelEncoder
+    le = LabelEncoder()
+    y = le.fit_transform(y_raw if not hasattr(y_raw, "values") else y_raw.values)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=seed, stratify=y
+    )
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+
+    key = model_key or "sklearn.random_forest_classifier"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    y_prob = None
+    if hasattr(adapter, "_model") and hasattr(adapter._model, "predict_proba"):
+        try:
+            y_prob = adapter._model.predict_proba(X_test)
+        except Exception:
+            pass
+    metrics = _clf_metrics(y_test, y_pred, y_prob)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="classification.plasma_stability",
+        model_key=adapter.name,
+        tier="2",
+        task_type="classification",
+        metrics=metrics,
+        passed=metrics["test_accuracy"] >= 0.92,
+        message="UCI Electrical Grid Stability (Arzamasov 2018)",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase D2 — PDEBench benchmarks (Tier 3, requires HDF5 download)
+# ---------------------------------------------------------------------------
+
+_PDEBENCH_DEFAULTS = {
+    "pdebench.burgers_1d": "sklearn.random_forest",
+    "pdebench.darcy_2d": "sklearn.random_forest",
+    "pdebench.shallow_water_2d": "sklearn.random_forest",
+}
+
+_TASK_TYPE.update({
+    "pdebench.burgers_1d": "regression",
+    "pdebench.darcy_2d": "regression",
+    "pdebench.shallow_water_2d": "regression",
+})
+
+
+def _run_pdebench_benchmark(
+    pdebench_key: str,
+    benchmark_key: str,
+    model_key: str | None,
+    pass_threshold: float = 0.20,
+    description: str = "",
+) -> "BenchmarkResult":
+    """Generic runner for PDEBench Tier-3 benchmarks."""
+    try:
+        from surge.benchmarks.loaders.pdebench import load_pdebench, H5PY_AVAILABLE
+    except ImportError as exc:
+        raise ImportError("h5py required for PDEBench. pip install h5py") from exc
+
+    if not H5PY_AVAILABLE:
+        raise ImportError("h5py required for PDEBench loaders. pip install h5py")
+
+    X_train, y_train, X_test, y_test = load_pdebench(pdebench_key)
+
+    key = model_key or _PDEBENCH_DEFAULTS.get(benchmark_key, "sklearn.random_forest")
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    rel_l2 = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
+    metrics: dict = {"test_relative_l2": rel_l2, "runtime_s": elapsed}
+    return BenchmarkResult(
+        benchmark_key=benchmark_key,
+        model_key=adapter.name,
+        tier="3",
+        task_type="regression",
+        metrics=metrics,
+        passed=rel_l2 < pass_threshold,
+        message=description or f"PDEBench {pdebench_key}",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_pdebench_burgers_1d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """PDEBench Burgers 1D (Tier 3, HDF5 download required).
+
+    Published FNO baseline relative-L2 ≈ 0.64% (Li et al. 2021).
+    Pass threshold: relative-L2 < 5% (conservative for non-FNO models).
+    """
+    return _run_pdebench_benchmark(
+        "burgers_1d", "pdebench.burgers_1d", model_key,
+        pass_threshold=0.05,
+        description="PDEBench 1D Burgers ν=0.01 (Takamoto et al. NeurIPS 2022)",
+    )
+
+
+def run_pdebench_darcy_2d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """PDEBench Darcy Flow 2D (Tier 3, HDF5 download required).
+
+    Published FNO baseline relative-L2 ≈ 0.90%.
+    Pass threshold: relative-L2 < 10%.
+    """
+    return _run_pdebench_benchmark(
+        "darcy_2d", "pdebench.darcy_2d", model_key,
+        pass_threshold=0.10,
+        description="PDEBench 2D Darcy Flow β=1.0 (Takamoto et al. NeurIPS 2022)",
+    )
+
+
+def run_pdebench_shallow_water_2d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """PDEBench 2D Shallow Water Equations (Tier 3, HDF5 download required).
+
+    Pass threshold: relative-L2 < 20%.
+    """
+    return _run_pdebench_benchmark(
+        "shallow_water_2d", "pdebench.shallow_water_2d", model_key,
+        pass_threshold=0.20,
+        description="PDEBench 2D Shallow Water Equations (Takamoto et al. NeurIPS 2022)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase E — Vision Benchmarks (Tier 2, torchvision)
+# ---------------------------------------------------------------------------
+
+
+def _load_mnist_arrays(data_dir: str | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Load MNIST via torchvision, return flat numpy arrays (N, 784)."""
+    try:
+        import torchvision
+        import torchvision.transforms as T
+    except ImportError as exc:
+        raise ImportError("torchvision required for vision benchmarks. pip install torchvision") from exc
+
+    root = data_dir or str(np.lib.npyio._file_openers.__module__.split(".")[0])  # dummy; use default
+    from pathlib import Path
+    root = str(Path.home() / ".surge" / "data" / "torchvision")
+
+    transform = T.Compose([T.ToTensor()])
+    train_ds = torchvision.datasets.MNIST(root, train=True, download=True, transform=transform)
+    test_ds = torchvision.datasets.MNIST(root, train=False, download=True, transform=transform)
+
+    def _ds_to_arrays(ds):
+        import torch
+        loader = torch.utils.data.DataLoader(ds, batch_size=10000, shuffle=False)
+        Xs, ys = [], []
+        for xb, yb in loader:
+            Xs.append(xb.numpy())
+            ys.append(yb.numpy())
+        X = np.concatenate(Xs).reshape(-1, 784)
+        y = np.concatenate(ys)
+        return X, y
+
+    X_train, y_train = _ds_to_arrays(train_ds)
+    X_test, y_test = _ds_to_arrays(test_ds)
+    return X_train, y_train, X_test, y_test
+
+
+def _load_cifar10_arrays() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Load CIFAR-10 via torchvision, return (N, 3072) flat numpy arrays."""
+    try:
+        import torchvision
+        import torchvision.transforms as T
+    except ImportError as exc:
+        raise ImportError("torchvision required for vision benchmarks. pip install torchvision") from exc
+
+    from pathlib import Path
+    root = str(Path.home() / ".surge" / "data" / "torchvision")
+    transform = T.Compose([T.ToTensor()])
+    train_ds = torchvision.datasets.CIFAR10(root, train=True, download=True, transform=transform)
+    test_ds = torchvision.datasets.CIFAR10(root, train=False, download=True, transform=transform)
+
+    def _ds_to_arrays(ds):
+        import torch
+        loader = torch.utils.data.DataLoader(ds, batch_size=10000, shuffle=False)
+        Xs, ys = [], []
+        for xb, yb in loader:
+            Xs.append(xb.numpy())
+            ys.append(yb.numpy())
+        X = np.concatenate(Xs).reshape(len(ds), -1)
+        y = np.concatenate(ys)
+        return X, y
+
+    X_train, y_train = _ds_to_arrays(train_ds)
+    X_test, y_test = _ds_to_arrays(test_ds)
+    return X_train, y_train, X_test, y_test
+
+
+def run_vision_mnist(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """MNIST digit classification (Tier 2, requires torchvision + internet on first run).
+
+    Published LeNet-5 baseline: 99.05% top-1 accuracy (LeCun 1998).
+    Pass threshold: ≥ 99.0%.
+    """
+    X_train, y_train, X_test, y_test = _load_mnist_arrays()
+
+    key = model_key or "pytorch.lenet5"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    y_prob = None
+    if hasattr(adapter, "predict_proba"):
+        try:
+            y_prob = adapter.predict_proba(X_test)
+        except Exception:
+            pass
+    metrics = _clf_metrics(y_test, y_pred, y_prob)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="vision.mnist",
+        model_key=adapter.name,
+        tier="2",
+        task_type="classification",
+        metrics=metrics,
+        passed=metrics["test_accuracy"] >= 0.99,
+        message="MNIST (LeCun et al. 1998) — top-1 accuracy",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """CIFAR-10 image classification (Tier 2, requires torchvision + internet on first run).
+
+    Published baselines (He et al. 2016):
+    - ResNet-20: 91.25%
+    - ResNet-56: 93.03%
+    Pass threshold: ≥ 91.0%.
+    """
+    X_train, y_train, X_test, y_test = _load_cifar10_arrays()
+
+    key = model_key or "pytorch.resnet20"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    y_prob = None
+    if hasattr(adapter, "predict_proba"):
+        try:
+            y_prob = adapter.predict_proba(X_test)
+        except Exception:
+            pass
+    metrics = _clf_metrics(y_test, y_pred, y_prob)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="vision.cifar10",
+        model_key=adapter.name,
+        tier="2",
+        task_type="classification",
+        metrics=metrics,
+        passed=metrics["test_accuracy"] >= 0.91,
+        message="CIFAR-10 (Krizhevsky 2009) — top-1 accuracy",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase F late — Fusion benchmark
+# ---------------------------------------------------------------------------
+
+
+def run_fusion_mhd_sample(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """MHD-code equilibrium surrogate sample (Tier 2).
+
+    Data
+    ----
+    Tries to load from ``data/datasets/MHD-code/mhd_sample.hdf5`` (13→1
+    regression on normalized MHD equilibrium parameters).  Falls back to a
+    synthetic inline fixture (same shape / difficulty) if the HDF5 is absent
+    so that CI and tests run without the large dataset.
+
+    Shape: 13 input features → 1 stability metric (R²).
+    Pass threshold: R² ≥ 0.70.
+    """
+    from pathlib import Path
+    from sklearn.model_selection import train_test_split
+
+    H5_PATH = Path(__file__).parent.parent.parent / "data" / "datasets" / "MHD-code" / "mhd_sample.hdf5"
+
+    X, y = None, None
+
+    # Attempt real HDF5 load.
+    if H5_PATH.exists():
+        try:
+            import h5py
+            with h5py.File(H5_PATH, "r") as f:
+                keys = list(f.keys())
+                X_key = [k for k in keys if "X" in k or "input" in k.lower()][0]
+                y_key = [k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower()][0]
+                X = np.asarray(f[X_key], dtype=float)
+                y = np.asarray(f[y_key], dtype=float).ravel()
+        except Exception:
+            X, y = None, None
+
+    # Synthetic fallback: linear combination + noise, 13 → 1.
+    if X is None or y is None:
+        rng = np.random.default_rng(seed)
+        n = 2000
+        X = rng.standard_normal((n, 13))
+        coefs = rng.uniform(-1.0, 1.0, 13)
+        y = X @ coefs + 0.1 * rng.standard_normal(n)
+        # Hint in the result that synthetic data was used.
+        _is_synthetic = True
+    else:
+        _is_synthetic = False
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    key = model_key or "sklearn.random_forest"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test)).ravel()
+    elapsed = time.perf_counter() - t0
+
+    metrics = _reg_metrics(y_test, y_pred)
+    metrics["runtime_s"] = elapsed
+    note = "(synthetic inline fixture — place real data at data/datasets/MHD-code/mhd_sample.hdf5)" if _is_synthetic else ""
+    return BenchmarkResult(
+        benchmark_key="fusion.mhd_sample",
+        model_key=adapter.name,
+        tier="2",
+        task_type="regression",
+        metrics=metrics,
+        passed=metrics["test_r2"] >= 0.70,
+        message=f"MHD-code equilibrium surrogate 13→1 {note}".strip(),
+        extra={"n_train": len(X_train), "n_test": len(X_test), "synthetic": _is_synthetic},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase G — TheWell benchmarks (Tier 4, manual trigger, requires the-well)
+# ---------------------------------------------------------------------------
+
+
+def _run_thewell_benchmark(
+    thewell_key: str,
+    benchmark_key: str,
+    model_key: str | None,
+    description: str = "",
+    pass_threshold: float = 0.30,
+) -> "BenchmarkResult":
+    """Generic runner for TheWell Tier-4 benchmarks."""
+    from surge.benchmarks.loaders.thewell import load_thewell, THEWELL_AVAILABLE
+
+    if not THEWELL_AVAILABLE:
+        raise ImportError("the_well required. pip install the-well  or  pip install 'surge-ml[thewell]'")
+
+    X_train, y_train, X_test, y_test = load_thewell(thewell_key)
+
+    key = model_key or "sklearn.random_forest"
+    from surge.model.registry import MODEL_REGISTRY
+    adapter = MODEL_REGISTRY.create(key)
+
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train)
+    y_pred = np.asarray(adapter.predict(X_test))
+    elapsed = time.perf_counter() - t0
+
+    rel_l2 = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
+    metrics: dict = {"test_relative_l2": rel_l2, "runtime_s": elapsed}
+    return BenchmarkResult(
+        benchmark_key=benchmark_key,
+        model_key=adapter.name,
+        tier="4",
+        task_type="regression",
+        metrics=metrics,
+        passed=rel_l2 < pass_threshold,
+        message=description or f"TheWell {thewell_key}",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_thewell_gray_scott(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """Gray-Scott reaction-diffusion (Tier 4, TheWell, requires the-well package + download)."""
+    return _run_thewell_benchmark(
+        "gray_scott", "thewell.gray_scott", model_key,
+        description="TheWell Gray-Scott reaction-diffusion (Ohana et al. NeurIPS 2024)",
+    )
+
+
+def run_thewell_turbulence_2d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """2D homogeneous turbulence (Tier 4, TheWell, requires the-well package + download)."""
+    return _run_thewell_benchmark(
+        "turbulence_2d", "thewell.turbulence_2d", model_key,
+        description="TheWell 2D turbulence (Ohana et al. NeurIPS 2024)",
+    )
+
+
+def run_thewell_mhd(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """3D MHD turbulence (Tier 4, TheWell, requires the-well package + download)."""
+    return _run_thewell_benchmark(
+        "mhd", "thewell.mhd", model_key,
+        description="TheWell 3D MHD turbulence (Ohana et al. NeurIPS 2024)",
     )

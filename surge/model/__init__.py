@@ -62,6 +62,62 @@ try:
 except Exception:
     pass
 
+try:
+    from .adapters.cnn import CNN1DAdapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA3
+
+    if _PTA3:
+        register_model(CNN1DAdapter, key='pytorch.cnn1d', aliases=['cnn1d'])
+except Exception:
+    pass
+
+try:
+    from .adapters.rnn import GRUAdapter, LSTMAdapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA4
+
+    if _PTA4:
+        register_model(LSTMAdapter, key='pytorch.lstm', aliases=['lstm'])
+        register_model(GRUAdapter, key='pytorch.gru', aliases=['gru'])
+except Exception:
+    pass
+
+try:
+    from .adapters.fno import FNO1dAdapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA5
+
+    if _PTA5:
+        register_model(FNO1dAdapter, key='pytorch.fno1d', aliases=['fno1d', 'fno'])
+except Exception:
+    pass
+
+try:
+    from .adapters.deeponet import DeepONetAdapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA6
+
+    if _PTA6:
+        register_model(DeepONetAdapter, key='pytorch.deeponet', aliases=['deeponet'])
+except Exception:
+    pass
+
+try:
+    from .adapters.lenet import LeNet5Adapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA7
+
+    if _PTA7:
+        register_model(LeNet5Adapter, key='pytorch.lenet5', aliases=['lenet5', 'lenet'])
+except Exception:
+    pass
+
+try:
+    from .adapters.resnet import ResNet20Adapter, ResNet56Adapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA8
+
+    if _PTA8:
+        register_model(ResNet20Adapter, key='pytorch.resnet20', aliases=['resnet20'])
+        register_model(ResNet56Adapter, key='pytorch.resnet56', aliases=['resnet56'])
+except Exception:
+    pass
+
 
 def __getattr__(name: str):  # PEP 562: avoid importing TensorFlow/GPflow at import time
     if name == "GPFLOW_AVAILABLE":

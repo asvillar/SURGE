@@ -3,24 +3,35 @@ GPflow-based model implementations for SURGE package.
 Integrates GPflow (TensorFlow) Gaussian Process models with the unified SURGE interface.
 """
 
+from __future__ import annotations
+
+import contextlib
+import io
+
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-try:
-    import gpflow as gpf
-    from gpflow.mean_functions import Constant
-    from gpflow.utilities import positive, print_summary
-    GPFLOW_AVAILABLE = True
+# Optional stack may print noisy tracebacks to stdout/stderr while still failing;
+# keep probe quiet so ``import surge`` and CPU-only CLIs stay usable.
+_out_buf = io.StringIO()
+_err_buf = io.StringIO()
+with contextlib.redirect_stdout(_out_buf), contextlib.redirect_stderr(_err_buf):
+    try:
+        import gpflow as gpf
+        from gpflow.mean_functions import Constant
+        from gpflow.utilities import positive, print_summary
 
-    # Set GPflow configuration
-    gpf.config.set_default_float(np.float64)
-    gpf.config.set_default_summary_fmt("notebook")
+        GPFLOW_AVAILABLE = True
 
-except Exception:
-    GPFLOW_AVAILABLE = False
-    gpf = None
-    print("Warning: GPflow not available or incompatible. Install with: pip install gpflow")
+        # Set GPflow configuration
+        gpf.config.set_default_float(np.float64)
+        gpf.config.set_default_summary_fmt("notebook")
+
+    except Exception:
+        GPFLOW_AVAILABLE = False
+        gpf = None  # type: ignore[assignment]
+        Constant = positive = print_summary = None  # type: ignore[misc,assignment]
 
 
 class GPflowGPRModel:

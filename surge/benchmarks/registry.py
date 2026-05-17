@@ -7,9 +7,23 @@ from typing import Any
 
 from .base import BenchmarkResult
 from .tasks import (
+    run_classification_flow_regime,
+    run_classification_plasma_stability,
+    run_fusion_mhd_sample,
+    run_pde_burgers_1d,
+    run_pdebench_burgers_1d,
+    run_pdebench_darcy_2d,
+    run_pdebench_shallow_water_2d,
+    run_sequence_lorenz63,
+    run_thewell_gray_scott,
+    run_thewell_mhd,
+    run_thewell_turbulence_2d,
+    run_vision_cifar10,
+    run_vision_mnist,
     run_synthetic_classification_binary,
     run_synthetic_multioutput_2d,
     run_synthetic_regression_1d,
+    run_tabular_airfoil_noise,
     run_tabular_breast_cancer,
     run_tabular_california_housing,
     run_tabular_concrete_strength,
@@ -18,6 +32,7 @@ from .tasks import (
     run_tabular_energy_efficiency,
     run_tabular_iris,
     run_tabular_wine,
+    run_tabular_yacht_dynamics,
 )
 
 # ─── Benchmark metadata ───────────────────────────────────────────────────────
@@ -66,6 +81,66 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "tabular.digits": (
         run_tabular_digits, "1", "classification", "64→10",
         "Optical digits / sklearn.datasets (Alpaydin 1998)",
+    ),
+    "sequence.lorenz63": (
+        run_sequence_lorenz63, "0", "regression", "60→60",
+        "Lorenz-63 RK-4 short-horizon prediction (inline, no download)",
+    ),
+    "pde.burgers_1d": (
+        run_pde_burgers_1d, "1", "regression", "64→64",
+        "Viscous Burgers 1D operator learning — inline FD solver (n_x=64, ν=0.01)",
+    ),
+    "classification.flow_regime": (
+        run_classification_flow_regime, "0", "classification", "3→4",
+        "CFD flow regime 4-class labeling from Mach/Re/AoA (inline fixture, no download)",
+    ),
+    "tabular.airfoil_noise": (
+        run_tabular_airfoil_noise, "1", "regression", "5→1",
+        "NASA Airfoil Self-Noise (Brooks et al. 1989) — UCI [requires internet on first run]",
+    ),
+    "tabular.yacht_dynamics": (
+        run_tabular_yacht_dynamics, "1", "regression", "6→1",
+        "UCI Yacht Hydrodynamics (Gerritsma 1981) [requires internet on first run]",
+    ),
+    "classification.plasma_stability": (
+        run_classification_plasma_stability, "2", "classification", "12→2",
+        "UCI Electrical Grid Stability (Arzamasov 2018) [requires internet on first run]",
+    ),
+    "pdebench.burgers_1d": (
+        run_pdebench_burgers_1d, "3", "regression", "1024→1024",
+        "PDEBench 1D Burgers ν=0.01 (Takamoto et al. NeurIPS 2022) [requires HDF5 download]",
+    ),
+    "pdebench.darcy_2d": (
+        run_pdebench_darcy_2d, "3", "regression", "16384→16384",
+        "PDEBench 2D Darcy Flow β=1.0 (Takamoto et al. NeurIPS 2022) [requires HDF5 download]",
+    ),
+    "pdebench.shallow_water_2d": (
+        run_pdebench_shallow_water_2d, "3", "regression", "16384→16384",
+        "PDEBench 2D Shallow Water Equations (Takamoto et al. NeurIPS 2022) [requires HDF5 download]",
+    ),
+    "vision.mnist": (
+        run_vision_mnist, "2", "classification", "784→10",
+        "MNIST digit recognition (LeCun et al. 1998) — top-1 accuracy [requires torchvision]",
+    ),
+    "vision.cifar10": (
+        run_vision_cifar10, "2", "classification", "3072→10",
+        "CIFAR-10 image classification (Krizhevsky 2009) — top-1 accuracy [requires torchvision]",
+    ),
+    "fusion.mhd_sample": (
+        run_fusion_mhd_sample, "2", "regression", "13→1",
+        "MHD-code equilibrium surrogate (13 MHD params → stability metric, R²)",
+    ),
+    "thewell.gray_scott": (
+        run_thewell_gray_scott, "4", "regression", "varies",
+        "TheWell Gray-Scott reaction-diffusion (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
+    ),
+    "thewell.turbulence_2d": (
+        run_thewell_turbulence_2d, "4", "regression", "varies",
+        "TheWell 2D homogeneous turbulence (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
+    ),
+    "thewell.mhd": (
+        run_thewell_mhd, "4", "regression", "varies",
+        "TheWell 3D MHD turbulence (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
     ),
 }
 

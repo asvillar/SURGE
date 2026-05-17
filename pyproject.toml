@@ -47,6 +47,8 @@ onnx = ["onnx>=1.14", "onnxscript>=0.1", "onnxruntime>=1.17"]
 # gpflow = ["tensorflow>=2.8.0,<2.16", "tensorflow-probability>=0.19.0", "gpflow>=2.5.0"]
 # h5py is included so MHD-code batch-mode tests run without an extra install.
 mlflow = ["mlflow>=2.0.0"]
+benchmarks = ["h5py>=3.0", "optuna>=3.0"]
+thewell = ["the-well"]
 dev = ["pytest>=6.0", "pytest-cov", "ruff>=0.1.0", "h5py>=3.0"]
 docs = ["sphinx>=5.0", "furo", "myst-parser"]
 

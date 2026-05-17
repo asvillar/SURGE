@@ -188,6 +188,22 @@ def expected_calibration_error(
     return float(ece)
 
 
+def relative_l2(y_true, y_pred) -> float:
+    """Relative L2 error: ``||y_pred - y_true||_F / ||y_true||_F``.
+
+    Standard metric for PDE surrogate evaluation (Li et al. 2021).
+    """
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    denom = np.linalg.norm(y_true) + 1e-12
+    return float(np.linalg.norm(y_pred - y_true) / denom)
+
+
+def nrmse(y_true, y_pred) -> float:
+    """Normalised RMSE: ``||y_pred - y_true||_F / ||y_true||_F``."""
+    return relative_l2(y_true, y_pred)
+
+
 __all__ = [
     "accuracy_score",
     "auroc",
@@ -195,6 +211,8 @@ __all__ = [
     "expected_calibration_error",
     "f1_score",
     "log_loss",
+    "nrmse",
+    "relative_l2",
     "summarize",
     "top_k_accuracy_score",
 ]

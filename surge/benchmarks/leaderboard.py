@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from .base import BenchmarkResult
 from .registry import benchmark_info, list_benchmarks, run_benchmark
 
@@ -43,7 +45,16 @@ _CLASSIFICATION_MODELS: list[str] = [
 ]
 
 
-def _default_models_for(task_type: str) -> list[str]:
+# Per-benchmark overrides: map a benchmark key to a specific model list.
+# Used for sequence / PDE benchmarks that support structured adapters.
+_BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {}
+
+
+def _default_models_for(task_type: str, benchmark_key: str | None = None) -> list[str]:
+    # Per-benchmark override takes precedence.
+    if benchmark_key is not None and benchmark_key in _BENCHMARK_MODEL_OVERRIDES:
+        return list(_BENCHMARK_MODEL_OVERRIDES[benchmark_key])
+
     if task_type == "regression":
         base = list(_REGRESSION_MODELS)
         try:
@@ -59,6 +70,9 @@ def _default_models_for(task_type: str) -> list[str]:
             if PYTORCH_AVAILABLE:
                 base.append("pytorch.mlp")
                 base.append("pytorch.residual_mlp")
+                # Sequence models added for all regression benchmarks
+                # (they handle flat input internally).
+                base.extend(["pytorch.cnn1d", "pytorch.lstm", "pytorch.gru"])
         except Exception:
             pass
         return base
@@ -82,7 +96,7 @@ def _default_models_for(task_type: str) -> list[str]:
 
 
 # Metrics where lower is better (used to decide which direction to highlight).
-_LOWER_IS_BETTER: frozenset[str] = frozenset({"runtime_s", "test_rmse"})
+_LOWER_IS_BETTER: frozenset[str] = frozenset({"runtime_s", "test_rmse", "test_nrmse", "test_relative_l2"})
 
 # Preferred column order for display (unknown keys appended alphabetically).
 _METRIC_ORDER: list[str] = [
@@ -91,6 +105,8 @@ _METRIC_ORDER: list[str] = [
     "test_auroc",
     "test_r2",
     "test_rmse",
+    "test_nrmse",
+    "test_relative_l2",
     "runtime_s",
 ]
 
@@ -137,7 +153,7 @@ def run_leaderboard(
     for key in benchmark_keys:
         info = benchmark_info(key)
         task_type = info["task_type"]
-        candidates = model_keys if model_keys is not None else _default_models_for(task_type)
+        candidates = model_keys if model_keys is not None else _default_models_for(task_type, key)
         results[key] = []
 
         for model_key in candidates:
@@ -150,7 +166,12 @@ def run_leaderboard(
                 continue
 
             # Cap epochs for all pytorch adapters so leaderboard runs don't take too long.
-            _PYTORCH_EPOCH_CAP_MODELS = {"pytorch.mlp", "pytorch.residual_mlp", "pytorch.mlp_classifier"}
+            _PYTORCH_EPOCH_CAP_MODELS = {
+                "pytorch.mlp", "pytorch.residual_mlp", "pytorch.mlp_classifier",
+                "pytorch.cnn1d", "pytorch.lstm", "pytorch.gru",
+                "pytorch.fno1d", "pytorch.deeponet",
+                "pytorch.lenet5", "pytorch.resnet20", "pytorch.resnet56",
+            }
             if model_key in _PYTORCH_EPOCH_CAP_MODELS:
                 try:
                     adapter = MODEL_REGISTRY.create(model_key, n_epochs=pytorch_mlp_epochs)
@@ -213,8 +234,20 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         return None
 
     if task_type == "regression":
-        # Support multi-output: only ravel for 1-D targets.
-        metrics = _reg_metrics(y_test, y_pred.ravel() if y_test.ndim == 1 else y_pred)
+        # Sequence benchmarks: compute NRMSE instead of / in addition to R².
+        if benchmark_key.startswith("sequence.") or benchmark_key.startswith("pde.") or benchmark_key.startswith("pdebench."):
+            nrmse = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
+            metrics = {"test_nrmse": nrmse}
+            # Also compute R² if single-output, skip for multi-output PDE fields.
+            try:
+                from sklearn.metrics import r2_score
+                r2 = float(r2_score(y_test, y_pred.ravel() if y_test.ndim == 1 else y_pred))
+                metrics["test_r2"] = r2
+            except Exception:
+                pass
+        else:
+            # Support multi-output: only ravel for 1-D targets.
+            metrics = _reg_metrics(y_test, y_pred.ravel() if y_test.ndim == 1 else y_pred)
     else:
         y_prob = None
         if hasattr(adapter, "predict_proba"):
@@ -262,6 +295,12 @@ def _load_dataset(benchmark_key: str):
         "tabular.breast_cancer": lambda: load_breast_cancer(return_X_y=True),
         "tabular.wine": lambda: load_wine(return_X_y=True),
         "tabular.digits": lambda: load_digits(return_X_y=True),
+        "sequence.lorenz63": lambda: _load_lorenz63(),
+        "pde.burgers_1d": lambda: _load_burgers_1d(),
+        "classification.flow_regime": lambda: _load_flow_regime(),
+        "tabular.airfoil_noise": lambda: _load_airfoil_noise(),
+        "tabular.yacht_dynamics": lambda: _load_yacht_dynamics(),
+        "classification.plasma_stability": lambda: _load_plasma_stability(),
     }
     if benchmark_key not in loaders:
         raise KeyError(f"No dataset loader for {benchmark_key!r}")
@@ -305,6 +344,61 @@ def _load_concrete_strength():
     return data.data.values.astype(float), data.target.values.astype(float)
 
 
+def _load_lorenz63():
+    from .tasks import _generate_lorenz_trajectories
+
+    return _generate_lorenz_trajectories(n_trajectories=1200, T_in=20, T_out=20, dt=0.01, warmup=500, seed=42)
+
+
+def _load_burgers_1d():
+    from .tasks import _generate_burgers_dataset
+
+    return _generate_burgers_dataset(n_samples=1024, n_x=64, nt=100, dt=1e-3, nu=0.01, seed=42)
+
+
+def _load_flow_regime(seed: int = 42):
+    rng = np.random.default_rng(seed)
+    n = 800
+    mach = rng.uniform(0.1, 3.0, n)
+    log_re = rng.uniform(4.0, 8.0, n)
+    aoa = rng.uniform(-5.0, 25.0, n)
+    labels = np.zeros(n, dtype=int)
+    labels[(mach < 0.8) & (log_re < 5.5)] = 0
+    labels[(mach < 0.8) & (log_re >= 5.5)] = 1
+    labels[(mach >= 0.8) & (mach < 1.2)] = 2
+    labels[(mach >= 1.2)] = 3
+    noise_idx = rng.choice(n, size=int(0.05 * n), replace=False)
+    labels[noise_idx] = rng.integers(0, 4, size=len(noise_idx))
+    X = np.column_stack([mach, log_re, aoa])
+    return X, labels
+
+
+def _load_airfoil_noise():
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml(name="airfoil-self-noise", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y = data.target.values.astype(float) if hasattr(data.target, "values") else np.asarray(data.target, dtype=float)
+    return X, y
+
+
+def _load_yacht_dynamics():
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml(name="yacht_hydrodynamics", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y = data.target.values.astype(float) if hasattr(data.target, "values") else np.asarray(data.target, dtype=float)
+    return X, y
+
+
+def _load_plasma_stability():
+    from sklearn.datasets import fetch_openml
+    from sklearn.preprocessing import LabelEncoder
+    data = fetch_openml(name="electricalGrid_stability_simulated", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    le = LabelEncoder()
+    y = le.fit_transform(data.target.values if hasattr(data.target, "values") else data.target)
+    return X, y
+
+
 def _load_energy_efficiency():
     from sklearn.datasets import fetch_openml
 
@@ -328,6 +422,12 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "tabular.breast_cancer": ("test_accuracy", 0.93),
         "tabular.wine": ("test_accuracy", 0.90),
         "tabular.digits": ("test_accuracy", 0.95),
+        "sequence.lorenz63": ("test_nrmse", 0.30),  # lower is better
+        "pde.burgers_1d": ("test_relative_l2", 0.10),  # lower is better
+        "classification.flow_regime": ("test_accuracy", 0.85),
+        "tabular.airfoil_noise": ("test_r2", 0.80),
+        "tabular.yacht_dynamics": ("test_r2", 0.80),
+        "classification.plasma_stability": ("test_accuracy", 0.92),
     }
     if benchmark_key not in _THRESHOLDS:
         return True
@@ -335,6 +435,9 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
     val = metrics.get(metric_key)
     if val is None:
         return True
+    # For lower-is-better metrics, pass if val <= threshold.
+    if metric_key in _LOWER_IS_BETTER or metric_key == "test_nrmse":
+        return float(val) <= threshold
     return float(val) >= threshold
 
 

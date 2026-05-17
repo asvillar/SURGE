@@ -247,8 +247,8 @@ def test_cli_all_autosave(tmp_path: Path, capsys):
     assert code == 0
     saved = list(tmp_path.rglob("result.json"))
     # Tier-0 benchmarks: synthetic.regression_1d, synthetic.classification_binary,
-    # synthetic.multioutput_2d (3 total)
-    assert len(saved) == 3
+    # synthetic.multioutput_2d, sequence.lorenz63, classification.flow_regime (5 total)
+    assert len(saved) == 5
 
 
 # ---------------------------------------------------------------------------

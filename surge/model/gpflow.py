@@ -1,11 +1,26 @@
 """GPflow model adapters."""
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..hpc import ResourceProfile
 from .base import BaseModelAdapter
-from .gpflow_impl import GPFLOW_AVAILABLE, GPflowGPRModel, GPflowMultiKernelGPR
+
+if TYPE_CHECKING:
+    from .gpflow_impl import GPflowGPRModel, GPflowMultiKernelGPR
+
+
+def gpflow_runtime_available() -> bool:
+    """True only if GPflow/TensorFlow initialized in :mod:`surge.model.gpflow_impl`."""
+    from . import gpflow_impl as impl
+
+    return impl.GPFLOW_AVAILABLE
+
+
+def __getattr__(name: str):  # PEP 562: lazy ``GPFLOW_AVAILABLE``
+    if name == "GPFLOW_AVAILABLE":
+        return gpflow_runtime_available()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 _GPFLOW_PROFILE = ResourceProfile(
@@ -25,11 +40,15 @@ class GPflowGPRAdapter(BaseModelAdapter):
     resource_profile = _GPFLOW_PROFILE
 
     def __init__(self, **kwargs: Any) -> None:
-        if not GPFLOW_AVAILABLE:
+        from . import gpflow_impl as impl
+
+        if not impl.GPFLOW_AVAILABLE:
             raise ImportError("GPflow not available. Install gpflow to enable GP adapters")
         super().__init__(**kwargs)
 
-    def _build_model(self, **kwargs: Any) -> GPflowGPRModel:
+    def _build_model(self, **kwargs: Any) -> Any:
+        from .gpflow_impl import GPflowGPRModel
+
         return GPflowGPRModel(**kwargs)
 
     def predict_with_uncertainty(self, X: Any) -> Any:
@@ -44,5 +63,7 @@ class GPflowMultiKernelAdapter(GPflowGPRAdapter):
 
     name = "gpflow.multi_kernel"
 
-    def _build_model(self, **kwargs: Any) -> GPflowMultiKernelGPR:
+    def _build_model(self, **kwargs: Any) -> Any:
+        from .gpflow_impl import GPflowMultiKernelGPR
+
         return GPflowMultiKernelGPR(**kwargs)

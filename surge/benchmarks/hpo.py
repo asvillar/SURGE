@@ -157,12 +157,81 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [32, 64, 128]),
         "patience": ("int", 10, 30),
     },
+    # ------------------------------------------------------------------
+    # Phase C — Temporal (CNN1D, LSTM, GRU)
+    # ------------------------------------------------------------------
+    "pytorch.cnn1d": {
+        "hidden_channels": ("categorical", [32, 64, 128, 256]),
+        "n_layers": ("int", 2, 6),
+        "kernel_size": ("categorical", [3, 5, 7, 9]),
+        "dropout": ("float", 0.0, 0.3),
+        "learning_rate": ("float_log", 1e-4, 1e-2),
+        "batch_size": ("categorical", [32, 64, 128]),
+    },
+    "pytorch.lstm": {
+        "hidden_size": ("categorical", [64, 128, 256, 512]),
+        "n_layers": ("int", 1, 3),
+        "dropout": ("float", 0.0, 0.4),
+        "learning_rate": ("float_log", 1e-4, 5e-3),
+        "batch_size": ("categorical", [32, 64, 128]),
+    },
+    "pytorch.gru": {
+        "hidden_size": ("categorical", [64, 128, 256, 512]),
+        "n_layers": ("int", 1, 3),
+        "dropout": ("float", 0.0, 0.4),
+        "learning_rate": ("float_log", 1e-4, 5e-3),
+        "batch_size": ("categorical", [32, 64, 128]),
+    },
+    # ------------------------------------------------------------------
+    # Phase D — PDE operators (FNO1d, DeepONet)
+    # ------------------------------------------------------------------
+    "pytorch.fno1d": {
+        "n_modes": ("categorical", [8, 12, 16, 24]),
+        "hidden_channels": ("categorical", [32, 64, 128]),
+        "n_layers": ("int", 2, 5),
+        "learning_rate": ("float_log", 1e-4, 5e-3),
+        "batch_size": ("categorical", [32, 64, 128]),
+    },
+    "pytorch.deeponet": {
+        "branch_width": ("categorical", [64, 128, 256]),
+        "trunk_width": ("categorical", [64, 128, 256]),
+        "n_basis": ("categorical", [32, 64, 128]),
+        "learning_rate": ("float_log", 1e-4, 5e-3),
+        "batch_size": ("categorical", [32, 64, 128]),
+    },
+    # ------------------------------------------------------------------
+    # Phase E — Vision (LeNet-5, ResNet-20/56)
+    # ------------------------------------------------------------------
+    "pytorch.lenet5": {
+        "learning_rate": ("float_log", 1e-4, 1e-2),
+        "batch_size": ("categorical", [64, 128, 256]),
+        "dropout": ("float", 0.0, 0.5),
+    },
+    "pytorch.resnet20": {
+        "learning_rate": ("float_log", 1e-4, 1e-1),
+        "batch_size": ("categorical", [64, 128, 256]),
+        "weight_decay": ("float_log", 1e-5, 1e-2),
+    },
+    "pytorch.resnet56": {
+        "learning_rate": ("float_log", 1e-4, 1e-1),
+        "batch_size": ("categorical", [64, 128, 256]),
+        "weight_decay": ("float_log", 1e-5, 1e-2),
+    },
 }
 
 # Primary metric to maximise/minimise per task type.
 _PRIMARY_METRIC: dict[str, tuple[str, str]] = {
     "regression": ("test_r2", "maximize"),
     "classification": ("test_accuracy", "maximize"),
+}
+
+# Per-benchmark metric overrides (for benchmarks where task_type alone is insufficient).
+_BENCHMARK_PRIMARY_METRIC: dict[str, tuple[str, str]] = {
+    "sequence.lorenz63": ("test_nrmse", "minimize"),
+    "pde.burgers_1d": ("test_relative_l2", "minimize"),
+    "pdebench.burgers_1d": ("test_relative_l2", "minimize"),
+    "pdebench.darcy_2d": ("test_relative_l2", "minimize"),
+    "pdebench.shallow_water_2d": ("test_relative_l2", "minimize"),
 }
 
 
@@ -282,15 +351,23 @@ def run_benchmark_hpo(
     info = benchmark_info(benchmark_key)
     task_type = info["task_type"]
 
-    # Auto-select metric + direction.
+    # Auto-select metric + direction (per-benchmark override first).
     if metric is None:
-        metric, default_dir = _PRIMARY_METRIC.get(task_type, ("test_r2", "maximize"))
+        metric, default_dir = _BENCHMARK_PRIMARY_METRIC.get(
+            benchmark_key, _PRIMARY_METRIC.get(task_type, ("test_r2", "maximize"))
+        )
     else:
-        default_dir = "minimize" if metric in {"test_rmse", "runtime_s"} else "maximize"
+        _lower_metrics = {"test_rmse", "test_nrmse", "test_relative_l2", "runtime_s"}
+        default_dir = "minimize" if metric in _lower_metrics else "maximize"
     if direction is None:
         direction = default_dir
 
-    _PYTORCH_KEYS = {"pytorch.mlp", "pytorch.residual_mlp", "pytorch.mlp_classifier"}
+    _PYTORCH_KEYS = {
+        "pytorch.mlp", "pytorch.residual_mlp", "pytorch.mlp_classifier",
+        "pytorch.cnn1d", "pytorch.lstm", "pytorch.gru",
+        "pytorch.fno1d", "pytorch.deeponet",
+        "pytorch.lenet5", "pytorch.resnet20", "pytorch.resnet56",
+    }
     epochs_cap = n_epochs_cap if n_epochs_cap is not None else 50
 
     # Pre-load the dataset once so every trial reuses the same in-memory arrays.
