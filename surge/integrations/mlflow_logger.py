@@ -9,6 +9,13 @@ from typing import Any, Dict, Optional
 
 LOG = logging.getLogger(__name__)
 
+MLFLOW_AVAILABLE: bool
+try:
+    import mlflow as _mlflow  # noqa: F401
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
+
 
 def log_surge_run(
     run_dir: Path,
@@ -121,4 +128,100 @@ def log_surge_run(
         return True
     except Exception as e:
         LOG.warning("MLflow logging failed: %s", e)
+        return False
+
+
+def log_benchmark_result(
+    result: Any,
+    *,
+    experiment_name: str = "surge_benchmarks",
+    tracking_uri: Optional[str] = None,
+    result_path: Optional[Path] = None,
+) -> bool:
+    """
+    Log a :class:`~surge.benchmarks.base.BenchmarkResult` to MLflow.
+
+    Creates (or reuses) an experiment named *experiment_name*. Each call
+    starts a new child run tagged with the benchmark key, model, tier, and
+    SURGE version so results are comparable across versions.
+
+    Parameters
+    ----------
+    result:
+        A ``BenchmarkResult`` instance.
+    experiment_name:
+        MLflow experiment name. Default ``"surge_benchmarks"``.
+    tracking_uri:
+        MLflow tracking URI (e.g. ``"http://localhost:5000"``). If ``None``
+        the local ``./mlruns`` directory (MLflow default) is used.
+    result_path:
+        If the result has already been saved to disk, log that JSON file as
+        an artifact so it is retrievable from the UI.
+
+    Returns
+    -------
+    bool
+        ``True`` on success, ``False`` if MLflow is unavailable or logging
+        fails (so callers can degrade gracefully).
+    """
+    if not MLFLOW_AVAILABLE:
+        LOG.warning(
+            "MLflow not installed. Install with: pip install 'surge-ml[mlflow]'"
+        )
+        return False
+
+    try:
+        import mlflow
+
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
+
+        mlflow.set_experiment(experiment_name)
+
+        run_name = f"{result.benchmark_key}__{result.model_key}"
+        with mlflow.start_run(run_name=run_name):
+            # ── Tags ────────────────────────────────────────────────────────
+            mlflow.set_tags(
+                {
+                    "benchmark_key": result.benchmark_key,
+                    "model_key": result.model_key,
+                    "tier": result.tier,
+                    "task_type": result.task_type,
+                    "passed": str(result.passed),
+                    "surge_version": result.surge_version or "",
+                    "timestamp": result.timestamp or "",
+                }
+            )
+
+            # ── Params ──────────────────────────────────────────────────────
+            mlflow.log_params(
+                {
+                    "benchmark_key": result.benchmark_key,
+                    "model_key": result.model_key,
+                    "tier": result.tier,
+                    "task_type": result.task_type,
+                    "n_train": result.extra.get("n_train", ""),
+                    "n_test": result.extra.get("n_test", ""),
+                }
+            )
+
+            # ── Metrics ─────────────────────────────────────────────────────
+            numeric_metrics: Dict[str, float] = {}
+            for k, v in result.metrics.items():
+                if isinstance(v, (int, float)) and k != "runtime_s":
+                    numeric_metrics[k] = float(v)
+            if "runtime_s" in result.metrics:
+                numeric_metrics["runtime_s"] = float(result.metrics["runtime_s"])
+            if numeric_metrics:
+                mlflow.log_metrics(numeric_metrics)
+
+            # ── Artifact ────────────────────────────────────────────────────
+            if result_path is not None:
+                rp = Path(result_path)
+                if rp.exists():
+                    mlflow.log_artifact(str(rp), artifact_path="benchmark_result")
+
+        return True
+    except Exception as exc:
+        LOG.warning("MLflow benchmark logging failed: %s", exc)
         return False

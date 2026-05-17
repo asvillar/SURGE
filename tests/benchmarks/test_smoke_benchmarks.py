@@ -182,3 +182,139 @@ def test_cli_list_models(capsys):
     assert "sklearn.random_forest_classifier" in out
     assert "sklearn.logistic_regression" in out
     assert "sklearn.gradient_boosting_classifier" in out
+
+
+# ---------------------------------------------------------------------------
+# Auto-save to benchmark_reports/
+# ---------------------------------------------------------------------------
+
+
+def test_benchmark_result_save(tmp_path: Path):
+    """BenchmarkResult.save() writes the expected directory structure."""
+    from surge.benchmarks.registry import run_benchmark
+
+    result = run_benchmark("synthetic.regression_1d", seed=0)
+    saved_path = result.save(root=tmp_path)
+
+    assert saved_path.exists()
+    assert saved_path.name == "result.json"
+    # directory layout: <root>/<benchmark_key>/<timestamp>/result.json
+    assert saved_path.parent.parent.name == "synthetic.regression_1d"
+
+    data = json.loads(saved_path.read_text(encoding="utf-8"))
+    assert data["benchmark_key"] == "synthetic.regression_1d"
+    assert data["passed"] is True
+    assert data["timestamp"]           # populated by save()
+    assert data["surge_version"]       # populated from surge.__version__
+
+
+def test_cli_autosave(tmp_path: Path):
+    """Running the CLI without --no-save writes to the save-dir."""
+    from surge.benchmarks.run import main
+
+    code = main([
+        "--benchmark", "synthetic.regression_1d",
+        "--save-dir", str(tmp_path),
+    ])
+    assert code == 0
+    # Expect benchmark_reports/<key>/<ts>/result.json
+    results = list(tmp_path.glob("synthetic.regression_1d/*/result.json"))
+    assert len(results) == 1
+    data = json.loads(results[0].read_text())
+    assert data["passed"] is True
+
+
+def test_cli_no_save(tmp_path: Path):
+    """--no-save produces no files under save-dir."""
+    from surge.benchmarks.run import main
+
+    code = main([
+        "--benchmark", "synthetic.regression_1d",
+        "--no-save",
+        "--save-dir", str(tmp_path),
+    ])
+    assert code == 0
+    assert list(tmp_path.rglob("result.json")) == []
+
+
+def test_cli_all_autosave(tmp_path: Path, capsys):
+    """--all saves one result.json per benchmark."""
+    from surge.benchmarks.run import main
+
+    code = main(["--all", "--tier", "0", "--save-dir", str(tmp_path)])
+    assert code == 0
+    saved = list(tmp_path.rglob("result.json"))
+    # Tier-0 has 2 benchmarks
+    assert len(saved) == 2
+
+
+# ---------------------------------------------------------------------------
+# MLflow integration
+# ---------------------------------------------------------------------------
+
+
+def test_log_benchmark_result_mlflow(tmp_path: Path):
+    """log_benchmark_result() logs metrics without error when MLflow is available."""
+    from surge.integrations.mlflow_logger import MLFLOW_AVAILABLE, log_benchmark_result
+
+    if not MLFLOW_AVAILABLE:
+        pytest.skip("mlflow not installed")
+
+    import mlflow
+
+    tracking_uri = f"file://{tmp_path / 'mlruns'}"
+    from surge.benchmarks.registry import run_benchmark
+
+    result = run_benchmark("synthetic.regression_1d", seed=0)
+    result_path = result.save(root=tmp_path / "benchmark_reports")
+
+    ok = log_benchmark_result(
+        result,
+        experiment_name="test_surge_benchmarks",
+        tracking_uri=tracking_uri,
+        result_path=result_path,
+    )
+    assert ok is True
+
+    mlflow.set_tracking_uri(tracking_uri)
+    client = mlflow.MlflowClient()
+    exp = client.get_experiment_by_name("test_surge_benchmarks")
+    assert exp is not None
+
+    runs = client.search_runs(experiment_ids=[exp.experiment_id])
+    assert len(runs) == 1
+    run = runs[0]
+
+    assert "test_r2" in run.data.metrics
+    assert run.data.params["benchmark_key"] == "synthetic.regression_1d"
+    assert run.data.tags["passed"] == "True"
+    assert run.data.tags["task_type"] == "regression"
+
+
+def test_cli_mlflow_flag(tmp_path: Path):
+    """--mlflow flag calls MLflow without crashing (uses temp tracking URI)."""
+    from surge.integrations.mlflow_logger import MLFLOW_AVAILABLE
+
+    if not MLFLOW_AVAILABLE:
+        pytest.skip("mlflow not installed")
+
+    from surge.benchmarks.run import main
+
+    tracking_uri = f"file://{tmp_path / 'mlruns'}"
+    code = main([
+        "--benchmark", "synthetic.classification_binary",
+        "--no-save",
+        "--mlflow",
+        "--mlflow-experiment", "test_cli_experiment",
+        "--mlflow-tracking-uri", tracking_uri,
+    ])
+    assert code == 0
+
+    import mlflow
+    mlflow.set_tracking_uri(tracking_uri)
+    client = mlflow.MlflowClient()
+    exp = client.get_experiment_by_name("test_cli_experiment")
+    assert exp is not None
+    runs = client.search_runs(experiment_ids=[exp.experiment_id])
+    assert len(runs) == 1
+    assert "test_accuracy" in runs[0].data.metrics
