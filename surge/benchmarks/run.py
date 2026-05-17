@@ -48,6 +48,15 @@ Compare specific models on a single benchmark::
 
     python -m surge.benchmarks.run --benchmark tabular.diabetes \\
         --compare-models sklearn.random_forest,sklearn.mlp,pytorch.mlp
+
+Hyperparameter optimisation (HPO) via Optuna::
+
+    python -m surge.benchmarks.run --benchmark tabular.california_housing \\
+        --model xgboost.xgbregressor --hpo --hpo-trials 40
+    python -m surge.benchmarks.run --benchmark tabular.iris \\
+        --model xgboost.xgbclassifier --hpo --hpo-trials 30 --mlflow
+    python -m surge.benchmarks.run --benchmark tabular.diabetes \\
+        --model pytorch.residual_mlp --hpo --hpo-trials 20 --hpo-metric test_r2
 """
 
 from __future__ import annotations
@@ -249,6 +258,23 @@ def main(argv: list[str] | None = None) -> int:
                         "With --leaderboard: save PNG/PDF leaderboard bar charts and "
                         "metric tables to <save-dir>/.plots/. Requires matplotlib."
                     ))
+    # ── HPO ──────────────────────────────────────────────────────────────────
+    ap.add_argument("--hpo", action="store_true",
+                    help=(
+                        "Run Optuna hyperparameter search for --benchmark / --model. "
+                        "Requires optuna (pip install optuna)."
+                    ))
+    ap.add_argument("--hpo-trials", type=int, default=20, metavar="N",
+                    help="Number of Optuna trials. Default: 20.")
+    ap.add_argument("--hpo-metric", default=None, metavar="METRIC",
+                    help=(
+                        "Metric to optimise (e.g. test_r2, test_accuracy, test_rmse). "
+                        "Defaults to the primary metric for the benchmark task type."
+                    ))
+    ap.add_argument("--hpo-epochs-cap", type=int, default=50, metavar="N",
+                    help="Cap n_epochs for PyTorch models during HPO trials. Default: 50.")
+    ap.add_argument("--list-hpo-models", action="store_true",
+                    help="Print model keys that have a registered HPO search space and exit.")
     # ── listing ──────────────────────────────────────────────────────────────
     ap.add_argument("--list", "-l", action="store_true",
                     help="Print registered benchmark keys and exit.")
@@ -273,6 +299,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="MLflow tracking URI. Default: local ./mlruns.")
     args = ap.parse_args(argv)
 
+    # ── list-hpo-models ──────────────────────────────────────────────────────
+    if args.list_hpo_models:
+        from .hpo import list_hpo_models
+        print("\nModels with HPO search spaces:")
+        for mk in list_hpo_models():
+            print(f"  {mk}")
+        return 0
+
     # ── list-models ──────────────────────────────────────────────────────────
     if args.list_models:
         _print_list_models()
@@ -282,6 +316,69 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         _print_list(verbose=args.verbose, tier=args.tier, task_type=args.task_type)
         return 0
+
+    # ── --hpo ────────────────────────────────────────────────────────────────
+    if args.hpo:
+        try:
+            import optuna as _optuna  # noqa: F401
+        except ImportError:
+            print(
+                "ERROR: optuna is required for --hpo.  pip install optuna",
+                file=sys.stderr,
+            )
+            return 1
+
+        if not args.benchmark:
+            print("ERROR: --hpo requires --benchmark KEY", file=sys.stderr)
+            return 1
+        if not args.model:
+            print("ERROR: --hpo requires --model KEY", file=sys.stderr)
+            return 1
+
+        from .hpo import print_hpo_summary, run_benchmark_hpo
+
+        print(
+            f"\nHPO: {args.benchmark}  /  {args.model}"
+            f"  ({args.hpo_trials} trials)",
+            file=sys.stderr,
+        )
+
+        result, best_params = run_benchmark_hpo(
+            args.benchmark,
+            args.model,
+            n_trials=args.hpo_trials,
+            seed=args.seed,
+            metric=args.hpo_metric,
+            n_epochs_cap=args.hpo_epochs_cap,
+            save_root=None if args.no_save else args.save_dir,
+            verbose=args.verbose,
+            mlflow_experiment=args.mlflow_experiment if args.mlflow else None,
+            mlflow_tracking_uri=args.mlflow_tracking_uri if args.mlflow else None,
+        )
+
+        if result is None:
+            print("HPO failed — no successful trials.", file=sys.stderr)
+            return 1
+
+        metric_used = result.extra.get("hpo_metric", args.hpo_metric or "?")
+        print_hpo_summary(
+            result,
+            best_params,
+            benchmark_key=args.benchmark,
+            model_key=args.model,
+            n_trials=args.hpo_trials,
+            metric=metric_used,
+        )
+
+        if args.output:
+            import json
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(
+                json.dumps(result.to_dict(), indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
+
+        return 0 if result.passed else 1
 
     # ── --leaderboard ────────────────────────────────────────────────────────
     if args.leaderboard:

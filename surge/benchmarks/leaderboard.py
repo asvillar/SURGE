@@ -47,6 +47,13 @@ def _default_models_for(task_type: str) -> list[str]:
     if task_type == "regression":
         base = list(_REGRESSION_MODELS)
         try:
+            from surge.model.backends.xgboost import XGBOOST_AVAILABLE
+
+            if XGBOOST_AVAILABLE:
+                base.append("xgboost.xgbregressor")
+        except Exception:
+            pass
+        try:
             from surge.model.pytorch import PYTORCH_AVAILABLE
 
             if PYTORCH_AVAILABLE:
@@ -57,6 +64,13 @@ def _default_models_for(task_type: str) -> list[str]:
         return base
     # classification
     base = list(_CLASSIFICATION_MODELS)
+    try:
+        from surge.model.backends.xgboost import XGBOOST_AVAILABLE
+
+        if XGBOOST_AVAILABLE:
+            base.append("xgboost.xgbclassifier")
+    except Exception:
+        pass
     try:
         from surge.model.pytorch import PYTORCH_AVAILABLE
 

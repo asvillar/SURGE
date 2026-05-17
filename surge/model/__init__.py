@@ -52,6 +52,16 @@ try:
 except Exception:
     pass
 
+try:
+    from .adapters.xgboost import XGBClassifierAdapter, XGBRegressorAdapter
+    from .backends.xgboost import XGBOOST_AVAILABLE as _XGBA
+
+    if _XGBA:
+        register_model(XGBRegressorAdapter, key='xgboost.xgbregressor', aliases=['xgbr', 'xgboost'])
+        register_model(XGBClassifierAdapter, key='xgboost.xgbclassifier', aliases=['xgbc'])
+except Exception:
+    pass
+
 
 def __getattr__(name: str):  # PEP 562: avoid importing TensorFlow/GPflow at import time
     if name == "GPFLOW_AVAILABLE":
