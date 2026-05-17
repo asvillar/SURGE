@@ -15,6 +15,7 @@ class BenchmarkResult:
     task_type: str
     metrics: dict[str, float]
     passed: bool
+    model_key: str = ""
     message: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
 

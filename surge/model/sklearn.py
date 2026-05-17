@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier, RandomForestRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPRegressor
 
 from ..hpc import ResourceProfile
-from .base import SklearnRegressorAdapter
+from .base import BaseModelAdapter, SklearnRegressorAdapter
 
 
 _RF_PROFILE = ResourceProfile(
@@ -98,3 +99,110 @@ class GPRModel(SklearnRegressorAdapter):
         if self._model is None or not hasattr(self._model, "sample_y"):
             raise NotImplementedError("Posterior sampling not supported for this model")
         return self._model.sample_y(X, n_samples=num_samples, random_state=self.params.get("random_state"))
+
+
+# ---------------------------------------------------------------------------
+# Classification adapters
+# ---------------------------------------------------------------------------
+
+_RF_CLF_PROFILE = ResourceProfile(
+    name="sklearn.random_forest_classifier",
+    supports_cpu=True,
+    supports_gpu=False,
+    worker_semantics="n_jobs",
+    notes="RandomForestClassifier uses joblib threads; num_workers -> n_jobs.",
+)
+
+_GB_CLF_PROFILE = ResourceProfile(
+    name="sklearn.gradient_boosting_classifier",
+    supports_cpu=True,
+    supports_gpu=False,
+    worker_semantics="none",
+    notes="GradientBoostingClassifier is single-threaded.",
+)
+
+_LR_PROFILE = ResourceProfile(
+    name="sklearn.logistic_regression",
+    supports_cpu=True,
+    supports_gpu=False,
+    worker_semantics="none",
+    notes="LogisticRegression is single-threaded.",
+)
+
+
+class SklearnClassifierAdapter(BaseModelAdapter):
+    """Base adapter for scikit-learn classifiers with predict_proba support."""
+
+    backend = "sklearn"
+    supports_sklearn_interface = True
+    task_type = "classification"
+    estimator_cls: Any = None
+    default_params: dict[str, Any] = {}
+
+    def _build_model(self, **kwargs: Any) -> Any:
+        if self.estimator_cls is None:
+            raise ValueError("estimator_cls must be set on subclasses")
+        params = dict(self.default_params)
+        params.update(kwargs)
+        return self.estimator_cls(**params)
+
+    def predict(self, X: Any) -> Any:
+        if self._model is None:
+            raise ValueError("Model must be fitted before predicting")
+        return self._model.predict(X)
+
+    def predict_proba(self, X: Any) -> Any:
+        """Return class probability estimates (required for AUROC / log-loss)."""
+        if self._model is None:
+            raise ValueError("Model must be fitted before predicting")
+        if not hasattr(self._model, "predict_proba"):
+            raise NotImplementedError(f"{self.name} does not support predict_proba")
+        return self._model.predict_proba(X)
+
+    def save(self, filepath: str) -> None:
+        import joblib
+        joblib.dump(self._model, filepath)
+
+    def load(self, filepath: str) -> None:
+        import joblib
+        self._model = joblib.load(filepath)
+
+
+class RandomForestClassifierAdapter(SklearnClassifierAdapter):
+    """Random Forest classifier."""
+
+    name = "sklearn.random_forest_classifier"
+    estimator_cls = RandomForestClassifier
+    resource_profile = _RF_CLF_PROFILE
+    default_params = {
+        "n_estimators": 100,
+        "max_depth": None,
+        "random_state": 42,
+        "n_jobs": -1,
+    }
+
+
+class GradientBoostingClassifierAdapter(SklearnClassifierAdapter):
+    """Gradient Boosting classifier."""
+
+    name = "sklearn.gradient_boosting_classifier"
+    estimator_cls = GradientBoostingClassifier
+    resource_profile = _GB_CLF_PROFILE
+    default_params = {
+        "n_estimators": 100,
+        "learning_rate": 0.1,
+        "max_depth": 3,
+        "random_state": 42,
+    }
+
+
+class LogisticRegressionAdapter(SklearnClassifierAdapter):
+    """Logistic Regression classifier — linear baseline."""
+
+    name = "sklearn.logistic_regression"
+    estimator_cls = LogisticRegression
+    resource_profile = _LR_PROFILE
+    default_params = {
+        "max_iter": 1000,
+        "random_state": 42,
+    }
