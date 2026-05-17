@@ -32,6 +32,13 @@ from .training import (
     plot_lr_schedule,
     plot_training_dashboard,
 )
+from .classification import (
+    plot_calibration_curve,
+    plot_classification_dashboard,
+    plot_confusion_matrix,
+    plot_precision_recall_curve,
+    plot_roc_curve,
+)
 
 __all__ = [
     # Run viz
@@ -62,6 +69,12 @@ __all__ = [
     "plot_lr_schedule",
     "plot_training_dashboard",
     "compare_training_curves",
+    # Classification diagnostics
+    "plot_roc_curve",
+    "plot_precision_recall_curve",
+    "plot_confusion_matrix",
+    "plot_calibration_curve",
+    "plot_classification_dashboard",
 ]
 
 
