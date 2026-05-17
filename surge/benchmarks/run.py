@@ -37,6 +37,17 @@ Track with MLflow (local mlruns/ by default)::
     python -m surge.benchmarks.run --benchmark tabular.iris --mlflow
     python -m surge.benchmarks.run --all --mlflow --mlflow-experiment my_project
     python -m surge.benchmarks.run --all --mlflow --mlflow-tracking-uri http://localhost:5000
+
+Run a leaderboard: all compatible models vs a benchmark or group of benchmarks::
+
+    python -m surge.benchmarks.run --leaderboard --benchmark tabular.iris
+    python -m surge.benchmarks.run --leaderboard --tier 1 --task-type classification
+    python -m surge.benchmarks.run --leaderboard --all-benchmarks --mlflow
+
+Compare specific models on a single benchmark::
+
+    python -m surge.benchmarks.run --benchmark tabular.diabetes \\
+        --compare-models sklearn.random_forest,sklearn.mlp,pytorch.mlp
 """
 
 from __future__ import annotations
@@ -45,6 +56,13 @@ import argparse
 import sys
 from pathlib import Path
 
+from .leaderboard import (
+    _default_models_for,
+    format_leaderboard_table,
+    log_leaderboard_to_mlflow,
+    print_leaderboard,
+    run_leaderboard,
+)
 from .registry import benchmark_info, list_benchmarks, run_benchmark
 
 
@@ -158,12 +176,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", "-m", metavar="KEY", default=None,
                     help="Model registry key (default: per-benchmark default). See --list-models.")
     ap.add_argument("--all", "-a", dest="run_all", action="store_true",
-                    help="Run all registered benchmarks.")
+                    help="Run all registered benchmarks with their default models.")
     ap.add_argument("--tier", metavar="TIER",
-                    help="Filter by tier (0, 1, …). Works with --list and --all.")
+                    help="Filter by tier (0, 1, …). Works with --list, --all, and --leaderboard.")
     ap.add_argument("--task-type", metavar="TYPE",
-                    help="Filter by task type (regression|classification). Works with --list and --all.")
+                    help="Filter by task type (regression|classification). Works with --list, --all, --leaderboard.")
     ap.add_argument("--seed", type=int, default=42, help="Random seed. Default: 42.")
+    # ── leaderboard ──────────────────────────────────────────────────────────
+    ap.add_argument("--leaderboard", action="store_true",
+                    help=(
+                        "Run all compatible models against the selected benchmark(s) and "
+                        "print a per-benchmark comparison table. Use with --benchmark, "
+                        "--tier, --task-type, or --all-benchmarks."
+                    ))
+    ap.add_argument("--all-benchmarks", action="store_true",
+                    help="With --leaderboard: run all registered benchmarks.")
+    ap.add_argument("--compare-models", metavar="KEY1,KEY2,...", default=None,
+                    help=(
+                        "Comma-separated list of model keys to compare on --benchmark. "
+                        "Overrides the default compatible-model set."
+                    ))
     # ── listing ──────────────────────────────────────────────────────────────
     ap.add_argument("--list", "-l", action="store_true",
                     help="Print registered benchmark keys and exit.")
@@ -197,6 +229,62 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         _print_list(verbose=args.verbose, tier=args.tier, task_type=args.task_type)
         return 0
+
+    # ── --leaderboard ────────────────────────────────────────────────────────
+    if args.leaderboard:
+        # Determine which benchmarks to run.
+        if args.all_benchmarks or (not args.benchmark):
+            bm_keys = list_benchmarks(tier=args.tier, task_type=args.task_type)
+        else:
+            bm_keys = [args.benchmark]
+
+        if not bm_keys:
+            print("No benchmarks match the specified filters.", file=sys.stderr)
+            return 1
+
+        # Determine which models to use.
+        custom_models = (
+            [m.strip() for m in args.compare_models.split(",") if m.strip()]
+            if args.compare_models
+            else None
+        )
+
+        print(
+            f"\nLeaderboard: {len(bm_keys)} benchmark(s) — seed={args.seed}\n"
+        )
+
+        lb_results = run_leaderboard(
+            bm_keys,
+            model_keys=custom_models,
+            seed=args.seed,
+            save_root=None if args.no_save else args.save_dir,
+        )
+
+        # Print per-benchmark tables.
+        print_leaderboard(lb_results)
+
+        # MLflow.
+        if args.mlflow:
+            log_leaderboard_to_mlflow(
+                lb_results,
+                experiment_name=args.mlflow_experiment,
+                tracking_uri=args.mlflow_tracking_uri,
+                save_tables=True,
+            )
+            print(f"\nMLflow → experiment={args.mlflow_experiment!r}", file=sys.stderr)
+
+        # Legacy --output: write all results as flat JSON list.
+        if args.output is not None:
+            import json
+            all_res = [r.to_dict() for rl in lb_results.values() for r in rl]
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(
+                json.dumps(all_res, indent=2, default=str) + "\n", encoding="utf-8"
+            )
+            print(f"Wrote {args.output}", file=sys.stderr)
+
+        any_failed = any(not r.passed for rl in lb_results.values() for r in rl)
+        return 1 if any_failed else 0
 
     # ── --all ────────────────────────────────────────────────────────────────
     if args.run_all:
@@ -242,9 +330,29 @@ def main(argv: list[str] | None = None) -> int:
 
         return 1 if any_failed else 0
 
-    # ── single benchmark ─────────────────────────────────────────────────────
+    # ── single benchmark (optionally --compare-models) ───────────────────────
     if not args.benchmark:
-        ap.error("provide --benchmark KEY, --all, --list, or --list-models")
+        ap.error("provide --benchmark KEY, --all, --leaderboard, --list, or --list-models")
+
+    # If --compare-models is given without --leaderboard, run as a mini-leaderboard.
+    if args.compare_models:
+        models = [m.strip() for m in args.compare_models.split(",") if m.strip()]
+        lb_results = run_leaderboard(
+            [args.benchmark],
+            model_keys=models,
+            seed=args.seed,
+            save_root=None if args.no_save else args.save_dir,
+        )
+        print_leaderboard(lb_results)
+        if args.mlflow:
+            log_leaderboard_to_mlflow(
+                lb_results,
+                experiment_name=args.mlflow_experiment,
+                tracking_uri=args.mlflow_tracking_uri,
+            )
+            print(f"MLflow → experiment={args.mlflow_experiment!r}", file=sys.stderr)
+        any_failed = any(not r.passed for rl in lb_results.values() for r in rl)
+        return 1 if any_failed else 0
 
     try:
         result = run_benchmark(args.benchmark, seed=args.seed, model_key=args.model)
