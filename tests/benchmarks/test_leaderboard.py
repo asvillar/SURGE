@@ -25,6 +25,7 @@ def test_default_models_for_regression():
     models = _default_models_for("regression")
     assert "sklearn.random_forest" in models
     assert "sklearn.mlp" in models
+    assert "sklearn.gradient_boosting_regressor" in models
     # Classification models must not bleed in
     assert "sklearn.random_forest_classifier" not in models
 

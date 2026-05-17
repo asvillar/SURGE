@@ -5,6 +5,7 @@ from .base import BaseModelAdapter, SklearnRegressorAdapter
 from .sklearn import (
     GPRModel,
     GradientBoostingClassifierAdapter,
+    GradientBoostingRegressorModel,
     LogisticRegressionAdapter,
     MLPModel,
     RandomForestClassifierAdapter,
@@ -29,7 +30,27 @@ register_model(GPflowGPRAdapter, key='gpflow.gpr', aliases=['gp_gpr'])
 register_model(GPflowMultiKernelAdapter, key='gpflow.multi_kernel', aliases=['gpflow_mk'])
 register_model(RandomForestClassifierAdapter, key='sklearn.random_forest_classifier', aliases=['rf_classifier', 'rfc'])
 register_model(GradientBoostingClassifierAdapter, key='sklearn.gradient_boosting_classifier', aliases=['gbc', 'gradient_boosting'])
+register_model(GradientBoostingRegressorModel, key='sklearn.gradient_boosting_regressor', aliases=['gbr'])
 register_model(LogisticRegressionAdapter, key='sklearn.logistic_regression', aliases=['logistic_regression', 'lr'])
+
+# New model adapters from surge/model/adapters/
+try:
+    from .adapters.residual_mlp import ResidualMLPAdapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA
+
+    if _PTA:
+        register_model(ResidualMLPAdapter, key='pytorch.residual_mlp', aliases=['residual_mlp'])
+except Exception:
+    pass
+
+try:
+    from .adapters.mlp_classifier import MLPClassifierAdapter
+    from .pytorch import PYTORCH_AVAILABLE as _PTA2
+
+    if _PTA2:
+        register_model(MLPClassifierAdapter, key='pytorch.mlp_classifier', aliases=['mlp_classifier'])
+except Exception:
+    pass
 
 
 def __getattr__(name: str):  # PEP 562: avoid importing TensorFlow/GPflow at import time
@@ -49,6 +70,7 @@ __all__ = [
     "GPRModel",
     "RandomForestClassifierAdapter",
     "GradientBoostingClassifierAdapter",
+    "GradientBoostingRegressorModel",
     "LogisticRegressionAdapter",
     "PyTorchMLPAdapter",
     "GPflowGPRAdapter",

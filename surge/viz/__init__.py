@@ -39,6 +39,12 @@ from .classification import (
     plot_precision_recall_curve,
     plot_roc_curve,
 )
+from .benchmark import (
+    load_benchmark_results,
+    plot_benchmark_leaderboard,
+    plot_metric_table,
+    plot_multi_benchmark_dashboard,
+)
 
 __all__ = [
     # Run viz
@@ -75,6 +81,11 @@ __all__ = [
     "plot_confusion_matrix",
     "plot_calibration_curve",
     "plot_classification_dashboard",
+    # Benchmark comparison
+    "plot_benchmark_leaderboard",
+    "plot_metric_table",
+    "plot_multi_benchmark_dashboard",
+    "load_benchmark_results",
 ]
 
 

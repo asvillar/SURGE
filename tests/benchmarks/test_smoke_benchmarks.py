@@ -19,6 +19,7 @@ def test_list_benchmarks_contains_all():
     keys = list_benchmarks()
     expected = {
         "synthetic.regression_1d",
+        "synthetic.multioutput_2d",
         "synthetic.classification_binary",
         "tabular.diabetes",
         "tabular.california_housing",
@@ -26,6 +27,7 @@ def test_list_benchmarks_contains_all():
         "tabular.breast_cancer",
         "tabular.wine",
         "tabular.digits",
+        "tabular.energy_efficiency",
     }
     assert expected.issubset(set(keys)), f"Missing: {expected - set(keys)}"
 
@@ -244,8 +246,9 @@ def test_cli_all_autosave(tmp_path: Path, capsys):
     code = main(["--all", "--tier", "0", "--save-dir", str(tmp_path)])
     assert code == 0
     saved = list(tmp_path.rglob("result.json"))
-    # Tier-0 has 2 benchmarks
-    assert len(saved) == 2
+    # Tier-0 benchmarks: synthetic.regression_1d, synthetic.classification_binary,
+    # synthetic.multioutput_2d (3 total)
+    assert len(saved) == 3
 
 
 # ---------------------------------------------------------------------------

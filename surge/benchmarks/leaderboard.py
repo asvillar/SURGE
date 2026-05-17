@@ -32,6 +32,7 @@ from .registry import benchmark_info, list_benchmarks, run_benchmark
 # table (roughly: ensemble → boosting → linear → neural).
 _REGRESSION_MODELS: list[str] = [
     "sklearn.random_forest",
+    "sklearn.gradient_boosting_regressor",
     "sklearn.mlp",
 ]
 
@@ -50,10 +51,20 @@ def _default_models_for(task_type: str) -> list[str]:
 
             if PYTORCH_AVAILABLE:
                 base.append("pytorch.mlp")
+                base.append("pytorch.residual_mlp")
         except Exception:
             pass
         return base
-    return list(_CLASSIFICATION_MODELS)
+    # classification
+    base = list(_CLASSIFICATION_MODELS)
+    try:
+        from surge.model.pytorch import PYTORCH_AVAILABLE
+
+        if PYTORCH_AVAILABLE:
+            base.append("pytorch.mlp_classifier")
+    except Exception:
+        pass
+    return base
 
 
 # Metrics where lower is better (used to decide which direction to highlight).
@@ -124,27 +135,11 @@ def run_leaderboard(
                 )
                 continue
 
-            # For pytorch.mlp cap epochs so leaderboard runs don't take too long.
-            if model_key == "pytorch.mlp":
+            # Cap epochs for all pytorch adapters so leaderboard runs don't take too long.
+            _PYTORCH_EPOCH_CAP_MODELS = {"pytorch.mlp", "pytorch.residual_mlp", "pytorch.mlp_classifier"}
+            if model_key in _PYTORCH_EPOCH_CAP_MODELS:
                 try:
                     adapter = MODEL_REGISTRY.create(model_key, n_epochs=pytorch_mlp_epochs)
-                    # Patch: pass a pre-built adapter by temporarily registering a
-                    # wrapper.  Simpler: call the task function directly with model_key
-                    # and a monkey-patched registry entry — but the cleanest path is
-                    # to support passing an adapter instance to the task.  For now
-                    # we override n_epochs via the kwargs path by creating a custom
-                    # model_key string that resolves to a pre-configured adapter.
-                    # The simplest approach: temporarily store the epoch-capped adapter
-                    # and replace the lookup.
-                    from surge.model.registry import MODEL_REGISTRY as _MR
-                    from surge.benchmarks.tasks import _fit_predict_regression, _reg_metrics
-                    import time, numpy as np
-                    from sklearn.datasets import (
-                        load_diabetes, fetch_california_housing,
-                    )
-                    from sklearn.model_selection import train_test_split
-
-                    # Run the benchmark, but inject the epoch-capped adapter.
                     res = _run_with_adapter(key, adapter, seed=seed)
                     if res is not None:
                         if save_root is not None:
@@ -152,7 +147,7 @@ def run_leaderboard(
                         results[key].append(res)
                     continue
                 except Exception as exc:
-                    print(f"  [warn] pytorch.mlp leaderboard run failed: {exc}", file=sys.stderr)
+                    print(f"  [warn] {model_key} leaderboard run failed: {exc}", file=sys.stderr)
                     continue
 
             try:
@@ -204,7 +199,8 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         return None
 
     if task_type == "regression":
-        metrics = _reg_metrics(y_test, y_pred.ravel())
+        # Support multi-output: only ravel for 1-D targets.
+        metrics = _reg_metrics(y_test, y_pred.ravel() if y_test.ndim == 1 else y_pred)
     else:
         y_prob = None
         if hasattr(adapter, "predict_proba"):
@@ -243,8 +239,11 @@ def _load_dataset(benchmark_key: str):
     loaders = {
         "synthetic.regression_1d": lambda: _synthetic_regression_1d(),
         "synthetic.classification_binary": lambda: _synthetic_classification_binary(),
+        "synthetic.multioutput_2d": lambda: _synthetic_multioutput_2d(),
         "tabular.diabetes": lambda: load_diabetes(return_X_y=True),
         "tabular.california_housing": lambda: fetch_california_housing(return_X_y=True),
+        "tabular.concrete_strength": lambda: _load_concrete_strength(),
+        "tabular.energy_efficiency": lambda: _load_energy_efficiency(),
         "tabular.iris": lambda: load_iris(return_X_y=True),
         "tabular.breast_cancer": lambda: load_breast_cancer(return_X_y=True),
         "tabular.wine": lambda: load_wine(return_X_y=True),
@@ -274,13 +273,42 @@ def _synthetic_classification_binary():
     return X, y
 
 
+def _synthetic_multioutput_2d():
+    import numpy as np
+
+    rng = np.random.default_rng(42)
+    X = rng.standard_normal((600, 8))
+    A = rng.standard_normal((8, 2)) * 0.5
+    noise = 0.1 * rng.standard_normal((600, 2))
+    Y = X @ A + noise
+    return X, Y
+
+
+def _load_concrete_strength():
+    from sklearn.datasets import fetch_openml
+
+    data = fetch_openml(name="concrete-compressive-strength", version=1, as_frame=True, parser="auto")
+    return data.data.values.astype(float), data.target.values.astype(float)
+
+
+def _load_energy_efficiency():
+    from sklearn.datasets import fetch_openml
+
+    data = fetch_openml(name="energy-efficiency", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y = data.target.values.astype(float) if data.target.ndim == 1 else data.target.iloc[:, 0].values.astype(float)
+    return X, y
+
+
 def _check_pass(benchmark_key: str, metrics: dict) -> bool:
     """Best-effort pass check using known thresholds."""
     _THRESHOLDS: dict[str, tuple[str, float]] = {
         "synthetic.regression_1d": ("test_r2", 0.85),
+        "synthetic.multioutput_2d": ("test_r2", 0.75),
         "tabular.diabetes": ("test_r2", 0.35),
         "tabular.california_housing": ("test_r2", 0.75),
         "tabular.concrete_strength": ("test_r2", 0.80),
+        "tabular.energy_efficiency": ("test_r2", 0.90),
         "synthetic.classification_binary": ("test_accuracy", 0.75),
         "tabular.iris": ("test_accuracy", 0.88),
         "tabular.breast_cancer": ("test_accuracy", 0.93),

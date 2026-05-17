@@ -12,10 +12,12 @@ from .base import BenchmarkResult
 # Default model keys per benchmark (used when the caller passes no model_key).
 _DEFAULTS: dict[str, str] = {
     "synthetic.regression_1d": "sklearn.random_forest",
+    "synthetic.multioutput_2d": "sklearn.random_forest",
     "synthetic.classification_binary": "sklearn.random_forest_classifier",
     "tabular.diabetes": "sklearn.random_forest",
     "tabular.california_housing": "sklearn.random_forest",
     "tabular.concrete_strength": "sklearn.random_forest",
+    "tabular.energy_efficiency": "sklearn.random_forest",
     "tabular.iris": "sklearn.random_forest_classifier",
     "tabular.breast_cancer": "sklearn.random_forest_classifier",
     "tabular.wine": "sklearn.random_forest_classifier",
@@ -25,10 +27,12 @@ _DEFAULTS: dict[str, str] = {
 # Which task type each benchmark expects of its model.
 _TASK_TYPE: dict[str, str] = {
     "synthetic.regression_1d": "regression",
+    "synthetic.multioutput_2d": "regression",
     "synthetic.classification_binary": "classification",
     "tabular.diabetes": "regression",
     "tabular.california_housing": "regression",
     "tabular.concrete_strength": "regression",
+    "tabular.energy_efficiency": "regression",
     "tabular.iris": "classification",
     "tabular.breast_cancer": "classification",
     "tabular.wine": "classification",
@@ -47,10 +51,17 @@ def _resolve_model(model_key: str | None, benchmark_key: str) -> Any:
 
 
 def _fit_predict_regression(adapter: Any, X_train, y_train, X_test):
-    """Fit adapter and return predictions. Returns (y_pred, elapsed_s)."""
+    """Fit adapter and return predictions. Returns (y_pred, elapsed_s).
+
+    For multi-output targets (y_train.ndim > 1) predictions are kept 2-D;
+    for 1-D targets they are ravelled so callers can treat them as vectors.
+    """
     t0 = time.perf_counter()
     adapter.fit(X_train, y_train)
-    y_pred = np.asarray(adapter.predict(X_test)).ravel()
+    y_pred = np.asarray(adapter.predict(X_test))
+    is_multioutput = np.asarray(y_train).ndim > 1
+    if not is_multioutput:
+        y_pred = y_pred.ravel()
     elapsed = time.perf_counter() - t0
     return y_pred, elapsed
 
@@ -326,6 +337,64 @@ def run_tabular_wine(*, seed: int = 42, model_key: str | None = None) -> Benchma
         metrics=metrics,
         passed=metrics["test_accuracy"] >= 0.90,
         message="UCI Wine / sklearn.datasets",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_synthetic_multioutput_2d(*, seed: int = 42, n_samples: int = 600, model_key: str | None = None) -> BenchmarkResult:
+    """Inline 8→2 multi-output regression (Tier 0)."""
+    from sklearn.model_selection import train_test_split
+
+    rng = np.random.default_rng(seed)
+    X = rng.standard_normal((n_samples, 8))
+    A = rng.standard_normal((8, 2)) * 0.5
+    noise = 0.1 * rng.standard_normal((n_samples, 2))
+    Y = X @ A + noise
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.25, random_state=seed)
+
+    adapter = _resolve_model(model_key, "synthetic.multioutput_2d")
+    y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
+    # Per-output r² then averaged.
+    from sklearn.metrics import r2_score
+
+    r2 = float(r2_score(y_test, y_pred if y_pred.ndim > 1 else y_pred.reshape(-1, 1)))
+    metrics: dict = {"test_r2": r2, "runtime_s": elapsed}
+    return BenchmarkResult(
+        benchmark_key="synthetic.multioutput_2d",
+        model_key=adapter.name,
+        tier="0",
+        task_type="regression",
+        metrics=metrics,
+        passed=r2 > 0.75,
+        message="8→2 linear multi-output with Gaussian noise (inline fixture)",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_tabular_energy_efficiency(*, seed: int = 42, model_key: str | None = None) -> BenchmarkResult:
+    """UCI Energy Efficiency — 8→1 regression on heating load (Tier 1, requires internet on first run)."""
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+
+    data = fetch_openml(name="energy-efficiency", version=1, as_frame=True, parser="auto")
+    # Target: Y1 (Heating Load)
+    X = data.data.values.astype(float)
+    y = data.target.values.astype(float) if data.target.ndim == 1 else data.target.iloc[:, 0].values.astype(float)
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    adapter = _resolve_model(model_key, "tabular.energy_efficiency")
+    y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
+    metrics = _reg_metrics(y_test, y_pred)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="tabular.energy_efficiency",
+        model_key=adapter.name,
+        tier="1",
+        task_type="regression",
+        metrics=metrics,
+        passed=metrics["test_r2"] > 0.90,
+        message="UCI Energy Efficiency — Heating Load (Tsanas & Xifara 2012)",
         extra={"n_train": len(X_train), "n_test": len(X_test)},
     )
 

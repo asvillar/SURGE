@@ -8,12 +8,14 @@ from typing import Any
 from .base import BenchmarkResult
 from .tasks import (
     run_synthetic_classification_binary,
+    run_synthetic_multioutput_2d,
     run_synthetic_regression_1d,
     run_tabular_breast_cancer,
     run_tabular_california_housing,
     run_tabular_concrete_strength,
     run_tabular_diabetes,
     run_tabular_digits,
+    run_tabular_energy_efficiency,
     run_tabular_iris,
     run_tabular_wine,
 )
@@ -24,6 +26,10 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "synthetic.regression_1d": (
         run_synthetic_regression_1d, "0", "regression", "1→1",
         "Linear 1-D signal with Gaussian noise (inline fixture)",
+    ),
+    "synthetic.multioutput_2d": (
+        run_synthetic_multioutput_2d, "0", "regression", "8→2",
+        "Multi-output 8→2 linear regression with Gaussian noise (inline fixture)",
     ),
     "synthetic.classification_binary": (
         run_synthetic_classification_binary, "0", "classification", "20→2",
@@ -40,6 +46,10 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "tabular.concrete_strength": (
         run_tabular_concrete_strength, "1", "regression", "8→1",
         "UCI Concrete Compressive Strength (Yeh 1998) [requires internet on first run]",
+    ),
+    "tabular.energy_efficiency": (
+        run_tabular_energy_efficiency, "1", "regression", "8→1",
+        "UCI Energy Efficiency — Heating Load (Tsanas & Xifara 2012) [requires internet on first run]",
     ),
     "tabular.iris": (
         run_tabular_iris, "1", "classification", "4→3",

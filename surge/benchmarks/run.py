@@ -139,6 +139,54 @@ def _persist(result, *, save_root: Path | None, no_save: bool) -> Path | None:
         return None
 
 
+def _save_leaderboard_plots(results_by_benchmark: dict, *, save_dir: Path) -> None:
+    """Save PNG/PDF bar charts and metric tables for a leaderboard run."""
+    try:
+        from surge.viz.benchmark import plot_benchmark_leaderboard, plot_metric_table, plot_multi_benchmark_dashboard
+    except ImportError:
+        print("       [warn] matplotlib not available — skipping plots", file=sys.stderr)
+        return
+
+    plots_dir = save_dir / ".plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
+
+    for bk, rl in results_by_benchmark.items():
+        if not rl:
+            continue
+        safe = bk.replace(".", "_")
+        task = rl[0].task_type
+        primary_metric = "test_accuracy" if task == "classification" else "test_r2"
+        if not any(primary_metric in r.metrics for r in rl):
+            primary_metric = next(
+                (k for r in rl for k in r.metrics if isinstance(r.metrics[k], float)), None
+            )
+        if primary_metric:
+            try:
+                plot_benchmark_leaderboard(
+                    rl, metric=primary_metric,
+                    save_path=plots_dir / f"{safe}_leaderboard.png",
+                )
+                print(f"       Plot  → {plots_dir / f'{safe}_leaderboard.png'}", file=sys.stderr)
+            except Exception as exc:
+                print(f"       [warn] leaderboard plot failed for {bk}: {exc}", file=sys.stderr)
+        try:
+            plot_metric_table(rl, save_path=plots_dir / f"{safe}_table.png")
+            print(f"       Plot  → {plots_dir / f'{safe}_table.png'}", file=sys.stderr)
+        except Exception as exc:
+            print(f"       [warn] metric table failed for {bk}: {exc}", file=sys.stderr)
+
+    # Multi-benchmark dashboard (all benchmarks in one figure).
+    if len(results_by_benchmark) > 1:
+        try:
+            plot_multi_benchmark_dashboard(
+                results_by_benchmark,
+                save_path=plots_dir / "dashboard.png",
+            )
+            print(f"       Plot  → {plots_dir / 'dashboard.png'}", file=sys.stderr)
+        except Exception as exc:
+            print(f"       [warn] dashboard plot failed: {exc}", file=sys.stderr)
+
+
 def _mlflow_log(result, *, result_path, experiment: str, tracking_uri: str | None) -> None:
     from surge.integrations.mlflow_logger import MLFLOW_AVAILABLE, log_benchmark_result
 
@@ -195,6 +243,11 @@ def main(argv: list[str] | None = None) -> int:
                     help=(
                         "Comma-separated list of model keys to compare on --benchmark. "
                         "Overrides the default compatible-model set."
+                    ))
+    ap.add_argument("--plot", action="store_true",
+                    help=(
+                        "With --leaderboard: save PNG/PDF leaderboard bar charts and "
+                        "metric tables to <save-dir>/.plots/. Requires matplotlib."
                     ))
     # ── listing ──────────────────────────────────────────────────────────────
     ap.add_argument("--list", "-l", action="store_true",
@@ -262,6 +315,10 @@ def main(argv: list[str] | None = None) -> int:
 
         # Print per-benchmark tables.
         print_leaderboard(lb_results)
+
+        # Matplotlib plots.
+        if args.plot:
+            _save_leaderboard_plots(lb_results, save_dir=args.save_dir)
 
         # MLflow.
         if args.mlflow:

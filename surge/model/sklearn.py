@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import (
+    GradientBoostingClassifier,
+    GradientBoostingRegressor,
+    RandomForestClassifier,
+    RandomForestRegressor,
+)
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPRegressor
@@ -80,6 +85,45 @@ class MLPModel(SklearnRegressorAdapter):
         "max_iter": 800,
         "random_state": 42,
     }
+
+
+_GB_REG_PROFILE = ResourceProfile(
+    name="sklearn.gradient_boosting_regressor",
+    supports_cpu=True,
+    supports_gpu=False,
+    worker_semantics="none",
+    notes="GradientBoostingRegressor is single-threaded.",
+)
+
+
+class GradientBoostingRegressorModel(SklearnRegressorAdapter):
+    """Gradient Boosting regressor — strong nonlinear tabular baseline.
+
+    Multi-output targets are handled automatically via
+    ``sklearn.multioutput.MultiOutputRegressor``.
+    """
+
+    name = "sklearn.gradient_boosting_regressor"
+    estimator_cls = GradientBoostingRegressor
+    resource_profile = _GB_REG_PROFILE
+    default_params = {
+        "n_estimators": 100,
+        "learning_rate": 0.1,
+        "max_depth": 3,
+        "random_state": 42,
+    }
+
+    def fit(self, X: Any, y: Any) -> None:
+        import numpy as _np
+        from sklearn.multioutput import MultiOutputRegressor
+
+        params = dict(self.default_params)
+        y_arr = _np.asarray(y)
+        if y_arr.ndim > 1 and y_arr.shape[1] > 1:
+            self._model = MultiOutputRegressor(self.estimator_cls(**params))
+        else:
+            self._model = self.estimator_cls(**params)
+        self._model.fit(X, y_arr)
 
 
 class GPRModel(SklearnRegressorAdapter):
