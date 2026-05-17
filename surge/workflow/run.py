@@ -501,13 +501,37 @@ def _persist_model_artifacts(
         prediction_files["val_uq"] = str(uq_path)
 
     artifact_extra: Dict[str, str] = {}
+    tag = _safe_model_artifact_tag(model_name)
     th = (result.extra or {}).get("training_history")
     if th:
-        th_path = paths.root / f"training_history_{_safe_model_artifact_tag(model_name)}.json"
+        th_path = paths.root / f"training_history_{tag}.json"
         with th_path.open("w", encoding="utf-8") as handle:
             json.dump(th, handle, indent=2)
         artifact_extra["training_history"] = str(th_path)
-    tag = _safe_model_artifact_tag(model_name)
+        log_path = paths.root / f"training_log_{tag}.jsonl"
+        try:
+            with log_path.open("w", encoding="utf-8") as handle:
+                for row in th:
+                    handle.write(json.dumps(row, default=str) + "\n")
+            artifact_extra["training_log_jsonl"] = str(log_path.resolve())
+        except OSError:
+            LOGGER.warning("Could not write training_log_jsonl for %s", model_name, exc_info=True)
+        try:
+            from ..viz.training import plot_training_dashboard
+
+            plots_dir = paths.root / "plots"
+            plots_dir.mkdir(parents=True, exist_ok=True)
+            plot_training_dashboard(
+                th,
+                model_name=model_name,
+                save_path=plots_dir / f"training_dashboard_{tag}.png",
+            )
+        except Exception:
+            LOGGER.debug(
+                "Training dashboard plot skipped for %s",
+                model_name,
+                exc_info=True,
+            )
     prog_jsonl = paths.root / f"training_progress_{tag}.jsonl"
     if prog_jsonl.is_file() and prog_jsonl.stat().st_size > 0:
         artifact_extra["training_progress_jsonl"] = str(prog_jsonl.resolve())

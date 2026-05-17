@@ -289,6 +289,7 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
                 "train_loss": avg_train_loss,
                 "train_rmse_scaled": train_rmse,
                 "train_rows_this_epoch": int(len(epoch_train_ds)),
+                "lr": float(self.optimizer.param_groups[0]["lr"]),
             }
 
             if use_early_stop:

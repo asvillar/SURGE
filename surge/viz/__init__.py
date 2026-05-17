@@ -25,6 +25,13 @@ from .profiles import (
     plot_profile_band,
     plot_profile_comparison_with_inset,
 )
+from .training import (
+    compare_training_curves,
+    load_training_history,
+    plot_loss_curve,
+    plot_lr_schedule,
+    plot_training_dashboard,
+)
 
 __all__ = [
     # Run viz
@@ -49,6 +56,12 @@ __all__ = [
     "plot_correlation_heatmap",
     "plot_strongest_correlation",
     "plot_data_analysis_suite",
+    # Training curves
+    "load_training_history",
+    "plot_loss_curve",
+    "plot_lr_schedule",
+    "plot_training_dashboard",
+    "compare_training_curves",
 ]
 
 
