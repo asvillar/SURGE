@@ -49,6 +49,9 @@ onnx = ["onnx>=1.14", "onnxscript>=0.1", "onnxruntime>=1.17"]
 dev = ["pytest>=6.0", "pytest-cov", "ruff>=0.1.0", "h5py>=3.0"]
 docs = ["sphinx>=5.0", "furo", "myst-parser"]
 
+[project.scripts]
+surge-benchmark = "surge.benchmarks.run:main"
+
 [project.urls]
 Homepage = "https://github.com/S-Villar/SURGE"
 Documentation = "https://github.com/S-Villar/SURGE/blob/main/docs/README.md"
