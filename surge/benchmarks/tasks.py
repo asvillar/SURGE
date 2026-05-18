@@ -855,9 +855,29 @@ def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None
 # ---------------------------------------------------------------------------
 
 _PDEBENCH_DEFAULTS = {
-    "pdebench.burgers_1d": "sklearn.random_forest",
-    "pdebench.darcy_2d": "sklearn.random_forest",
-    "pdebench.shallow_water_2d": "sklearn.random_forest",
+    # FNO1d is the published baseline for 1D Burgers; CNN1D/DeepONet also valid
+    "pdebench.burgers_1d": "pytorch.fno1d",
+    # 2D cases: flat MLP over the full-resolution field until FNO2D is added
+    "pdebench.darcy_2d": "pytorch.mlp",
+    "pdebench.shallow_water_2d": "pytorch.mlp",
+}
+
+# Raw (full) spatial resolution for all PDEBench benchmarks.
+# Tabular/sklearn/xgboost models are NOT run on these — see _PDEBENCH_SKIP_MODELS.
+_PDEBENCH_REDUCED_RES = {
+    "pdebench.burgers_1d": 1,
+    "pdebench.darcy_2d": 1,
+    "pdebench.shallow_water_2d": 1,
+}
+
+# Models that cannot meaningfully train on PDEBench-scale data.
+# The leaderboard will mark these N/A instead of attempting to train.
+_PDEBENCH_SKIP_MODELS = {
+    "sklearn.random_forest",
+    "sklearn.gradient_boosting",
+    "sklearn.ridge",
+    "sklearn.linear_regression",
+    "xgboost.regressor",
 }
 
 _TASK_TYPE.update({
@@ -883,19 +903,45 @@ def _run_pdebench_benchmark(
     if not H5PY_AVAILABLE:
         raise ImportError("h5py required for PDEBench loaders. pip install h5py")
 
-    X_train, y_train, X_test, y_test = load_pdebench(pdebench_key)
+    red = _PDEBENCH_REDUCED_RES.get(benchmark_key, 1)
+    print(f"[pdebench] Loading {pdebench_key} (res={red}) …", flush=True)
+    X_train, y_train, X_test, y_test = load_pdebench(
+        pdebench_key, reduced_resolution=red
+    )
+    print(
+        f"[pdebench] Loaded — X_train {X_train.shape}, X_test {X_test.shape}",
+        flush=True,
+    )
 
-    key = model_key or _PDEBENCH_DEFAULTS.get(benchmark_key, "sklearn.random_forest")
     from surge.model.registry import MODEL_REGISTRY
+    preferred = model_key or _PDEBENCH_DEFAULTS.get(benchmark_key, "pytorch.mlp")
+
+    # Tabular models are not meaningful at PDEBench scales — raise immediately
+    # so the leaderboard can record N/A rather than wasting time.
+    if preferred in _PDEBENCH_SKIP_MODELS:
+        raise ValueError(
+            f"Model '{preferred}' is not suitable for PDEBench-scale data "
+            f"(high-dimensional PDE fields).  Use a neural operator "
+            f"(pytorch.fno1d, pytorch.deeponet, pytorch.mlp) instead."
+        )
+
+    key = preferred if preferred in MODEL_REGISTRY else "pytorch.mlp"
     adapter = MODEL_REGISTRY.create(key)
 
+    print(f"[pdebench] Training {key} …", flush=True)
     t0 = time.perf_counter()
     adapter.fit(X_train, y_train)
+    print(f"[pdebench] Predicting …", flush=True)
     y_pred = np.asarray(adapter.predict(X_test))
     elapsed = time.perf_counter() - t0
+    print(f"[pdebench] Done — {elapsed:.1f}s", flush=True)
 
     rel_l2 = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
-    metrics: dict = {"test_relative_l2": rel_l2, "runtime_s": elapsed}
+    metrics: dict = {
+        "test_relative_l2": rel_l2,
+        "runtime_s": elapsed,
+        "n_features": X_train.shape[1],
+    }
     return BenchmarkResult(
         benchmark_key=benchmark_key,
         model_key=adapter.name,
@@ -904,7 +950,7 @@ def _run_pdebench_benchmark(
         metrics=metrics,
         passed=rel_l2 < pass_threshold,
         message=description or f"PDEBench {pdebench_key}",
-        extra={"n_train": len(X_train), "n_test": len(X_test)},
+        extra={"n_train": len(X_train), "n_test": len(X_test), "reduced_resolution": red},
     )
 
 

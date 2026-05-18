@@ -80,35 +80,29 @@ _CACHE_DIR = Path.home() / ".surge" / "data" / "pdebench"
 _DATASETS: dict[str, dict[str, Any]] = {
     "burgers_1d": {
         "filename": "1D_Burgers_Sols_Nu0.01.hdf5",
-        "url": (
-            "https://darus.uni-stuttgart.de/api/access/datafile/"
-            ":persistentId?persistentId=doi:10.18419/darus-2986/3"
-        ),
+        # Direct file ID from pdebench/PDEBench pdebench_data_urls.csv
+        "url": "https://darus.uni-stuttgart.de/api/access/datafile/281363",
         "n_samples_train": 900,
         "n_samples_test": 100,
-        "description": "1D Burgers, ν=0.01, shape (1000, 101, 1024, 1)",
+        "description": "1D Burgers ν=0.01, shape (N, T=101, nx=1024)",
         "loader": "_load_burgers_hdf5",
     },
     "darcy_2d": {
         "filename": "2D_DarcyFlow_beta1.0_Train.hdf5",
-        "url": (
-            "https://darus.uni-stuttgart.de/api/access/datafile/"
-            ":persistentId?persistentId=doi:10.18419/darus-2986/8"
-        ),
+        # Direct file ID from pdebench/PDEBench pdebench_data_urls.csv
+        "url": "https://darus.uni-stuttgart.de/api/access/datafile/133219",
         "n_samples_train": 900,
         "n_samples_test": 100,
-        "description": "2D Darcy Flow, beta=1.0, 128×128 grid",
+        "description": "2D Darcy Flow β=1.0, 128×128 grid",
         "loader": "_load_darcy_hdf5",
     },
     "shallow_water_2d": {
         "filename": "2D_rdb_NA_NA.h5",
-        "url": (
-            "https://darus.uni-stuttgart.de/api/access/datafile/"
-            ":persistentId?persistentId=doi:10.18419/darus-2986/27"
-        ),
+        # Direct file ID from pdebench/PDEBench pdebench_data_urls.csv
+        "url": "https://darus.uni-stuttgart.de/api/access/datafile/133021",
         "n_samples_train": 900,
         "n_samples_test": 100,
-        "description": "2D Shallow Water Equations, 128×128 grid",
+        "description": "2D Shallow Water Equations (radial dam-break), 128×128",
         "loader": "_load_shallow_water_hdf5",
     },
 }
@@ -138,6 +132,7 @@ def load_pdebench(
     cache_dir: Path | str | None = None,
     train_samples: int | None = None,
     test_samples: int | None = None,
+    reduced_resolution: int = 1,
     seed: int = 42,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -153,7 +148,10 @@ def load_pdebench(
     cache_dir:
         Override the default ``~/.surge/data/pdebench/`` cache directory.
     train_samples, test_samples:
-        Limit the number of samples loaded (useful for quick tests).
+        Limit the number of samples loaded.
+    reduced_resolution:
+        Spatial downsampling factor (1 = full resolution).  Use 4 or 8 to
+        reduce 128×128 → 32×32 or 16×16 for faster tabular-model baselines.
     seed:
         Random seed for splitting.
 
@@ -184,12 +182,12 @@ def load_pdebench(
             )
         _download(meta["url"], fpath)
 
-    # Dispatch to dataset-specific loader.
     loader_fn = globals()[meta["loader"]]
     X_train, y_train, X_test, y_test = loader_fn(
         fpath,
         n_train=train_samples or meta["n_samples_train"],
         n_test=test_samples or meta["n_samples_test"],
+        reduced_resolution=reduced_resolution,
         seed=seed,
     )
     return X_train, y_train, X_test, y_test
@@ -201,16 +199,21 @@ def load_pdebench(
 
 
 def _download(url: str, dest: Path) -> None:
+    """Download *url* → *dest*, following HTTP 303 redirects (DaRUS → S3)."""
     import urllib.request
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(".tmp")
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
     _LOG.info("Downloading %s → %s", url, dest)
-    print(f"[pdebench] Downloading {dest.name} …")
+    size_hint = _DATASETS.get(_key_for_filename(dest.name), {}).get("description", "")
+    print(f"[pdebench] Downloading {dest.name}  ({size_hint}) …")
+    print(f"[pdebench] This may take a few minutes — files are several hundred MB.")
     try:
+        # urllib follows redirects automatically; DaRUS returns 303 → S3 presigned URL
         urllib.request.urlretrieve(url, tmp)
         tmp.rename(dest)
-        print(f"[pdebench] Saved to {dest}")
+        size_mb = dest.stat().st_size / 1_048_576
+        print(f"[pdebench] ✓ Saved {dest.name}  ({size_mb:.0f} MB)")
     except Exception as exc:
         if tmp.exists():
             tmp.unlink()
@@ -218,8 +221,18 @@ def _download(url: str, dest: Path) -> None:
             f"Download failed for {url!r}.\n"
             "You can manually download the file and place it at:\n"
             f"  {dest}\n"
-            "PDEBench data is available at: https://darus.uni-stuttgart.de/dataverse/pdebench"
+            "PDEBench data: https://darus.uni-stuttgart.de/dataverse/pdebench\n"
+            "Direct file IDs in: https://github.com/pdebench/PDEBench/blob/main/"
+            "pdebench/data_download/pdebench_data_urls.csv"
         ) from exc
+
+
+def _key_for_filename(filename: str) -> str:
+    """Reverse-lookup dataset key by filename (for download messages)."""
+    for k, v in _DATASETS.items():
+        if v["filename"] == filename:
+            return k
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -228,69 +241,71 @@ def _download(url: str, dest: Path) -> None:
 
 
 def _load_burgers_hdf5(
-    path: Path, *, n_train: int, n_test: int, seed: int
+    path: Path, *, n_train: int, n_test: int, reduced_resolution: int = 1, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Burgers 1D (file extension ``.hdf5``).
 
     HDF5 layout (from PDEBench source)::
 
-        f["tensor"]       → (N, T, nx)   # u(x, t)
+        f["tensor"]       → (N, T, nx)   # u(x, t)  N=10000, T=201, nx=1024
         f["x-coordinate"] → (nx,)
 
     Task: predict u(x, T_last) from u(x, 0)  →  IC → final state.
-    X shape: (N, nx),  y shape: (N, nx).
+    X shape: (N, nx//r),  y shape: (N, nx//r).
     """
     import h5py
     from sklearn.model_selection import train_test_split
 
+    r = max(1, int(reduced_resolution))
     with h5py.File(path, "r") as f:
-        data = f["tensor"][()]  # (N, T, nx)
+        data = f["tensor"][:n_train + n_test, :, ::r]  # (n_use, T, nx//r)
 
     N, T, nx = data.shape
-    n_use = min(N, n_train + n_test)
-    data = data[:n_use].astype(np.float32)
-    X = data[:, 0, :]   # IC:          (n_use, nx)
-    y = data[:, -1, :]  # Final state: (n_use, nx)
+    data = data.astype(np.float32)
+    X = data[:, 0, :]   # IC:          (N, nx//r)
+    y = data[:, -1, :]  # Final state: (N, nx//r)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
-        X, y, test_size=n_test / n_use, random_state=seed
+        X, y, test_size=n_test / N, random_state=seed
     )
     return X_tr[:n_train], y_tr[:n_train], X_te[:n_test], y_te[:n_test]
 
 
 def _load_darcy_hdf5(
-    path: Path, *, n_train: int, n_test: int, seed: int
+    path: Path, *, n_train: int, n_test: int, reduced_resolution: int = 1, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Darcy Flow 2D (file extension ``.hdf5``).
 
     HDF5 layout (from PDEBench source)::
 
-        f["tensor"]       → (N, 1, nx, ny)  # solution u(x, y)
+        f["tensor"]       → (N, 1, nx, ny)  # solution u(x, y)  nx=ny=128
         f["nu"]           → (N, nx, ny)     # permeability a(x, y)
         f["x-coordinate"] → (nx,)
         f["y-coordinate"] → (ny,)
 
-    Task: predict u from a  →  flatten both to (N, nx*ny).
+    Task: predict u from a  →  flatten both to (N, (nx//r)*(ny//r)).
+    ``reduced_resolution=4`` → 32×32=1024 features (RF-friendly baseline).
     """
     import h5py
     from sklearn.model_selection import train_test_split
 
+    r = max(1, int(reduced_resolution))
+    n_use = n_train + n_test
     with h5py.File(path, "r") as f:
-        u = f["tensor"][()]  # (N, 1, nx, ny) or (N, nx, ny)
-        a = f["nu"][()]      # (N, nx, ny)
+        u = f["tensor"][:n_use, :, ::r, ::r]  # (n_use, 1, nx//r, ny//r)
+        a = f["nu"][:n_use, ::r, ::r]          # (n_use, nx//r, ny//r)
 
-    # Squeeze singleton time dim if present
+    # Squeeze singleton time dim
     if u.ndim == 4 and u.shape[1] == 1:
-        u = u[:, 0, :, :]  # (N, nx, ny)
+        u = u[:, 0, :, :]
     elif u.ndim == 4:
-        # Multiple time steps — use last
         u = u[:, -1, :, :]
 
-    N = min(a.shape[0], n_train + n_test)
-    X = a[:N].reshape(N, -1).astype(np.float32)
-    y = u[:N].reshape(N, -1).astype(np.float32)
+    N = a.shape[0]
+    X = a.reshape(N, -1).astype(np.float32)
+    y = u.reshape(N, -1).astype(np.float32)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=n_test / N, random_state=seed
@@ -299,41 +314,40 @@ def _load_darcy_hdf5(
 
 
 def _load_shallow_water_hdf5(
-    path: Path, *, n_train: int, n_test: int, seed: int
+    path: Path, *, n_train: int, n_test: int, reduced_resolution: int = 1, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Shallow Water Equations 2D (file extension ``.h5``).
 
     HDF5 layout (from PDEBench source)::
 
-        Top-level keys are zero-padded trajectory IDs: "0001", "0002", …
-        f[key]["data"] → (T, nx, ny, nc)   # nc = number of channels
+        Top-level keys are zero-padded trajectory IDs: "0000", "0001", …
+        f[key]["data"] → (T, nx, ny, nc)   # T=101, nx=ny=128, nc=1
 
     Task: predict final-step height h(x, y, T) from initial h(x, y, 0).
-    Channel 0 = water height.  Flatten spatial → (N, nx*ny).
+    Channel 0 = water height.  Flatten spatial → (N, (nx//r)*(ny//r)).
     """
     import h5py
     from sklearn.model_selection import train_test_split
 
+    r = max(1, int(reduced_resolution))
+    n_use = n_train + n_test
     with h5py.File(path, "r") as f:
-        # Collect all per-trajectory groups (skip metadata-only groups)
         traj_keys = sorted(k for k in f.keys() if "data" in f[k])
-        n_use = min(len(traj_keys), n_train + n_test)
         traj_keys = traj_keys[:n_use]
 
         frames = []
         for k in traj_keys:
-            arr = f[k]["data"][()]  # (T, nx, ny, nc)
+            arr = f[k]["data"][::1, ::r, ::r, :]  # (T, nx//r, ny//r, nc)
             frames.append(arr)
 
-    # Stack → (N, T, nx, ny, nc)
+    # Stack → (N, T, nx//r, ny//r, nc)
     data = np.stack(frames, axis=0).astype(np.float32)
     N, T, nx, ny, nc = data.shape
 
-    # Use height channel (index 0); IC → final state
-    h = data[:, :, :, :, 0]  # (N, T, nx, ny)
-    X = h[:, 0, :, :].reshape(N, -1)   # (N, nx*ny)
-    y = h[:, -1, :, :].reshape(N, -1)  # (N, nx*ny)
+    h = data[:, :, :, :, 0]               # (N, T, nx//r, ny//r)
+    X = h[:, 0, :, :].reshape(N, -1)      # IC
+    y = h[:, -1, :, :].reshape(N, -1)     # final state
 
     X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=n_test / N, random_state=seed

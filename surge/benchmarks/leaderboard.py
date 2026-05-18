@@ -46,8 +46,28 @@ _CLASSIFICATION_MODELS: list[str] = [
 
 
 # Per-benchmark overrides: map a benchmark key to a specific model list.
-# Used for sequence / PDE benchmarks that support structured adapters.
-_BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {}
+# PDEBench benchmarks only use neural-operator / deep-learning models.
+# Tabular/sklearn/XGBoost models are not viable at PDEBench spatial scales
+# and are marked N/A in the leaderboard instead.
+_PDEBENCH_OPERATOR_MODELS: list[str] = []
+try:
+    from surge.model.pytorch import PYTORCH_AVAILABLE as _PT
+    if _PT:
+        _PDEBENCH_OPERATOR_MODELS = [
+            "pytorch.fno1d",
+            "pytorch.deeponet",
+            "pytorch.mlp",
+            "pytorch.residual_mlp",
+            "pytorch.cnn1d",
+        ]
+except Exception:
+    pass
+
+_BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
+    "pdebench.burgers_1d":       _PDEBENCH_OPERATOR_MODELS,
+    "pdebench.darcy_2d":         _PDEBENCH_OPERATOR_MODELS,
+    "pdebench.shallow_water_2d": _PDEBENCH_OPERATOR_MODELS,
+}
 
 
 def _default_models_for(task_type: str, benchmark_key: str | None = None) -> list[str]:
