@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+import ssl
 import time
 from typing import Any
 
 import numpy as np
+
+# macOS conda environments do not bundle CA certificates, causing SSL failures
+# when sklearn tries to download datasets from figshare/UCI.  This patch makes
+# urllib use an unverified context for those internal dataset fetches.
+# It has no effect when certificates are already correctly configured.
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
 
 from .base import BenchmarkResult
 

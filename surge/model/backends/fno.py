@@ -174,8 +174,19 @@ class FNO1dModel:
         torch.manual_seed(self.random_state)
         np.random.seed(self.random_state)
 
-        X3, self._x_was_2d = self._to_3d(np.asarray(X, dtype=float))
-        y3, self._y_was_2d = self._to_3d(np.asarray(y, dtype=float))
+        X_arr = np.asarray(X, dtype=float)
+        y_arr = np.asarray(y, dtype=float)
+
+        if y_arr.ndim == 1:
+            raise ValueError(
+                "FNO1d requires the target y to be a spatial field with shape "
+                "(n_samples, n_x) or (n_samples, n_x, c_out). "
+                "Scalar targets (1-D y) are not supported — use pytorch.mlp or "
+                "sklearn.random_forest for tabular regression instead."
+            )
+
+        X3, self._x_was_2d = self._to_3d(X_arr)
+        y3, self._y_was_2d = self._to_3d(y_arr)
         B, n_x, c_in = X3.shape
         _, _, c_out = y3.shape
 
