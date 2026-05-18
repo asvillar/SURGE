@@ -420,12 +420,20 @@ def _load_yacht_dynamics():
 
 
 def _load_plasma_stability():
-    from sklearn.datasets import fetch_openml
+    import io
+    import urllib.request
+    import pandas as pd
     from sklearn.preprocessing import LabelEncoder
-    data = fetch_openml(name="electricalGrid_stability_simulated", version=1, as_frame=True, parser="auto")
-    X = data.data.values.astype(float)
+
+    _UCI_URL = (
+        "https://archive.ics.uci.edu/ml/machine-learning-databases/00471/Data_for_UCI_named.csv"
+    )
+    with urllib.request.urlopen(_UCI_URL, timeout=30) as resp:
+        df = pd.read_csv(io.BytesIO(resp.read()))
+    feature_cols = [c for c in df.columns if c not in ("stab", "stabf")]
+    X = df[feature_cols].values.astype(float)
     le = LabelEncoder()
-    y = le.fit_transform(data.target.values if hasattr(data.target, "values") else data.target)
+    y = le.fit_transform(df["stabf"].values)
     return X, y
 
 

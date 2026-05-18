@@ -944,21 +944,28 @@ def run_classification_covertype(*, seed: int = 42, model_key: str | None = None
 def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
     """UCI Electrical Grid Stability (plasma-like) — 12→2 classification (Tier 2, requires internet).
 
-    Source: UCI Electrical Grid Stability Simulated Data Set via fetch_openml.
+    Source: Arzamasov et al. 2018, UCI archive (direct CSV download).
     12 features, 10 000 rows, 2 classes (stable / unstable).
     Published RF accuracy ≈ 97.8%.  Pass threshold: ≥ 0.92.
     """
-    from sklearn.datasets import fetch_openml
-    from sklearn.model_selection import train_test_split
-    from sklearn.preprocessing import StandardScaler
+    import io
+    import urllib.request
 
-    data = fetch_openml(name="electricalGrid_stability_simulated", version=1, as_frame=True, parser="auto")
-    X = data.data.values.astype(float)
-    y_raw = data.target
-    # Map classes to ints.
-    from sklearn.preprocessing import LabelEncoder
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import LabelEncoder, StandardScaler
+
+    _UCI_URL = (
+        "https://archive.ics.uci.edu/ml/machine-learning-databases/00471/Data_for_UCI_named.csv"
+    )
+    with urllib.request.urlopen(_UCI_URL, timeout=30) as resp:
+        df = pd.read_csv(io.BytesIO(resp.read()))
+
+    # Features: tau1..tau4, p1..p4, g1..g4  (12 cols); target: stabf (stable/unstable)
+    feature_cols = [c for c in df.columns if c not in ("stab", "stabf")]
+    X = df[feature_cols].values.astype(float)
     le = LabelEncoder()
-    y = le.fit_transform(y_raw if not hasattr(y_raw, "values") else y_raw.values)
+    y = le.fit_transform(df["stabf"].values)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=seed, stratify=y
