@@ -38,6 +38,9 @@ _DEFAULTS: dict[str, str] = {
     "tabular.airfoil_noise": "sklearn.random_forest",
     "tabular.yacht_dynamics": "sklearn.random_forest",
     "classification.plasma_stability": "sklearn.random_forest_classifier",
+    "tabular.superconductor": "sklearn.random_forest",
+    "multioutput.scm20d": "sklearn.random_forest",
+    "classification.covertype": "sklearn.random_forest_classifier",
     "vision.mnist": "pytorch.lenet5",
     "vision.cifar10": "pytorch.resnet20",
     "fusion.mhd_sample": "sklearn.random_forest",
@@ -62,6 +65,9 @@ _TASK_TYPE: dict[str, str] = {
     "tabular.airfoil_noise": "regression",
     "tabular.yacht_dynamics": "regression",
     "classification.plasma_stability": "classification",
+    "tabular.superconductor": "regression",
+    "multioutput.scm20d": "regression",
+    "classification.covertype": "classification",
     "vision.mnist": "classification",
     "vision.cifar10": "classification",
     "fusion.mhd_sample": "regression",
@@ -829,10 +835,9 @@ def run_tabular_superconductor(*, seed: int = 42, model_key: str | None = None) 
         X, y, test_size=0.20, random_state=seed
     )
 
-    key = model_key or "sklearn.random_forest"
-    adapter = _make_adapter(key)
+    adapter = _resolve_model(model_key or "sklearn.random_forest", benchmark_key="tabular.superconductor")
     t0 = time.perf_counter()
-    adapter.fit(X_train, y_train, X_val=X_test, y_val=y_test)
+    adapter.fit(X_train, y_train)
     elapsed = time.perf_counter() - t0
 
     y_pred = adapter.predict(X_test)
@@ -869,10 +874,9 @@ def run_multioutput_scm20d(*, seed: int = 42, model_key: str | None = None) -> "
         X, y, test_size=0.20, random_state=seed
     )
 
-    key = model_key or "sklearn.random_forest"
-    adapter = _make_adapter(key)
+    adapter = _resolve_model(model_key or "sklearn.random_forest", benchmark_key="multioutput.scm20d")
     t0 = time.perf_counter()
-    adapter.fit(X_train, y_train, X_val=X_test, y_val=y_test)
+    adapter.fit(X_train, y_train)
     elapsed = time.perf_counter() - t0
 
     y_pred = adapter.predict(X_test)
@@ -917,10 +921,9 @@ def run_classification_covertype(*, seed: int = 42, model_key: str | None = None
         X_sub, y_sub, test_size=0.20, random_state=seed, stratify=y_sub
     )
 
-    key = model_key or "sklearn.random_forest_classifier"
-    adapter = _make_adapter(key)
+    adapter = _resolve_model(model_key or "sklearn.random_forest_classifier", benchmark_key="classification.covertype")
     t0 = time.perf_counter()
-    adapter.fit(X_train, y_train, X_val=X_test, y_val=y_test)
+    adapter.fit(X_train, y_train)
     elapsed = time.perf_counter() - t0
 
     y_pred = adapter.predict(X_test)
