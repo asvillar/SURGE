@@ -328,6 +328,9 @@ def _load_dataset(benchmark_key: str):
         "tabular.airfoil_noise": lambda: _load_airfoil_noise(),
         "tabular.yacht_dynamics": lambda: _load_yacht_dynamics(),
         "classification.plasma_stability": lambda: _load_plasma_stability(),
+        "tabular.superconductor": lambda: _load_superconductor(),
+        "multioutput.scm20d": lambda: _load_scm20d(),
+        "classification.covertype": lambda: _load_covertype(),
     }
     if benchmark_key not in loaders:
         raise KeyError(f"No dataset loader for {benchmark_key!r}")
@@ -402,7 +405,7 @@ def _load_flow_regime(seed: int = 42):
 
 def _load_airfoil_noise():
     from sklearn.datasets import fetch_openml
-    data = fetch_openml(name="airfoil-self-noise", version=1, as_frame=True, parser="auto")
+    data = fetch_openml(name="airfoil_self_noise", version=1, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     y = data.target.values.astype(float) if hasattr(data.target, "values") else np.asarray(data.target, dtype=float)
     return X, y
@@ -435,6 +438,34 @@ def _load_energy_efficiency():
     return X, y
 
 
+def _load_superconductor():
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml(name="superconduct", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y = data.target.values.astype(float)
+    return X, y
+
+
+def _load_scm20d():
+    from sklearn.datasets import fetch_openml
+    data = fetch_openml(name="scm20d", version=2, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y = data.target.values.astype(float)
+    return X, y
+
+
+def _load_covertype():
+    from sklearn.datasets import fetch_openml
+    from sklearn.preprocessing import LabelEncoder
+    data = fetch_openml(name="covertype", version=3, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    le = LabelEncoder()
+    y = le.fit_transform(data.target.values if hasattr(data.target, "values") else data.target)
+    rng = np.random.default_rng(42)
+    idx = rng.choice(len(y), size=min(20_000, len(y)), replace=False)
+    return X[idx], y[idx]
+
+
 def _check_pass(benchmark_key: str, metrics: dict) -> bool:
     """Best-effort pass check using known thresholds."""
     _THRESHOLDS: dict[str, tuple[str, float]] = {
@@ -455,6 +486,9 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "tabular.airfoil_noise": ("test_r2", 0.80),
         "tabular.yacht_dynamics": ("test_r2", 0.80),
         "classification.plasma_stability": ("test_accuracy", 0.92),
+        "tabular.superconductor": ("test_r2", 0.90),
+        "multioutput.scm20d": ("test_r2", 0.60),
+        "classification.covertype": ("test_accuracy", 0.85),
     }
     if benchmark_key not in _THRESHOLDS:
         return True

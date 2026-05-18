@@ -7,14 +7,17 @@ from typing import Any
 
 from .base import BenchmarkResult
 from .tasks import (
+    run_classification_covertype,
     run_classification_flow_regime,
     run_classification_plasma_stability,
     run_fusion_mhd_sample,
+    run_multioutput_scm20d,
     run_pde_burgers_1d,
     run_pdebench_burgers_1d,
     run_pdebench_darcy_2d,
     run_pdebench_shallow_water_2d,
     run_sequence_lorenz63,
+    run_tabular_superconductor,
     run_thewell_gray_scott,
     run_thewell_mhd,
     run_thewell_turbulence_2d,
@@ -101,6 +104,18 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "tabular.yacht_dynamics": (
         run_tabular_yacht_dynamics, "1", "regression", "6→1",
         "UCI Yacht Hydrodynamics (Gerritsma 1981) [requires internet on first run]",
+    ),
+    "tabular.superconductor": (
+        run_tabular_superconductor, "1", "regression", "81→1",
+        "Superconductor Tc prediction (Hamidieh 2018) — 21k samples, 81 material features [requires internet]",
+    ),
+    "multioutput.scm20d": (
+        run_multioutput_scm20d, "1", "regression", "61→20",
+        "SCM20d supply-chain management multi-output regression (61→20 targets) [requires internet]",
+    ),
+    "classification.covertype": (
+        run_classification_covertype, "1", "classification", "54→7",
+        "Forest Covertype 7-class classification (Blackard & Dean 1999) — 20k subsample [requires internet]",
     ),
     "classification.plasma_stability": (
         run_classification_plasma_stability, "2", "classification", "12→2",

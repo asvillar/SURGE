@@ -811,6 +811,133 @@ def run_tabular_yacht_dynamics(*, seed: int = 42, model_key: str | None = None) 
     )
 
 
+def run_tabular_superconductor(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """Superconductor critical temperature regression (Hamidieh 2018).
+
+    81 material-descriptor features → Tc (K). 21,263 samples.
+    Standard materials-science surrogate benchmark.
+    Pass threshold: R² ≥ 0.90.
+    """
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+
+    data = fetch_openml(name="superconduct", version=1, as_frame=True, parser="auto")
+    X = data.data.values.astype(float)
+    y = data.target.astype(float).values
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.20, random_state=seed
+    )
+
+    key = model_key or "sklearn.random_forest"
+    adapter = _make_adapter(key)
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train, X_val=X_test, y_val=y_test)
+    elapsed = time.perf_counter() - t0
+
+    y_pred = adapter.predict(X_test)
+    metrics = _reg_metrics(y_test, y_pred)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="tabular.superconductor",
+        model_key=adapter.name,
+        tier="1",
+        task_type="regression",
+        metrics=metrics,
+        passed=metrics["test_r2"] >= 0.90,
+        message="Superconductor Tc prediction (Hamidieh 2018) — 81 material features → critical temp",
+        extra={"n_train": len(X_train), "n_test": len(X_test)},
+    )
+
+
+def run_multioutput_scm20d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """SCM20d multi-output regression: 61 features → 20 targets (supply chain management).
+
+    8,966 samples. Widely used multi-target regression benchmark.
+    Pass threshold: average R² ≥ 0.60.
+    """
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+
+    data = fetch_openml(name="scm20d", version=2, as_frame=True, parser="auto")
+    target_cols = list(data.target_names)
+    feature_cols = [c for c in data.data.columns]
+    X = data.data[feature_cols].values.astype(float)
+    y = data.target.values.astype(float)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.20, random_state=seed
+    )
+
+    key = model_key or "sklearn.random_forest"
+    adapter = _make_adapter(key)
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train, X_val=X_test, y_val=y_test)
+    elapsed = time.perf_counter() - t0
+
+    y_pred = adapter.predict(X_test)
+    if y_pred.ndim == 1:
+        y_pred = y_pred.reshape(-1, 1)
+    metrics = _reg_metrics(y_test, y_pred)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="multioutput.scm20d",
+        model_key=adapter.name,
+        tier="1",
+        task_type="regression",
+        metrics=metrics,
+        passed=metrics["test_r2"] >= 0.60,
+        message="SCM20d supply-chain multi-output regression (61→20 targets)",
+        extra={"n_train": len(X_train), "n_test": len(X_test), "n_targets": y.shape[1]},
+    )
+
+
+def run_classification_covertype(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+    """Forest Covertype 7-class classification (Blackard & Dean 1999).
+
+    54 cartographic features → forest cover type (7 classes). Uses 20k-sample
+    stratified subsample for tractable CPU runtimes (full set: 581k).
+    Standard large-tabular classification benchmark.
+    Pass threshold: accuracy ≥ 0.85.
+    """
+    from sklearn.datasets import fetch_openml
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import LabelEncoder
+
+    data = fetch_openml(name="covertype", version=3, as_frame=True, parser="auto")
+    X_full = data.data.values.astype(float)
+    y_full = LabelEncoder().fit_transform(data.target.values)
+
+    # Stratified subsample to 20k for reasonable CPU runtime
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(len(y_full), size=min(20_000, len(y_full)), replace=False)
+    X_sub, y_sub = X_full[idx], y_full[idx]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_sub, y_sub, test_size=0.20, random_state=seed, stratify=y_sub
+    )
+
+    key = model_key or "sklearn.random_forest_classifier"
+    adapter = _make_adapter(key)
+    t0 = time.perf_counter()
+    adapter.fit(X_train, y_train, X_val=X_test, y_val=y_test)
+    elapsed = time.perf_counter() - t0
+
+    y_pred = adapter.predict(X_test)
+    metrics = _clf_metrics(y_test, y_pred, adapter)
+    metrics["runtime_s"] = elapsed
+    return BenchmarkResult(
+        benchmark_key="classification.covertype",
+        model_key=adapter.name,
+        tier="1",
+        task_type="classification",
+        metrics=metrics,
+        passed=metrics["test_accuracy"] >= 0.85,
+        message="Forest Covertype 7-class classification (Blackard & Dean 1999) — 54 cartographic features",
+        extra={"n_train": len(X_train), "n_test": len(X_test), "n_classes": 7},
+    )
+
+
 def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
     """UCI Electrical Grid Stability (plasma-like) — 12→2 classification (Tier 2, requires internet).
 
