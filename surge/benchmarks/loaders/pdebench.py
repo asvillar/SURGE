@@ -28,6 +28,22 @@ Dataset inventory
 | shallow_water_2d  | ~4.2 GB          | see _URLS below            |
 +-------------------+------------------+----------------------------+
 
+HDF5 file structure (from pdebench/PDEBench source)
+----------------------------------------------------
+1D Burgers (``1D_Burgers_Sols_Nu*.hdf5``, extension ``.hdf5``):
+  - ``f["tensor"]``        → (N, T, nx)  — solution u(x, t)
+  - ``f["x-coordinate"]``  → (nx,)
+
+2D Darcy Flow (``2D_DarcyFlow_beta*.hdf5``, extension ``.hdf5``):
+  - ``f["tensor"]``        → (N, 1, nx, ny) — solution u(x, y)
+  - ``f["nu"]``            → (N, nx, ny)    — permeability a(x, y)
+  - Task: predict u from a  (IC → solution)
+
+2D Shallow Water (``2D_rdb_NA_NA.h5``, extension ``.h5``):
+  - Top-level keys are trajectory IDs: ``"0001"``, ``"0002"``, …
+  - ``f[key]["data"]``     → (T, nx, ny, nc)  — per-trajectory fields
+  - ``f["0001"]["grid"]["x"]`` etc. — coordinate grids
+
 References
 ----------
 Takamoto, M. et al. (2022). PDEBench: An Extensive Benchmark for
@@ -85,7 +101,7 @@ _DATASETS: dict[str, dict[str, Any]] = {
         "loader": "_load_darcy_hdf5",
     },
     "shallow_water_2d": {
-        "filename": "2D_rdb_NA_NA.hdf5",
+        "filename": "2D_rdb_NA_NA.h5",
         "url": (
             "https://darus.uni-stuttgart.de/api/access/datafile/"
             ":persistentId?persistentId=doi:10.18419/darus-2986/27"
@@ -215,21 +231,26 @@ def _load_burgers_hdf5(
     path: Path, *, n_train: int, n_test: int, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Burgers 1D: HDF5 shape ``(1000, T, n_x, 1)``.
-    Task: predict u(x, T_last) from u(x, 0).
+    Burgers 1D (file extension ``.hdf5``).
+
+    HDF5 layout (from PDEBench source)::
+
+        f["tensor"]       → (N, T, nx)   # u(x, t)
+        f["x-coordinate"] → (nx,)
+
+    Task: predict u(x, T_last) from u(x, 0)  →  IC → final state.
+    X shape: (N, nx),  y shape: (N, nx).
     """
     import h5py
     from sklearn.model_selection import train_test_split
 
     with h5py.File(path, "r") as f:
-        # Field: (n_samples, T, n_x, 1)
-        key = list(f.keys())[0]
-        data = f[key][()]  # Load fully; shape (N, T, nx, 1)
+        data = f["tensor"][()]  # (N, T, nx)
 
-    N, T, nx, _ = data.shape
+    N, T, nx = data.shape
     n_use = min(N, n_train + n_test)
-    data = data[:n_use, :, :, 0]  # (n_use, T, nx)
-    X = data[:, 0, :]   # IC: (n_use, nx)
+    data = data[:n_use].astype(np.float32)
+    X = data[:, 0, :]   # IC:          (n_use, nx)
     y = data[:, -1, :]  # Final state: (n_use, nx)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
@@ -242,24 +263,34 @@ def _load_darcy_hdf5(
     path: Path, *, n_train: int, n_test: int, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Darcy Flow 2D: HDF5 shape ``(N, nx, ny)``.
-    Task: predict u(x, y) from permeability field a(x, y).
-    Flatten spatial dims → (N, nx*ny).
+    Darcy Flow 2D (file extension ``.hdf5``).
+
+    HDF5 layout (from PDEBench source)::
+
+        f["tensor"]       → (N, 1, nx, ny)  # solution u(x, y)
+        f["nu"]           → (N, nx, ny)     # permeability a(x, y)
+        f["x-coordinate"] → (nx,)
+        f["y-coordinate"] → (ny,)
+
+    Task: predict u from a  →  flatten both to (N, nx*ny).
     """
     import h5py
     from sklearn.model_selection import train_test_split
 
     with h5py.File(path, "r") as f:
-        keys = list(f.keys())
-        # Typically: "nu" (permeability) and "sol" (solution)
-        perm_key = [k for k in keys if "nu" in k.lower() or "perm" in k.lower()][0]
-        sol_key = [k for k in keys if "sol" in k.lower()][0]
-        a = f[perm_key][()]  # (N, nx, ny)
-        u = f[sol_key][()]   # (N, nx, ny)
+        u = f["tensor"][()]  # (N, 1, nx, ny) or (N, nx, ny)
+        a = f["nu"][()]      # (N, nx, ny)
+
+    # Squeeze singleton time dim if present
+    if u.ndim == 4 and u.shape[1] == 1:
+        u = u[:, 0, :, :]  # (N, nx, ny)
+    elif u.ndim == 4:
+        # Multiple time steps — use last
+        u = u[:, -1, :, :]
 
     N = min(a.shape[0], n_train + n_test)
-    X = a[:N].reshape(N, -1).astype(float)
-    y = u[:N].reshape(N, -1).astype(float)
+    X = a[:N].reshape(N, -1).astype(np.float32)
+    y = u[:N].reshape(N, -1).astype(np.float32)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
         X, y, test_size=n_test / N, random_state=seed
@@ -271,32 +302,40 @@ def _load_shallow_water_hdf5(
     path: Path, *, n_train: int, n_test: int, seed: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Shallow Water Equations 2D.
-    Task: predict water height h(x, y, T) from h(x, y, 0).
+    Shallow Water Equations 2D (file extension ``.h5``).
+
+    HDF5 layout (from PDEBench source)::
+
+        Top-level keys are zero-padded trajectory IDs: "0001", "0002", …
+        f[key]["data"] → (T, nx, ny, nc)   # nc = number of channels
+
+    Task: predict final-step height h(x, y, T) from initial h(x, y, 0).
+    Channel 0 = water height.  Flatten spatial → (N, nx*ny).
     """
     import h5py
     from sklearn.model_selection import train_test_split
 
     with h5py.File(path, "r") as f:
-        keys = list(f.keys())
-        # Usually has a "data" field: (N, T, nx, ny, channels)
-        data_key = keys[0]
-        data = f[data_key][()]
+        # Collect all per-trajectory groups (skip metadata-only groups)
+        traj_keys = sorted(k for k in f.keys() if "data" in f[k])
+        n_use = min(len(traj_keys), n_train + n_test)
+        traj_keys = traj_keys[:n_use]
 
-    if data.ndim == 5:
-        N, T, nx, ny, C = data.shape
-        # Use height channel (index 0) only.
-        data = data[:, :, :, :, 0]
-    elif data.ndim == 4:
-        N, T, nx, ny = data.shape
-    else:
-        raise ValueError(f"Unexpected HDF5 shape {data.shape} for shallow water")
+        frames = []
+        for k in traj_keys:
+            arr = f[k]["data"][()]  # (T, nx, ny, nc)
+            frames.append(arr)
 
-    N_use = min(N, n_train + n_test)
-    X = data[:N_use, 0, :, :].reshape(N_use, -1).astype(float)
-    y = data[:N_use, -1, :, :].reshape(N_use, -1).astype(float)
+    # Stack → (N, T, nx, ny, nc)
+    data = np.stack(frames, axis=0).astype(np.float32)
+    N, T, nx, ny, nc = data.shape
+
+    # Use height channel (index 0); IC → final state
+    h = data[:, :, :, :, 0]  # (N, T, nx, ny)
+    X = h[:, 0, :, :].reshape(N, -1)   # (N, nx*ny)
+    y = h[:, -1, :, :].reshape(N, -1)  # (N, nx*ny)
 
     X_tr, X_te, y_tr, y_te = train_test_split(
-        X, y, test_size=n_test / N_use, random_state=seed
+        X, y, test_size=n_test / N, random_state=seed
     )
     return X_tr[:n_train], y_tr[:n_train], X_te[:n_test], y_te[:n_test]
