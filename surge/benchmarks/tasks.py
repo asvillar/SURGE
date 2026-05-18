@@ -1021,9 +1021,8 @@ def _load_mnist_arrays(data_dir: str | None = None) -> tuple[np.ndarray, np.ndar
     except ImportError as exc:
         raise ImportError("torchvision required for vision benchmarks. pip install torchvision") from exc
 
-    root = data_dir or str(np.lib.npyio._file_openers.__module__.split(".")[0])  # dummy; use default
     from pathlib import Path
-    root = str(Path.home() / ".surge" / "data" / "torchvision")
+    root = str(Path(data_dir) if data_dir else Path.home() / ".surge" / "data" / "torchvision")
 
     transform = T.Compose([T.ToTensor()])
     train_ds = torchvision.datasets.MNIST(root, train=True, download=True, transform=transform)
