@@ -260,9 +260,13 @@ def run_tabular_concrete_strength(*, seed: int = 42, model_key: str | None = Non
     from sklearn.datasets import fetch_openml
     from sklearn.model_selection import train_test_split
 
-    data = fetch_openml(name="concrete-strength", version=1, as_frame=True, parser="auto")
-    X = data.data.values.astype(float)
-    y = data.target.values.astype(float)
+    # data_id=4353 is "Concrete_Data" (Yeh 1998): 1030 samples, 8 features.
+    # The last column is the target — no named target in this OpenML entry.
+    data = fetch_openml(data_id=4353, as_frame=True, parser="auto")
+    df = data.frame
+    target_col = df.columns[-1]
+    X = df.iloc[:, :-1].values.astype(float)
+    y = df[target_col].values.astype(float)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
 
     adapter = _resolve_model(model_key, "tabular.concrete_strength")
@@ -749,7 +753,9 @@ def run_tabular_airfoil_noise(*, seed: int = 42, model_key: str | None = None) -
     from sklearn.datasets import fetch_openml
     from sklearn.model_selection import train_test_split
 
-    data = fetch_openml(name="airfoil-self-noise", version=1, as_frame=True, parser="auto")
+    # "airfoil_self_noise" (underscore) is the correct OpenML name.
+    # "airfoil-self-noise" (hyphen, version 1) no longer exists in the registry.
+    data = fetch_openml(name="airfoil_self_noise", version=1, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     y_raw = data.target
     y = y_raw.values.astype(float) if hasattr(y_raw, "values") else np.asarray(y_raw, dtype=float)

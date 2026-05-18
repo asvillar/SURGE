@@ -64,6 +64,9 @@ except Exception:
     pass
 
 _BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
+    # Inline PDE benchmark (64-pt grid, no download) — operator models only
+    "pde.burgers_1d":            _PDEBENCH_OPERATOR_MODELS,
+    # Real PDEBench HDF5 data — operator models only, tabular models are N/A
     "pdebench.burgers_1d":       _PDEBENCH_OPERATOR_MODELS,
     "pdebench.darcy_2d":         _PDEBENCH_OPERATOR_MODELS,
     "pdebench.shallow_water_2d": _PDEBENCH_OPERATOR_MODELS,
@@ -90,9 +93,13 @@ def _default_models_for(task_type: str, benchmark_key: str | None = None) -> lis
             if PYTORCH_AVAILABLE:
                 base.append("pytorch.mlp")
                 base.append("pytorch.residual_mlp")
-                # Sequence models added for all regression benchmarks
-                # (they handle flat input internally).
+                # Sequence/temporal models handle flat input internally — valid
+                # for tabular and sequence benchmarks alike.
                 base.extend(["pytorch.cnn1d", "pytorch.lstm", "pytorch.gru"])
+                # NOTE: pytorch.fno1d and pytorch.deeponet are NOT added here.
+                # They are PDE spatial-field operators that require y.ndim >= 2
+                # (shape (N, nx)).  They are only valid for pdebench.* and
+                # pde.* benchmarks, and appear via _BENCHMARK_MODEL_OVERRIDES.
         except Exception:
             pass
         return base
