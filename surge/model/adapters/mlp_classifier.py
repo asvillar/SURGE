@@ -66,9 +66,6 @@ class MLPClassifierAdapter(BaseModelAdapter):
         """Return class probability matrix (n_samples × n_classes)."""
         return self._model.predict_proba(X)
 
-    def training_history(self) -> list[dict]:
-        return getattr(self._model, "training_history", [])
-
     def save(self, path: Any) -> None:
         self._model.save(str(path))
 

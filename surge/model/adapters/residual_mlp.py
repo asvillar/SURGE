@@ -64,9 +64,6 @@ class ResidualMLPAdapter(BaseModelAdapter):
     def predict(self, X: Any) -> Any:
         return self._model.predict(X)
 
-    def training_history(self) -> list[dict]:
-        return getattr(self._model, "training_history", [])
-
     def save(self, path: Any) -> None:
         self._model.save(str(path))
 
