@@ -4,9 +4,48 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..base import BaseModelAdapter
+from ..base import BaseModelAdapter, ModelInfo
 from ..pytorch import PYTORCH_AVAILABLE
 from ...hpc import ResourceProfile
+
+_RNN_INFO = ModelInfo(
+    architecture=(
+        "Stacked LSTM/GRU with configurable hidden size and depth. "
+        "Input shape (B, T, features) → output (B, T, targets). "
+        "StandardScaler applied to X and y; early stopping on validation loss."
+    ),
+    use_cases=[
+        "Time-series forecasting (Lorenz-63/96, plasma control signals)",
+        "Sequence-to-sequence regression where temporal order matters",
+        "Surrogate models for dynamical systems with memory effects",
+    ],
+    not_for=[
+        "Static tabular regression — tree models and MLPs are faster and more accurate",
+        "Image or 2-D spatial data — use CNN2D or ViT",
+        "Very long sequences (> 1000 steps) — use Transformer instead",
+    ],
+    strengths=[
+        "Captures temporal dependencies and long-range order",
+        "Works well on plasma disruption precursor sequences",
+        "Bidirectional option doubles representational capacity",
+    ],
+    weaknesses=[
+        "Slower to train than MLP on same data size",
+        "Vanishing gradients on sequences > 200 steps despite LSTM gating",
+        "Underperforms tree ensembles on non-temporal tabular benchmarks",
+    ],
+    references=[
+        "Hochreiter & Schmidhuber (1997) Long Short-Term Memory. Neural Computation.",
+        "Cho et al. (2014) Learning Phrase Representations using RNN Encoder-Decoder. EMNLP.",
+        "Grinsztajn et al. (2022) Why tree-based models still outperform deep learning on "
+        "tabular data. NeurIPS. https://arxiv.org/abs/2207.08815",
+    ],
+    notes=(
+        "Grinsztajn et al. (2022) showed that on static tabular benchmarks, "
+        "gradient-boosted trees and MLPs consistently outperform LSTMs/GRUs. "
+        "Use these models only when temporal ordering is meaningful."
+    ),
+)
 
 _RNN_PROFILE = ResourceProfile(
     name="pytorch.rnn",
@@ -61,6 +100,7 @@ class LSTMAdapter(_RNNAdapterBase):
     backend = "pytorch"
     uses_internal_preprocessing = True
     _backend_cls_name = "LSTMModel"
+    _INFO = _RNN_INFO
 
 
 class GRUAdapter(_RNNAdapterBase):
@@ -69,3 +109,4 @@ class GRUAdapter(_RNNAdapterBase):
     backend = "pytorch"
     uses_internal_preprocessing = True
     _backend_cls_name = "GRUModel"
+    _INFO = _RNN_INFO

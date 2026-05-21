@@ -112,6 +112,8 @@ class _RNNModel:
         patience: int = 20,
         device: Optional[str] = None,
         random_state: int = 42,
+        verbose: bool = False,
+        log_file: str | None = None,
         **_: Any,
     ) -> None:
         if not TORCH_AVAILABLE:
@@ -128,6 +130,8 @@ class _RNNModel:
         self.patience = patience
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.random_state = random_state
+        self.verbose = verbose
+        self.log_file = log_file
 
         self._net: Any = None
         self.scaler_X = StandardScaler()
@@ -145,6 +149,9 @@ class _RNNModel:
 
         X_arr = np.asarray(X, dtype=float)
         y_arr = np.asarray(y, dtype=float)
+        # Ensure at least 2D for shape[1] access throughout.
+        if y_arr.ndim == 1:
+            y_arr = y_arr[:, np.newaxis]
         B, feat_x = X_arr.shape[0], X_arr.shape[1] if X_arr.ndim == 2 else X_arr.shape[1] * X_arr.shape[2]
         if X_arr.ndim == 3:
             X_arr = X_arr.reshape(B, -1)
@@ -190,7 +197,11 @@ class _RNNModel:
         best_val = float("inf")
         best_state = None
         no_improve = 0
-        self.training_history = []
+        from ._progress import ProgressList
+        self.training_history = ProgressList(
+            self.n_epochs, verbose=self.verbose,
+            log_file=self.log_file, desc=type(self).__name__,
+        )
 
         for epoch in range(self.n_epochs):
             self._net.train()
@@ -222,6 +233,7 @@ class _RNNModel:
 
         if best_state is not None:
             self._net.load_state_dict(best_state)
+        self.training_history.close()
         self.is_fitted = True
         return self
 
@@ -242,7 +254,11 @@ class _RNNModel:
         ).to(self.device)
         with torch.no_grad():
             out = self._net(Xt).cpu().numpy()
-        return self.scaler_y.inverse_transform(out)
+        result = self.scaler_y.inverse_transform(out)
+        # If original y was 1D (scalar), ravel the output.
+        if self._T_out == 1 and self._n_state == 1:
+            return result.ravel()
+        return result
 
     def save(self, path: str) -> None:
         import joblib
