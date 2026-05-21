@@ -114,6 +114,8 @@ class CNN1DModel:
         out_channels: Optional[int] = None,
         device: Optional[str] = None,
         random_state: int = 42,
+        verbose: bool = False,
+        log_file: str | None = None,
         **_: Any,
     ) -> None:
         if not TORCH_AVAILABLE:
@@ -130,6 +132,8 @@ class CNN1DModel:
         self._out_channels = out_channels
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.random_state = random_state
+        self.verbose = verbose
+        self.log_file = log_file
 
         self._net: Any = None
         self.scaler_X = StandardScaler()
@@ -143,7 +147,17 @@ class CNN1DModel:
 
     @staticmethod
     def _to_3d(arr: np.ndarray) -> tuple[np.ndarray, bool]:
-        """Return (arr_3d, was_2d) where arr_3d has shape (B, n_x, C)."""
+        """Return (arr_3d, was_2d) where arr_3d has shape (B, n_x, C).
+
+        CNN1D is a sequence-to-sequence model — both X and y must have the
+        same spatial length n_x.  Scalar (1-D) targets are not supported;
+        use ``pytorch.mlp`` or ``pytorch.residual_mlp`` for tabular data.
+        """
+        if arr.ndim == 1:
+            raise ValueError(
+                "CNN1D requires sequence targets (2-D or 3-D y). "
+                "For scalar targets use pytorch.mlp or pytorch.residual_mlp."
+            )
         if arr.ndim == 2:
             return arr[:, :, np.newaxis], True
         return arr, False
@@ -207,7 +221,11 @@ class CNN1DModel:
         best_val = float("inf")
         best_state = None
         no_improve = 0
-        self.training_history = []
+        from ._progress import ProgressList
+        self.training_history = ProgressList(
+            self.n_epochs, verbose=self.verbose,
+            log_file=self.log_file, desc=type(self).__name__,
+        )
 
         for epoch in range(self.n_epochs):
             self._net.train()
@@ -239,6 +257,7 @@ class CNN1DModel:
 
         if best_state is not None:
             self._net.load_state_dict(best_state)
+        self.training_history.close()
         self.is_fitted = True
         return self
 
