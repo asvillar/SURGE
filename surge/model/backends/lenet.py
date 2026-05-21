@@ -92,6 +92,8 @@ class LeNet5Model:
         lr_decay_epochs: int = 10,
         device: Optional[str] = None,
         random_state: int = 42,
+        verbose: bool = False,
+        log_file: str | None = None,
         **_: Any,
     ) -> None:
         if not TORCH_AVAILABLE:
@@ -107,6 +109,8 @@ class LeNet5Model:
         self.lr_decay_epochs = lr_decay_epochs
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.random_state = random_state
+        self.verbose = verbose
+        self.log_file = log_file
         self._net: Any = None
         self.is_fitted = False
         self.training_history: list[dict] = []
@@ -144,7 +148,11 @@ class LeNet5Model:
         best_acc = -1.0
         best_state = None
         no_improve = 0
-        self.training_history = []
+        from ._progress import ProgressList
+        self.training_history = ProgressList(
+            self.n_epochs, verbose=self.verbose,
+            log_file=self.log_file, desc=type(self).__name__,
+        )
 
         for epoch in range(self.n_epochs):
             self._net.train()
@@ -179,6 +187,7 @@ class LeNet5Model:
 
         if best_state is not None:
             self._net.load_state_dict(best_state)
+        self.training_history.close()
         self.is_fitted = True
         return self
 
