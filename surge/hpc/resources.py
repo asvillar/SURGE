@@ -26,7 +26,11 @@ except ImportError:  # pragma: no cover
     TORCH_AVAILABLE = False
 
 
-@dataclass(slots=True)
+import sys as _sys
+_DATACLASS_KWARGS = {"slots": True} if _sys.version_info >= (3, 10) else {}
+
+
+@dataclass(**_DATACLASS_KWARGS)
 class ComputeResources:
     scheduler: Optional[str]
     n_cpus: int
