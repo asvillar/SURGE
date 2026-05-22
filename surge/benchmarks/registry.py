@@ -5,12 +5,16 @@ Each benchmark has a **category** that describes its scientific purpose:
     smoke       — inline synthetic fixtures; used only for fast unit-level
                   CI smoke tests.  Never shown in --list by default.
     tabular     — real-world tabular regression / classification datasets.
-                  UCI legacy datasets live here alongside modern CTR-23 sets.
-    vision      — image classification (CIFAR-10, MNIST).
-    pde         — PDE / operator-learning problems (Burgers, Darcy, …).
+                  Includes UCI legacy, modern CTR-23, multi-output regression
+                  (SCM20d), and sequence-to-sequence tasks solvable by any
+                  tabular regressor (Lorenz-63 windowed prediction).
+    image       — image tensor (H×W×C) input / output, e.g. CIFAR-10, MNIST.
+                  (Legacy alias: ``vision``.)
+    field       — discretised function/field → function/field.  ``field`` covers
+                  any benchmark whose input and output are discretised
+                  functions/fields, including but not limited to PDEs.
+                  (Legacy alias: ``pde``.)
     plasma      — fusion / plasma-physics surrogates (QLKNN, ConStellaration, …).
-    sequence    — time-series / forecasting (Lorenz-63).
-    multioutput — multi-target regression.
 
 The ``surge run -b cifar10 -m all`` short-name syntax is handled via
 ``_SHORT_ALIASES`` below and resolved in ``run.py``.
@@ -57,7 +61,8 @@ from .tasks import (
 # ─── Benchmark metadata ───────────────────────────────────────────────────────
 # Each entry: (runner_fn, category, task_type, shape_desc, description)
 #
-# category choices: smoke | tabular | vision | pde | plasma | sequence | multioutput
+# category choices: smoke | tabular | image | field | plasma
+# Legacy aliases: vision→image, pde→field, sequence→tabular, multioutput→tabular
 #
 # 'smoke' benchmarks are hidden from --list by default (pass --smoke to show).
 # All other categories are shown and are selectable with --category <name>.
@@ -173,55 +178,56 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
 
     # ── Multi-output tabular ───────────────────────────────────────────────────
     "multioutput.scm20d": (
-        run_multioutput_scm20d, "multioutput", "regression", "61→16 (n=9,803)",
+        run_multioutput_scm20d, "tabular", "regression", "61→16 (n=9,803)",
         "SCM20d supply-chain management multi-output regression [requires internet]",
     ),
 
-    # ── Vision ────────────────────────────────────────────────────────────────
+    # ── Image (H×W×C tensor → label) ─────────────────────────────────────────
     "vision.mnist": (
-        run_vision_mnist, "vision", "classification", "784→10 (n=70k)",
+        run_vision_mnist, "image", "classification", "784→10 (n=70k)",
         "MNIST digit recognition (LeCun et al. 1998) — top-1 accuracy "
         "[LeNet-5 ref: 99.2%, requires torchvision]",
     ),
     "vision.cifar10": (
-        run_vision_cifar10, "vision", "classification", "3072→10 (n=60k)",
+        run_vision_cifar10, "image", "classification", "3072→10 (n=60k)",
         "CIFAR-10 image classification (Krizhevsky 2009) — top-1 accuracy "
         "[ResNet-20 ref: 91.3%, requires torchvision]",
     ),
 
-    # ── Sequence / time-series ────────────────────────────────────────────────
+    # ── Sequence / windowed prediction (tabular interface) ────────────────────
     "sequence.lorenz63": (
-        run_sequence_lorenz63, "sequence", "regression", "60→60 (n=1,200)",
-        "Lorenz-63 RK-4 short-horizon prediction (inline, no download)",
+        run_sequence_lorenz63, "tabular", "regression", "60→60 (n=1,200)",
+        "Lorenz-63 RK-4 short-horizon prediction — windowed 20-step input/output, "
+        "inline ODE solver (no download)",
     ),
 
-    # ── PDE / operator learning ───────────────────────────────────────────────
+    # ── Field (discretised function/field → function/field) ───────────────────
     "pde.burgers_1d": (
-        run_pde_burgers_1d, "pde", "regression", "64→64 (n=1,024)",
+        run_pde_burgers_1d, "field", "regression", "64→64 (n=1,024)",
         "Viscous Burgers 1D operator learning — inline FD solver (n_x=64, ν=0.01)",
     ),
     "pdebench.burgers_1d": (
-        run_pdebench_burgers_1d, "pde", "regression", "1024→1024 (n=9,000)",
+        run_pdebench_burgers_1d, "field", "regression", "1024→1024 (n=9,000)",
         "PDEBench 1D Burgers ν=0.01 (Takamoto et al. NeurIPS 2022) [requires HDF5 download]",
     ),
     "pdebench.darcy_2d": (
-        run_pdebench_darcy_2d, "pde", "regression", "128×128→128×128 (n=10,000)",
+        run_pdebench_darcy_2d, "field", "regression", "128×128→128×128 (n=10,000)",
         "PDEBench 2D Darcy Flow β=1.0 (Takamoto et al. NeurIPS 2022) [requires HDF5 download]",
     ),
     "pdebench.shallow_water_2d": (
-        run_pdebench_shallow_water_2d, "pde", "regression", "128×128→128×128 (n=1,000)",
+        run_pdebench_shallow_water_2d, "field", "regression", "128×128→128×128 (n=1,000)",
         "PDEBench 2D Shallow Water Equations (Takamoto et al. NeurIPS 2022) [requires HDF5 download]",
     ),
     "thewell.gray_scott": (
-        run_thewell_gray_scott, "pde", "regression", "64×64×2→64×64×2",
+        run_thewell_gray_scott, "field", "regression", "64×64×2→64×64×2",
         "TheWell Gray-Scott reaction-diffusion (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
     ),
     "thewell.turbulence_2d": (
-        run_thewell_turbulence_2d, "pde", "regression", "64×64×4→64×64×4",
+        run_thewell_turbulence_2d, "field", "regression", "64×64×4→64×64×4",
         "TheWell 2D homogeneous turbulence (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
     ),
     "thewell.mhd": (
-        run_thewell_mhd, "pde", "regression", "64³×8→64³×8",
+        run_thewell_mhd, "field", "regression", "64³×8→64³×8",
         "TheWell 3D MHD turbulence (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
     ),
 
@@ -341,19 +347,28 @@ def list_benchmarks(
     Parameters
     ----------
     category:
-        One of ``tabular``, ``vision``, ``pde``, ``plasma``, ``sequence``,
-        ``multioutput``, or ``smoke``.
+        One of ``tabular``, ``image``, ``field``, ``plasma``, or ``smoke``.
+        Legacy aliases are accepted: ``vision`` → ``image``, ``pde`` → ``field``,
+        ``sequence`` → ``tabular``, ``multioutput`` → ``tabular``.
     task_type:
         ``regression`` or ``classification``.
     include_smoke:
         If *False* (default), synthetic smoke-test benchmarks are excluded.
         Pass *True* or ``--smoke`` from the CLI to include them.
     """
+    _CAT_ALIASES = {
+        "vision": "image",       # legacy
+        "pde": "field",          # legacy
+        "sequence": "tabular",   # legacy
+        "multioutput": "tabular", # legacy
+    }
+    effective_category = _CAT_ALIASES.get(category, category) if category else None
+
     keys = []
     for k, (_, cat, tt, _, _) in _META.items():
         if not include_smoke and cat == "smoke":
             continue
-        if category is not None and cat != category:
+        if effective_category is not None and cat != effective_category:
             continue
         if task_type is not None and tt != task_type:
             continue

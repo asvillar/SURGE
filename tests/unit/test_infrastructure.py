@@ -317,3 +317,28 @@ def test_benchmark_runner_works_tabular():
     )
     assert result is not None
     assert "test_r2" in result.metrics
+
+
+def test_legacy_category_aliases_resolve():
+    """vision→image and pde→field aliases must return the same keys."""
+    from surge.benchmarks.registry import list_benchmarks
+
+    vision_keys = list_benchmarks(category="vision")
+    image_keys = list_benchmarks(category="image")
+    assert vision_keys == image_keys and len(image_keys) > 0, (
+        f"vision alias mismatch: {vision_keys} != {image_keys}"
+    )
+
+    pde_keys = list_benchmarks(category="pde")
+    field_keys = list_benchmarks(category="field")
+    assert pde_keys == field_keys and len(field_keys) > 0, (
+        f"pde alias mismatch: {pde_keys} != {field_keys}"
+    )
+
+    # Canonical names appear in the returned category metadata
+    for key in image_keys:
+        from surge.benchmarks.registry import benchmark_info
+        assert benchmark_info(key)["category"] == "image"
+    for key in field_keys:
+        from surge.benchmarks.registry import benchmark_info
+        assert benchmark_info(key)["category"] == "field"
