@@ -68,6 +68,7 @@ class VAEAdapter(BaseModelAdapter):
         "latent_dim": 16,
         "hidden_dim": 128,
         "beta": 1.0,
+        "regression_weight": 1.0,
         "task": "regression",
         "n_epochs": 200,
         "learning_rate": 1e-3,

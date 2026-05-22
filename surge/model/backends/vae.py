@@ -106,6 +106,7 @@ class VAEModel:
         latent_dim: int = 16,
         hidden_dim: int = 128,
         beta: float = 1.0,
+        regression_weight: float = 1.0,
         task: str = "regression",
         n_epochs: int = 200,
         learning_rate: float = 1e-3,
@@ -122,6 +123,7 @@ class VAEModel:
         self.latent_dim = latent_dim
         self.hidden_dim = hidden_dim
         self.beta = beta
+        self.regression_weight = regression_weight
         self.task = task
         self.n_epochs = n_epochs
         self.learning_rate = learning_rate
@@ -166,7 +168,10 @@ class VAEModel:
         else:
             yt = torch.from_numpy(ys.ravel().astype(np.int64))
 
-        loader = DataLoader(TensorDataset(Xt, yt), batch_size=self.batch_size, shuffle=True)
+        # Cap batch size to at most 10% of training data so small datasets
+        # (e.g. diabetes, n=309 train) get enough gradient steps per epoch.
+        eff_bs = min(self.batch_size, max(32, len(Xt) // 10))
+        loader = DataLoader(TensorDataset(Xt, yt), batch_size=eff_bs, shuffle=True)
         recon_loss = nn.MSELoss(reduction="sum")
         task_loss_fn = nn.MSELoss() if self.task == "regression" else nn.CrossEntropyLoss()
 
@@ -186,10 +191,13 @@ class VAEModel:
                 xb, yb = xb.to(self.device), yb.to(self.device)
                 optimizer.zero_grad()
                 y_hat, x_hat, mu, logvar = self._net(xb)
-                rl = recon_loss(x_hat, xb) / len(xb)
+                # Normalise reconstruction loss per feature so it doesn't
+                # dominate on high-dimensional inputs.
+                rl = recon_loss(x_hat, xb) / (len(xb) * xb.shape[1])
                 kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 tl = task_loss_fn(y_hat, yb)
-                loss = rl + self.beta * kl + tl
+                # regression_weight amplifies task signal relative to ELBO.
+                loss = rl + self.beta * kl + self.regression_weight * tl
                 loss.backward()
                 optimizer.step()
                 eloss += loss.item() * len(xb)
