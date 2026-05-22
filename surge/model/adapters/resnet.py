@@ -4,9 +4,46 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..base import BaseModelAdapter
+from ..base import BaseModelAdapter, ModelInfo
 from ..pytorch import PYTORCH_AVAILABLE
 from ...hpc import ResourceProfile
+
+_RESNET_INFO = ModelInfo(
+    architecture=(
+        "ResNet for CIFAR-10 (He et al. 2016): a stack of residual blocks where each "
+        "block computes F(x) + x via a shortcut connection. For CIFAR-10 the network "
+        "uses three stages of 2n blocks each (n=3 → ResNet-20 with ~0.27M params; "
+        "n=9 → ResNet-56 with ~0.85M params), with 3×3 convolutions, batch "
+        "normalisation, and ReLU. The skip connections solve the vanishing gradient "
+        "problem, enabling training of networks far deeper than AlexNet."
+    ),
+    use_cases=[
+        "Image classification on CIFAR-10/100 — the canonical small-image CNN benchmark",
+        "Strong convolutional baseline to compare against attention-based models (ViT)",
+        "Transfer learning feature extractor when fine-tuned on domain-specific images",
+    ],
+    not_for=[
+        "Tabular or 1D data — use pytorch.mlp or pytorch.ft_transformer",
+        "Very high-resolution images — use torchvision ResNet-50/101 with ImageNet weights",
+    ],
+    strengths=[
+        "Residual connections allow training of very deep networks reliably",
+        "State-of-the-art CIFAR-10 accuracy: ResNet-20 ≈ 91.3%, ResNet-56 ≈ 93.0% "
+        "(He et al. 2016, Table 6)",
+        "Computationally efficient: ResNet-20 trains in minutes on a single GPU",
+        "Strong inductive bias for local spatial structure via convolutions",
+    ],
+    weaknesses=[
+        "Fixed receptive field — cannot attend to global context without many layers",
+        "Performance saturates with depth on CIFAR without wider channels (see WideResNet)",
+    ],
+    references=[
+        "He et al. (2016) 'Deep Residual Learning for Image Recognition' "
+        "CVPR 2016. https://arxiv.org/abs/1512.03385",
+        "He et al. (2016) 'Identity Mappings in Deep Residual Networks' "
+        "ECCV 2016. https://arxiv.org/abs/1603.05027",
+    ],
+)
 
 _RESNET_PROFILE = ResourceProfile(
     name="pytorch.resnet_cifar",
@@ -19,6 +56,7 @@ _RESNET_PROFILE = ResourceProfile(
 
 class _ResNetCIFARAdapter(BaseModelAdapter):
     resource_profile = _RESNET_PROFILE
+    _INFO = _RESNET_INFO
     task_type = "classification"
     _n: int = 3  # overridden by subclasses
     default_params: dict[str, Any] = {
