@@ -228,8 +228,8 @@ def main(argv: list[str] | None = None) -> int:
         epilog=__doc__,
     )
     # ── selection ────────────────────────────────────────────────────────────
-    ap.add_argument("--benchmark", "-b", metavar="KEY",
-                    help="Benchmark registry key (see --list).")
+    ap.add_argument("--benchmark", "-b", metavar="KEY", nargs="+",
+                    help="One or more benchmark registry keys (see --list).")
     ap.add_argument("--model", "-m", metavar="KEY", default=None,
                     help="Model registry key (default: per-benchmark default). See --list-models.")
     ap.add_argument("--all", "-a", dest="run_all", action="store_true",
@@ -239,6 +239,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--task-type", metavar="TYPE",
                     help="Filter by task type (regression|classification). Works with --list, --all, --leaderboard.")
     ap.add_argument("--seed", type=int, default=42, help="Random seed. Default: 42.")
+    ap.add_argument("--seeds", type=int, default=1, metavar="N",
+                    help=(
+                        "Number of evaluation seeds for the leaderboard. "
+                        "Seeds seed, seed+1, … seed+N-1 are used. "
+                        "Results are reported as mean ± std. Default: 1."
+                    ))
     # ── leaderboard ──────────────────────────────────────────────────────────
     ap.add_argument("--leaderboard", action="store_true",
                     help=(
@@ -275,11 +281,26 @@ def main(argv: list[str] | None = None) -> int:
                     help="Cap n_epochs for PyTorch models during HPO trials. Default: 50.")
     ap.add_argument("--list-hpo-models", action="store_true",
                     help="Print model keys that have a registered HPO search space and exit.")
+    ap.add_argument("--use-hpo-cache", action="store_true",
+                    help=(
+                        "Load previously cached best hyperparameters from "
+                        "benchmark_reports/hpo_cache/ (written by --hpo) and use them "
+                        "in the leaderboard run.  Falls back to defaults when no cache exists."
+                    ))
     # ── listing ──────────────────────────────────────────────────────────────
     ap.add_argument("--list", "-l", action="store_true",
                     help="Print registered benchmark keys and exit.")
     ap.add_argument("--verbose", "-v", action="store_true",
-                    help="With --list: show tier, task_type, shape, and description.")
+                    help="With --list: show tier, task_type, shape, and description. "
+                         "With --benchmark: show a live tqdm training progress bar for PyTorch models.")
+    ap.add_argument("--train-log-file", metavar="PATH", default=None,
+                    help=(
+                        "Stream per-epoch loss records to this JSONL file during training. "
+                        "Each run appends to the file (separated by a sentinel line). "
+                        "Can be plotted at any time with: "
+                        "python -c \"from surge.model import plot_training_history; "
+                        "plot_training_history(log_file='PATH')\""
+                    ))
     ap.add_argument("--list-models", action="store_true",
                     help="Print all models available in MODEL_REGISTRY and exit.")
     # ── persistence ──────────────────────────────────────────────────────────
@@ -334,17 +355,18 @@ def main(argv: list[str] | None = None) -> int:
         if not args.model:
             print("ERROR: --hpo requires --model KEY", file=sys.stderr)
             return 1
+        hpo_bm_key = args.benchmark[0] if isinstance(args.benchmark, list) else args.benchmark
 
         from .hpo import print_hpo_summary, run_benchmark_hpo
 
         print(
-            f"\nHPO: {args.benchmark}  /  {args.model}"
+            f"\nHPO: {hpo_bm_key}  /  {args.model}"
             f"  ({args.hpo_trials} trials)",
             file=sys.stderr,
         )
 
         result, best_params = run_benchmark_hpo(
-            args.benchmark,
+            hpo_bm_key,
             args.model,
             n_trials=args.hpo_trials,
             seed=args.seed,
@@ -364,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
         print_hpo_summary(
             result,
             best_params,
-            benchmark_key=args.benchmark,
+            benchmark_key=hpo_bm_key,
             model_key=args.model,
             n_trials=args.hpo_trials,
             metric=metric_used,
@@ -386,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.all_benchmarks or (not args.benchmark):
             bm_keys = list_benchmarks(tier=args.tier, task_type=args.task_type)
         else:
-            bm_keys = [args.benchmark]
+            bm_keys = args.benchmark if isinstance(args.benchmark, list) else [args.benchmark]
 
         if not bm_keys:
             print("No benchmarks match the specified filters.", file=sys.stderr)
@@ -407,7 +429,9 @@ def main(argv: list[str] | None = None) -> int:
             bm_keys,
             model_keys=custom_models,
             seed=args.seed,
+            n_seeds=getattr(args, "seeds", 1),
             save_root=None if args.no_save else args.save_dir,
+            use_hpo_cache=getattr(args, "use_hpo_cache", False),
         )
 
         # Print per-benchmark tables.
@@ -488,11 +512,32 @@ def main(argv: list[str] | None = None) -> int:
     if not args.benchmark:
         ap.error("provide --benchmark KEY, --all, --leaderboard, --list, or --list-models")
 
+    # Normalise to list.
+    bm_key_list = args.benchmark if isinstance(args.benchmark, list) else [args.benchmark]
+    single_bm_key = bm_key_list[0]
+
+    # If multiple benchmarks given without --leaderboard, run each sequentially.
+    if len(bm_key_list) > 1 and not args.compare_models:
+        results = []
+        any_failed = False
+        for bk in bm_key_list:
+            try:
+                r = run_benchmark(bk, seed=args.seed, model_key=args.model)
+                _print_result_banner(r)
+                _persist(r, save_root=args.save_dir, no_save=args.no_save)
+                results.append(r)
+                if not r.passed:
+                    any_failed = True
+            except Exception as exc:
+                print(f"Error running {bk}: {exc}", file=sys.stderr)
+                any_failed = True
+        return 1 if any_failed else 0
+
     # If --compare-models is given without --leaderboard, run as a mini-leaderboard.
     if args.compare_models:
         models = [m.strip() for m in args.compare_models.split(",") if m.strip()]
         lb_results = run_leaderboard(
-            [args.benchmark],
+            bm_key_list,
             model_keys=models,
             seed=args.seed,
             save_root=None if args.no_save else args.save_dir,
@@ -508,8 +553,26 @@ def main(argv: list[str] | None = None) -> int:
         any_failed = any(not r.passed for rl in lb_results.values() for r in rl)
         return 1 if any_failed else 0
 
+    # Build extra model kwargs for verbose / log-file monitoring.
+    _monitor_kwargs: dict = {}
+    if args.verbose:
+        _monitor_kwargs["verbose"] = True
+    if getattr(args, "train_log_file", None):
+        _monitor_kwargs["log_file"] = args.train_log_file
+
     try:
-        result = run_benchmark(args.benchmark, seed=args.seed, model_key=args.model)
+        if _monitor_kwargs and args.model:
+            # When monitoring is requested with an explicit model, bypass the
+            # task function and run directly so kwargs reach the backend.
+            from .leaderboard import _run_with_adapter
+            from surge.model.registry import MODEL_REGISTRY
+            adapter = MODEL_REGISTRY.create(args.model, **_monitor_kwargs)
+            result = _run_with_adapter(single_bm_key, adapter, seed=args.seed)
+            if result is None:
+                print("Error: benchmark run failed (see stderr above).", file=sys.stderr)
+                return 1
+        else:
+            result = run_benchmark(single_bm_key, seed=args.seed, model_key=args.model)
     except KeyError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2

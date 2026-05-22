@@ -77,14 +77,18 @@ _TASK_TYPE: dict[str, str] = {
 }
 
 
-def _resolve_model(model_key: str | None, benchmark_key: str) -> Any:
+def _resolve_model(
+    model_key: str | None,
+    benchmark_key: str,
+    model_kwargs: dict | None = None,
+) -> Any:
     """Return a fitted-ready adapter instance from MODEL_REGISTRY."""
     from surge.model.registry import MODEL_REGISTRY
 
     key = model_key or _DEFAULTS.get(benchmark_key)
     if key is None:
         raise ValueError(f"No default model for {benchmark_key!r}. Pass --model KEY.")
-    return MODEL_REGISTRY.create(key)
+    return MODEL_REGISTRY.create(key, **(model_kwargs or {}))
 
 
 def _fit_predict_regression(adapter: Any, X_train, y_train, X_test):
@@ -150,6 +154,60 @@ def _reg_metrics(y_test, y_pred) -> dict[str, float]:
     return {"test_r2": r2, "test_rmse": rmse}
 
 
+def _uq_metrics(y_true, mean_pred, std_pred, *, coverage: float = 0.95) -> dict[str, float]:
+    """Compute uncertainty-quantification metrics for probabilistic regressors.
+
+    Parameters
+    ----------
+    y_true:   Ground-truth targets, shape (n,).
+    mean_pred: Predictive mean, shape (n,).
+    std_pred:  Predictive standard deviation, shape (n,).
+    coverage:  Nominal coverage for the prediction interval (default 0.95).
+
+    Returns
+    -------
+    dict with keys:
+    - ``uq_picp``  — Prediction Interval Coverage Probability (ideal = coverage).
+    - ``uq_mpiw``  — Mean Prediction Interval Width (lower = sharper, normalised by y_std).
+    - ``uq_crps``  — Mean Continuous Ranked Probability Score (lower = better).
+    - ``uq_nll``   — Mean Gaussian negative log-likelihood (lower = better).
+    """
+    from scipy import stats
+
+    y = np.asarray(y_true, dtype=float).ravel()
+    mu = np.asarray(mean_pred, dtype=float).ravel()
+    sigma = np.asarray(std_pred, dtype=float).ravel()
+    sigma = np.maximum(sigma, 1e-8)  # avoid division by zero
+
+    z = stats.norm.ppf(0.5 + coverage / 2)
+    lower = mu - z * sigma
+    upper = mu + z * sigma
+
+    # PICP: fraction of y within the interval
+    picp = float(np.mean((y >= lower) & (y <= upper)))
+
+    # MPIW: mean interval width, normalised by y std so it is scale-free
+    y_std = float(np.std(y)) or 1.0
+    mpiw = float(np.mean(upper - lower)) / y_std
+
+    # CRPS for Gaussian predictive distribution (analytical formula)
+    z_score = (y - mu) / sigma
+    phi = stats.norm.pdf(z_score)
+    Phi = stats.norm.cdf(z_score)
+    crps_per_sample = sigma * (z_score * (2 * Phi - 1) + 2 * phi - 1.0 / np.sqrt(np.pi))
+    crps = float(np.mean(crps_per_sample))
+
+    # Gaussian NLL
+    nll = float(np.mean(0.5 * np.log(2 * np.pi * sigma**2) + 0.5 * ((y - mu) / sigma) ** 2))
+
+    return {
+        "uq_picp": picp,
+        "uq_mpiw": mpiw,
+        "uq_crps": crps,
+        "uq_nll": nll,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tier 0
 # ---------------------------------------------------------------------------
@@ -164,7 +222,7 @@ def run_synthetic_regression_1d(*, seed: int = 42, n_samples: int = 400, model_k
     y = 3.0 * X.ravel() + 1.5 + 0.15 * rng.standard_normal(n_samples)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=seed)
 
-    adapter = _resolve_model(model_key, "synthetic.regression_1d")
+    adapter = _resolve_model(model_key, "synthetic.regression_1d", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
@@ -192,7 +250,7 @@ def run_synthetic_classification_binary(*, seed: int = 42, n_samples: int = 500,
         X, y, test_size=0.25, random_state=seed, stratify=y
     )
 
-    adapter = _resolve_model(model_key, "synthetic.classification_binary")
+    adapter = _resolve_model(model_key, "synthetic.classification_binary", model_kwargs=None)
     y_pred, y_prob, elapsed = _fit_predict_classification(adapter, X_train, y_train, X_test)
     metrics = _clf_metrics(y_test, y_pred, y_prob)
     metrics["runtime_s"] = elapsed
@@ -221,7 +279,7 @@ def run_tabular_diabetes(*, seed: int = 42, model_key: str | None = None) -> Ben
     X, y = load_diabetes(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=seed)
 
-    adapter = _resolve_model(model_key, "tabular.diabetes")
+    adapter = _resolve_model(model_key, "tabular.diabetes", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
@@ -245,7 +303,7 @@ def run_tabular_california_housing(*, seed: int = 42, model_key: str | None = No
     X, y = fetch_california_housing(return_X_y=True)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
 
-    adapter = _resolve_model(model_key, "tabular.california_housing")
+    adapter = _resolve_model(model_key, "tabular.california_housing", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
@@ -275,7 +333,7 @@ def run_tabular_concrete_strength(*, seed: int = 42, model_key: str | None = Non
     y = df[target_col].values.astype(float)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
 
-    adapter = _resolve_model(model_key, "tabular.concrete_strength")
+    adapter = _resolve_model(model_key, "tabular.concrete_strength", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
@@ -306,7 +364,7 @@ def run_tabular_iris(*, seed: int = 42, model_key: str | None = None) -> Benchma
         X, y, test_size=0.25, random_state=seed, stratify=y
     )
 
-    adapter = _resolve_model(model_key, "tabular.iris")
+    adapter = _resolve_model(model_key, "tabular.iris", model_kwargs=None)
     y_pred, y_prob, elapsed = _fit_predict_classification(adapter, X_train, y_train, X_test)
     metrics = _clf_metrics(y_test, y_pred, y_prob)
     metrics["runtime_s"] = elapsed
@@ -336,7 +394,7 @@ def run_tabular_breast_cancer(*, seed: int = 42, model_key: str | None = None) -
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
 
-    adapter = _resolve_model(model_key, "tabular.breast_cancer")
+    adapter = _resolve_model(model_key, "tabular.breast_cancer", model_kwargs=None)
     y_pred, y_prob, elapsed = _fit_predict_classification(adapter, X_train, y_train, X_test)
     metrics = _clf_metrics(y_test, y_pred, y_prob)
     metrics["runtime_s"] = elapsed
@@ -366,7 +424,7 @@ def run_tabular_wine(*, seed: int = 42, model_key: str | None = None) -> Benchma
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
 
-    adapter = _resolve_model(model_key, "tabular.wine")
+    adapter = _resolve_model(model_key, "tabular.wine", model_kwargs=None)
     y_pred, y_prob, elapsed = _fit_predict_classification(adapter, X_train, y_train, X_test)
     metrics = _clf_metrics(y_test, y_pred, y_prob)
     metrics["runtime_s"] = elapsed
@@ -393,7 +451,7 @@ def run_synthetic_multioutput_2d(*, seed: int = 42, n_samples: int = 600, model_
     Y = X @ A + noise
     X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.25, random_state=seed)
 
-    adapter = _resolve_model(model_key, "synthetic.multioutput_2d")
+    adapter = _resolve_model(model_key, "synthetic.multioutput_2d", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     # Per-output r² then averaged.
     from sklearn.metrics import r2_score
@@ -424,7 +482,7 @@ def run_tabular_energy_efficiency(*, seed: int = 42, model_key: str | None = Non
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
 
-    adapter = _resolve_model(model_key, "tabular.energy_efficiency")
+    adapter = _resolve_model(model_key, "tabular.energy_efficiency", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
@@ -454,7 +512,7 @@ def run_tabular_digits(*, seed: int = 42, model_key: str | None = None) -> Bench
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
 
-    adapter = _resolve_model(model_key, "tabular.digits")
+    adapter = _resolve_model(model_key, "tabular.digits", model_kwargs=None)
     y_pred, y_prob, elapsed = _fit_predict_classification(adapter, X_train, y_train, X_test)
     metrics = _clf_metrics(y_test, y_pred, y_prob)
     metrics["runtime_s"] = elapsed
@@ -525,7 +583,8 @@ def _generate_lorenz_trajectories(
     return np.array(X_list), np.array(y_list)
 
 
-def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """Lorenz-63 one-step and short-horizon prediction (Tier 0, inline ODE).
 
     Data
@@ -625,7 +684,8 @@ def _generate_burgers_dataset(
     return np.array(X_list), np.array(y_list)
 
 
-def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """Viscous Burgers 1D operator learning (Tier 1, inline solver, no download).
 
     Data
@@ -675,7 +735,8 @@ def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None) -> "Benc
 # ---------------------------------------------------------------------------
 
 
-def run_classification_flow_regime(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_classification_flow_regime(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """CFD flow regime classification (Tier 0, inline fixture, no download).
 
     Data
@@ -749,7 +810,8 @@ def run_classification_flow_regime(*, seed: int = 42, model_key: str | None = No
     )
 
 
-def run_tabular_airfoil_noise(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_tabular_airfoil_noise(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """NASA Airfoil Self-Noise — 5→1 regression (Tier 1, requires internet on first run).
 
     Source: UCI via fetch_openml (ID 4544).
@@ -768,7 +830,7 @@ def run_tabular_airfoil_noise(*, seed: int = 42, model_key: str | None = None) -
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
 
-    adapter = _resolve_model(model_key, "tabular.airfoil_noise")
+    adapter = _resolve_model(model_key, "tabular.airfoil_noise", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
@@ -784,7 +846,8 @@ def run_tabular_airfoil_noise(*, seed: int = 42, model_key: str | None = None) -
     )
 
 
-def run_tabular_yacht_dynamics(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_tabular_yacht_dynamics(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """Yacht Hydrodynamics — 6→1 regression (Tier 1, requires internet on first run).
 
     Source: UCI via fetch_openml.  Residuary resistance of sailing yachts.
@@ -801,7 +864,7 @@ def run_tabular_yacht_dynamics(*, seed: int = 42, model_key: str | None = None) 
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
 
-    adapter = _resolve_model(model_key, "tabular.yacht_dynamics")
+    adapter = _resolve_model(model_key, "tabular.yacht_dynamics", model_kwargs=None)
     y_pred, elapsed = _fit_predict_regression(adapter, X_train, y_train, X_test)
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
@@ -817,7 +880,8 @@ def run_tabular_yacht_dynamics(*, seed: int = 42, model_key: str | None = None) 
     )
 
 
-def run_tabular_superconductor(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_tabular_superconductor(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """Superconductor critical temperature regression (Hamidieh 2018).
 
     81 material-descriptor features → Tc (K). 21,263 samples.
@@ -855,7 +919,8 @@ def run_tabular_superconductor(*, seed: int = 42, model_key: str | None = None) 
     )
 
 
-def run_multioutput_scm20d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_multioutput_scm20d(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """SCM20d multi-output regression: 61 features → 20 targets (supply chain management).
 
     8,966 samples. Widely used multi-target regression benchmark.
@@ -896,7 +961,8 @@ def run_multioutput_scm20d(*, seed: int = 42, model_key: str | None = None) -> "
     )
 
 
-def run_classification_covertype(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_classification_covertype(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """Forest Covertype 7-class classification (Blackard & Dean 1999).
 
     54 cartographic features → forest cover type (7 classes). Uses 20k-sample
@@ -941,7 +1007,8 @@ def run_classification_covertype(*, seed: int = 42, model_key: str | None = None
     )
 
 
-def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """UCI Electrical Grid Stability (plasma-like) — 12→2 classification (Tier 2, requires internet).
 
     Source: Arzamasov et al. 2018, UCI archive (direct CSV download).
@@ -1107,7 +1174,8 @@ def _run_pdebench_benchmark(
     )
 
 
-def run_pdebench_burgers_1d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_pdebench_burgers_1d(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """PDEBench Burgers 1D (Tier 3, HDF5 download required).
 
     Published FNO baseline relative-L2 ≈ 0.64% (Li et al. 2021).
@@ -1120,7 +1188,8 @@ def run_pdebench_burgers_1d(*, seed: int = 42, model_key: str | None = None) -> 
     )
 
 
-def run_pdebench_darcy_2d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_pdebench_darcy_2d(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """PDEBench Darcy Flow 2D (Tier 3, HDF5 download required).
 
     Published FNO baseline relative-L2 ≈ 0.90%.
@@ -1133,7 +1202,8 @@ def run_pdebench_darcy_2d(*, seed: int = 42, model_key: str | None = None) -> "B
     )
 
 
-def run_pdebench_shallow_water_2d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_pdebench_shallow_water_2d(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """PDEBench 2D Shallow Water Equations (Tier 3, HDF5 download required).
 
     Pass threshold: relative-L2 < 20%.
@@ -1211,7 +1281,8 @@ def _load_cifar10_arrays() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     return X_train, y_train, X_test, y_test
 
 
-def run_vision_mnist(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_vision_mnist(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """MNIST digit classification (Tier 2, requires torchvision + internet on first run).
 
     Published LeNet-5 baseline: 99.05% top-1 accuracy (LeCun 1998).
@@ -1248,7 +1319,8 @@ def run_vision_mnist(*, seed: int = 42, model_key: str | None = None) -> "Benchm
     )
 
 
-def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """CIFAR-10 image classification (Tier 2, requires torchvision + internet on first run).
 
     Published baselines (He et al. 2016):
@@ -1292,7 +1364,8 @@ def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None) -> "Benc
 # ---------------------------------------------------------------------------
 
 
-def run_fusion_mhd_sample(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_fusion_mhd_sample(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """MHD-code equilibrium surrogate sample (Tier 2).
 
     Data
@@ -1406,7 +1479,8 @@ def _run_thewell_benchmark(
     )
 
 
-def run_thewell_gray_scott(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_thewell_gray_scott(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """Gray-Scott reaction-diffusion (Tier 4, TheWell, requires the-well package + download)."""
     return _run_thewell_benchmark(
         "gray_scott", "thewell.gray_scott", model_key,
@@ -1414,7 +1488,8 @@ def run_thewell_gray_scott(*, seed: int = 42, model_key: str | None = None) -> "
     )
 
 
-def run_thewell_turbulence_2d(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_thewell_turbulence_2d(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """2D homogeneous turbulence (Tier 4, TheWell, requires the-well package + download)."""
     return _run_thewell_benchmark(
         "turbulence_2d", "thewell.turbulence_2d", model_key,
@@ -1422,7 +1497,8 @@ def run_thewell_turbulence_2d(*, seed: int = 42, model_key: str | None = None) -
     )
 
 
-def run_thewell_mhd(*, seed: int = 42, model_key: str | None = None) -> "BenchmarkResult":
+def run_thewell_mhd(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
     """3D MHD turbulence (Tier 4, TheWell, requires the-well package + download)."""
     return _run_thewell_benchmark(
         "mhd", "thewell.mhd", model_key,

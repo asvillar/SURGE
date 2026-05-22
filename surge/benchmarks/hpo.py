@@ -217,6 +217,130 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [64, 128, 256]),
         "weight_decay": ("float_log", 1e-5, 1e-2),
     },
+    # ------------------------------------------------------------------
+    # Phase 1 — BoTorch GP
+    # ------------------------------------------------------------------
+    "botorch.gp": {
+        "kernel": ("categorical", ["rbf", "matern", "rbf_matern"]),
+        "n_train_iter": ("int", 50, 300),
+        "learning_rate": ("float_log", 1e-3, 0.5),
+        "noise_init": ("float_log", 1e-3, 1.0),
+    },
+    "botorch.sparse_gp": {
+        "n_inducing": ("categorical", [100, 200, 500]),
+        "n_train_iter": ("int", 50, 300),
+        "learning_rate": ("float_log", 1e-4, 0.1),
+        "batch_size": ("categorical", [128, 256, 512]),
+    },
+    # ------------------------------------------------------------------
+    # Phase 2 — KAN
+    # ------------------------------------------------------------------
+    "pytorch.kan": {
+        "hidden_dims": ("categorical", [
+            [32, 32], [64, 64], [128, 128],
+            [64, 64, 64], [128, 64, 64],
+        ]),
+        "grid_size": ("categorical", [3, 5, 8, 10]),
+        "spline_order": ("categorical", [2, 3, 4]),
+        "learning_rate": ("float_log", 1e-4, 1e-2),
+        "batch_size": ("categorical", [64, 128, 256]),
+    },
+    "pytorch.kan_classifier": {
+        "hidden_dims": ("categorical", [
+            [32, 32], [64, 64], [128, 128],
+            [64, 64, 64], [128, 64, 64],
+        ]),
+        "grid_size": ("categorical", [3, 5, 8]),
+        "spline_order": ("categorical", [2, 3, 4]),
+        "learning_rate": ("float_log", 1e-4, 1e-2),
+        "batch_size": ("categorical", [64, 128, 256]),
+    },
+    # ------------------------------------------------------------------
+    # Phase 3 — FT-Transformer
+    # ------------------------------------------------------------------
+    "pytorch.ft_transformer": {
+        "d_model": ("categorical", [64, 128, 256]),
+        "n_heads": ("categorical", [4, 8]),
+        "n_layers": ("int", 1, 6),
+        "ffn_factor": ("float", 2.0, 6.0),
+        "dropout": ("float", 0.0, 0.4),
+        "learning_rate": ("float_log", 1e-5, 1e-3),
+        "batch_size": ("categorical", [64, 128, 256]),
+    },
+    "pytorch.ft_transformer_classifier": {
+        "d_model": ("categorical", [64, 128, 256]),
+        "n_heads": ("categorical", [4, 8]),
+        "n_layers": ("int", 1, 6),
+        "ffn_factor": ("float", 2.0, 6.0),
+        "dropout": ("float", 0.0, 0.4),
+        "learning_rate": ("float_log", 1e-5, 1e-3),
+        "batch_size": ("categorical", [64, 128, 256]),
+    },
+    # ------------------------------------------------------------------
+    # Phase 4 — Vision (ViT, AlexNet)
+    # ------------------------------------------------------------------
+    "pytorch.vit": {
+        "d_model": ("categorical", [64, 128, 192]),
+        "n_heads": ("categorical", [4, 8]),
+        "n_layers": ("int", 2, 8),
+        "patch_size": ("categorical", [2, 4, 7]),
+        "dropout": ("float", 0.0, 0.3),
+        "learning_rate": ("float_log", 1e-5, 1e-3),
+        "batch_size": ("categorical", [64, 128]),
+    },
+    "pytorch.alexnet": {
+        "dropout_fc": ("float", 0.2, 0.7),
+        "learning_rate": ("float_log", 1e-4, 1e-2),
+        "weight_decay": ("float_log", 1e-5, 1e-3),
+        "batch_size": ("categorical", [64, 128, 256]),
+    },
+    # ------------------------------------------------------------------
+    # Phase 5 — 2D PDE (FNO2d, U-Net)
+    # ------------------------------------------------------------------
+    "pytorch.fno2d": {
+        "n_modes": ("categorical", [8, 12, 16, 20]),
+        "hidden_channels": ("categorical", [16, 32, 64]),
+        "n_layers": ("int", 2, 6),
+        "learning_rate": ("float_log", 1e-4, 5e-3),
+        "batch_size": ("categorical", [4, 8, 16]),
+    },
+    "pytorch.unet": {
+        "base_channels": ("categorical", [16, 32, 64]),
+        "depth": ("int", 2, 4),
+        "learning_rate": ("float_log", 1e-4, 5e-3),
+        "batch_size": ("categorical", [4, 8, 16]),
+    },
+    # ------------------------------------------------------------------
+    # Phase 6 — VAE
+    # ------------------------------------------------------------------
+    "pytorch.vae": {
+        "latent_dim": ("categorical", [8, 16, 32, 64]),
+        "hidden_dim": ("categorical", [64, 128, 256]),
+        "beta": ("float_log", 0.01, 10.0),
+        "learning_rate": ("float_log", 1e-4, 1e-2),
+        "batch_size": ("categorical", [64, 128, 256]),
+    },
+    # ------------------------------------------------------------------
+    # Phase 7 — DDPM
+    # ------------------------------------------------------------------
+    "pytorch.ddpm": {
+        "n_timesteps": ("categorical", [100, 200, 500]),
+        "hidden_channels": ("categorical", [32, 64, 128]),
+        "learning_rate": ("float_log", 1e-4, 1e-2),
+        "batch_size": ("categorical", [32, 64, 128]),
+    },
+    # ------------------------------------------------------------------
+    # Phase 8 — CGAN
+    # ------------------------------------------------------------------
+    "pytorch.cgan": {
+        "latent_dim": ("categorical", [16, 32, 64]),
+        "hidden_channels": ("categorical", [64, 128, 256]),
+        "learning_rate_g": ("float_log", 1e-4, 1e-2),
+        "learning_rate_d": ("float_log", 1e-4, 1e-2),
+        "n_gen_layers": ("int", 2, 4),
+        "n_disc_layers": ("int", 2, 4),
+        "batch_size": ("categorical", [32, 64, 128]),
+    },
 }
 
 # Primary metric to maximise/minimise per task type.
@@ -481,6 +605,10 @@ def run_benchmark_hpo(
     if save_root is not None and result is not None:
         result.save(root=save_root)
 
+    # Persist best HP to a human-readable cache file for leaderboard reuse.
+    if save_root is not None and best_params:
+        save_hpo_cache(benchmark_key, model_key, best_params, root=Path(save_root))
+
     # MLflow logging.
     if mlflow_experiment and result is not None:
         _log_hpo_to_mlflow(
@@ -634,3 +762,57 @@ def print_hpo_summary(
     passed = "PASS" if result.passed else "FAIL"
     print(f"  Status: [{passed}]")
     print("═" * w)
+
+
+# ---------------------------------------------------------------------------
+# HPO cache helpers
+# ---------------------------------------------------------------------------
+
+def _hpo_cache_path(benchmark_key: str, model_key: str, root: Path) -> Path:
+    safe_bm = benchmark_key.replace(".", "_")
+    safe_model = model_key.replace(".", "_")
+    return root / "hpo_cache" / f"{safe_bm}__{safe_model}.json"
+
+
+def save_hpo_cache(
+    benchmark_key: str,
+    model_key: str,
+    best_params: dict,
+    root: Path = Path("benchmark_reports"),
+) -> Path:
+    """Persist *best_params* to a JSON cache file.
+
+    Returns the path where it was written.
+    """
+    import json
+
+    path = _hpo_cache_path(benchmark_key, model_key, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "benchmark_key": benchmark_key,
+        "model_key": model_key,
+        "best_params": best_params,
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def load_hpo_cache(
+    benchmark_key: str,
+    model_key: str,
+    root: Path = Path("benchmark_reports"),
+) -> dict | None:
+    """Load cached HP for a (benchmark, model) pair.
+
+    Returns ``None`` when no cache exists.
+    """
+    import json
+
+    path = _hpo_cache_path(benchmark_key, model_key, root)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("best_params")
+    except Exception:
+        return None
