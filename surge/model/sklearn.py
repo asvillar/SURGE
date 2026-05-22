@@ -250,3 +250,245 @@ class LogisticRegressionAdapter(SklearnClassifierAdapter):
         "max_iter": 1000,
         "random_state": 42,
     }
+
+
+# ---------------------------------------------------------------------------
+# Ridge — linear regression baseline
+# ---------------------------------------------------------------------------
+
+from sklearn.linear_model import Ridge  # noqa: E402
+
+
+_RIDGE_PROFILE = ResourceProfile(
+    name="sklearn.ridge",
+    supports_cpu=True,
+    supports_gpu=False,
+    worker_semantics="none",
+    notes="Ridge regression; fast linear baseline.",
+)
+
+
+class RidgeRegressorAdapter(SklearnRegressorAdapter):
+    """Ridge (L2-penalised) linear regression — the simplest sensible baseline.
+
+    Use this first: if Ridge can't fit the data, check preprocessing.
+    Published R² on UCI benchmarks (with std scaling) — Concrete ≈ 0.61,
+    Energy ≈ 0.90, Yacht ≈ 0.64, Airfoil ≈ 0.52, California ≈ 0.60.
+    """
+
+    name = "sklearn.ridge"
+    estimator_cls = Ridge
+    resource_profile = _RIDGE_PROFILE
+    default_params = {"alpha": 1.0, "random_state": 42}
+
+    def _build_model(self, **kwargs: Any) -> Any:
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+
+        params = dict(self.default_params)
+        params.update(kwargs)
+        # Always scale features — Ridge is not scale-invariant.
+        return Pipeline([
+            ("scaler", StandardScaler()),
+            ("ridge", Ridge(alpha=params.get("alpha", 1.0))),
+        ])
+
+
+# ---------------------------------------------------------------------------
+# LightGBM
+# ---------------------------------------------------------------------------
+
+
+class LGBMRegressorAdapter(BaseModelAdapter):
+    """LightGBM gradient-boosted trees regressor.
+
+    Requires ``lightgbm`` (pip install lightgbm).
+    Fast, memory-efficient GBM often competitive with XGBoost.
+    """
+
+    name = "lgbm.regressor"
+    backend = "lightgbm"
+
+    default_params: dict[str, Any] = {
+        "n_estimators": 500,
+        "learning_rate": 0.05,
+        "num_leaves": 31,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "random_state": 42,
+        "n_jobs": -1,
+        "verbose": -1,
+    }
+
+    def _build_model(self, **kwargs: Any) -> Any:
+        try:
+            import lightgbm as lgb
+        except ImportError as e:
+            raise ImportError("pip install lightgbm") from e
+        params = dict(self.default_params)
+        params.update(kwargs)
+        return lgb.LGBMRegressor(**params)
+
+    def fit(self, X: Any, y: Any) -> None:
+        import numpy as np, warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            self._model.fit(np.asarray(X), np.asarray(y).ravel())
+
+    def predict(self, X: Any) -> Any:
+        import numpy as np, warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            return self._model.predict(np.asarray(X))
+
+    def save(self, path: str) -> None:
+        import joblib
+        joblib.dump(self._model, path)
+
+    def load(self, path: str) -> None:
+        import joblib
+        self._model = joblib.load(path)
+
+
+class LGBMClassifierAdapter(BaseModelAdapter):
+    """LightGBM gradient-boosted trees classifier."""
+
+    name = "lgbm.classifier"
+    backend = "lightgbm"
+
+    default_params: dict[str, Any] = {
+        "n_estimators": 300,
+        "learning_rate": 0.05,
+        "num_leaves": 31,
+        "random_state": 42,
+        "n_jobs": -1,
+        "verbose": -1,
+    }
+
+    def _build_model(self, **kwargs: Any) -> Any:
+        try:
+            import lightgbm as lgb
+        except ImportError as e:
+            raise ImportError("pip install lightgbm") from e
+        params = dict(self.default_params)
+        params.update(kwargs)
+        return lgb.LGBMClassifier(**params)
+
+    def fit(self, X: Any, y: Any) -> None:
+        import numpy as np
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            self._model.fit(np.asarray(X), np.asarray(y).ravel())
+
+    def predict(self, X: Any) -> Any:
+        import numpy as np
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            return self._model.predict(np.asarray(X))
+
+    def predict_proba(self, X: Any) -> Any:
+        import numpy as np
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            return self._model.predict_proba(np.asarray(X))
+
+    def save(self, path: str) -> None:
+        import joblib
+        joblib.dump(self._model, path)
+
+    def load(self, path: str) -> None:
+        import joblib
+        self._model = joblib.load(path)
+
+
+# ---------------------------------------------------------------------------
+# CatBoost
+# ---------------------------------------------------------------------------
+
+
+class CatBoostRegressorAdapter(BaseModelAdapter):
+    """CatBoost gradient-boosted trees regressor.
+
+    Requires ``catboost`` (pip install catboost).
+    Handles categorical features natively; strong default HP.
+    """
+
+    name = "catboost.regressor"
+    backend = "catboost"
+
+    default_params: dict[str, Any] = {
+        "iterations": 500,
+        "learning_rate": 0.05,
+        "depth": 6,
+        "random_seed": 42,
+        "verbose": 0,
+    }
+
+    def _build_model(self, **kwargs: Any) -> Any:
+        try:
+            from catboost import CatBoostRegressor
+        except ImportError as e:
+            raise ImportError("pip install catboost") from e
+        params = dict(self.default_params)
+        params.update(kwargs)
+        return CatBoostRegressor(**params)
+
+    def fit(self, X: Any, y: Any) -> None:
+        self._model.fit(X, y)
+
+    def predict(self, X: Any) -> Any:
+        return self._model.predict(X)
+
+    def save(self, path: str) -> None:
+        self._model.save_model(path)
+
+    def load(self, path: str) -> None:
+        from catboost import CatBoostRegressor
+        m = CatBoostRegressor()
+        m.load_model(path)
+        self._model = m
+
+
+class CatBoostClassifierAdapter(BaseModelAdapter):
+    """CatBoost gradient-boosted trees classifier."""
+
+    name = "catboost.classifier"
+    backend = "catboost"
+
+    default_params: dict[str, Any] = {
+        "iterations": 300,
+        "learning_rate": 0.05,
+        "depth": 6,
+        "random_seed": 42,
+        "verbose": 0,
+    }
+
+    def _build_model(self, **kwargs: Any) -> Any:
+        try:
+            from catboost import CatBoostClassifier
+        except ImportError as e:
+            raise ImportError("pip install catboost") from e
+        params = dict(self.default_params)
+        params.update(kwargs)
+        return CatBoostClassifier(**params)
+
+    def fit(self, X: Any, y: Any) -> None:
+        self._model.fit(X, y)
+
+    def predict(self, X: Any) -> Any:
+        return self._model.predict(X).ravel()
+
+    def predict_proba(self, X: Any) -> Any:
+        return self._model.predict_proba(X)
+
+    def save(self, path: str) -> None:
+        self._model.save_model(path)
+
+    def load(self, path: str) -> None:
+        from catboost import CatBoostClassifier
+        m = CatBoostClassifier()
+        m.load_model(path)
+        self._model = m
