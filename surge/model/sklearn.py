@@ -331,9 +331,14 @@ class LGBMRegressorAdapter(BaseModelAdapter):
 
     def fit(self, X: Any, y: Any) -> None:
         import numpy as np, warnings
+        from sklearn.multioutput import MultiOutputRegressor
+        y_arr = np.asarray(y)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
-            self._model.fit(np.asarray(X), np.asarray(y).ravel())
+            if y_arr.ndim == 2 and y_arr.shape[1] > 1:
+                # LightGBM natively supports only single-output; wrap for multi-output.
+                self._model = MultiOutputRegressor(self._model, n_jobs=-1)
+            self._model.fit(np.asarray(X), y_arr.ravel() if y_arr.ndim == 1 else y_arr)
 
     def predict(self, X: Any) -> Any:
         import numpy as np, warnings
@@ -437,19 +442,26 @@ class CatBoostRegressorAdapter(BaseModelAdapter):
         return CatBoostRegressor(**params)
 
     def fit(self, X: Any, y: Any) -> None:
-        self._model.fit(X, y)
+        import numpy as np
+        from sklearn.multioutput import MultiOutputRegressor
+        y_arr = np.asarray(y)
+        if y_arr.ndim == 2 and y_arr.shape[1] > 1:
+            # CatBoost's multi-regression objective requires special flags;
+            # wrapping with MultiOutputRegressor is simpler and universally supported.
+            self._model = MultiOutputRegressor(self._model, n_jobs=-1)
+        self._model.fit(np.asarray(X), y_arr.ravel() if y_arr.ndim == 1 else y_arr)
 
     def predict(self, X: Any) -> Any:
-        return self._model.predict(X)
+        import numpy as np
+        return self._model.predict(np.asarray(X))
 
     def save(self, path: str) -> None:
-        self._model.save_model(path)
+        import joblib
+        joblib.dump(self._model, path)
 
     def load(self, path: str) -> None:
-        from catboost import CatBoostRegressor
-        m = CatBoostRegressor()
-        m.load_model(path)
-        self._model = m
+        import joblib
+        self._model = joblib.load(path)
 
 
 class CatBoostClassifierAdapter(BaseModelAdapter):
