@@ -48,13 +48,13 @@ class FTTransformerAdapter(_FTTransformerBase):
     backend = "pytorch"
     task_type = "regression"
     default_params: dict[str, Any] = {
-        "d_model": 128,
-        "n_heads": 8,
-        "n_layers": 3,
-        "ffn_factor": 4.0,
+        "d_model": 64,
+        "n_heads": 4,
+        "n_layers": 2,
+        "ffn_factor": 2.0,
         "dropout": 0.1,
         "task": "regression",
-        "n_epochs": 200,
+        "n_epochs": 100,
         "learning_rate": 1e-4,
         "batch_size": 256,
         "patience": 20,
@@ -69,13 +69,13 @@ class FTTransformerClassifierAdapter(_FTTransformerBase):
     backend = "pytorch"
     task_type = "classification"
     default_params: dict[str, Any] = {
-        "d_model": 128,
-        "n_heads": 8,
-        "n_layers": 3,
-        "ffn_factor": 4.0,
+        "d_model": 64,
+        "n_heads": 4,
+        "n_layers": 2,
+        "ffn_factor": 2.0,
         "dropout": 0.1,
         "task": "classification",
-        "n_epochs": 200,
+        "n_epochs": 100,
         "learning_rate": 1e-4,
         "batch_size": 256,
         "patience": 20,

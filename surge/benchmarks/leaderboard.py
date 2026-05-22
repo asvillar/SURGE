@@ -254,6 +254,13 @@ def run_leaderboard(
         "pytorch.ddpm", "pytorch.cgan",
         "botorch.gp", "botorch.sparse_gp",
     }
+    # Some models need more epochs than the global cap to converge.
+    # Keys override pytorch_mlp_epochs for specific models.
+    _PER_MODEL_EPOCH_CAP: dict[str, int] = {
+        "pytorch.ft_transformer": 100,
+        "pytorch.ft_transformer_classifier": 100,
+        "pytorch.vae": 100,
+    }
 
     seeds = list(range(seed, seed + n_seeds))
     results: dict[str, list[BenchmarkResult]] = {}
@@ -290,14 +297,16 @@ def run_leaderboard(
                 try:
                     if key == "plasma.constellaration_paper":
                         # Special per-metric runner matching arXiv:2506.19583 Appendix A.4
-                        epoch_kwargs = {"n_epochs": pytorch_mlp_epochs} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
+                        _ecap = _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
+                        epoch_kwargs = {"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
                         res = _run_constellaration_paper_benchmark(
                             model_key,
                             model_kwargs={**epoch_kwargs, **cached_hp},
                             seed=s,
                         )
                     elif model_key in _PYTORCH_EPOCH_CAP_MODELS or bench_kwargs:
-                        epoch_kwargs = {"n_epochs": pytorch_mlp_epochs} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
+                        _ecap = _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
+                        epoch_kwargs = {"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
                         adapter = MODEL_REGISTRY.create(model_key, **epoch_kwargs, **bench_kwargs, **cached_hp)
                         res = _run_with_adapter(key, adapter, seed=s)
                     elif cached_hp:

@@ -121,13 +121,13 @@ class FTTransformerModel:
 
     def __init__(
         self,
-        d_model: int = 128,
-        n_heads: int = 8,
-        n_layers: int = 3,
-        ffn_factor: float = 4.0,
+        d_model: int = 64,
+        n_heads: int = 4,
+        n_layers: int = 2,
+        ffn_factor: float = 2.0,
         dropout: float = 0.1,
         task: str = "regression",
-        n_epochs: int = 200,
+        n_epochs: int = 100,
         learning_rate: float = 1e-4,
         batch_size: int = 256,
         patience: int = 20,
@@ -196,13 +196,31 @@ class FTTransformerModel:
         else:
             criterion = nn.CrossEntropyLoss()
 
-        optimizer = optim.Adam(self._net.parameters(), lr=self.learning_rate)
+        optimizer = optim.AdamW(
+            self._net.parameters(), lr=self.learning_rate, weight_decay=1e-4
+        )
 
         Xt = torch.from_numpy(Xs.astype(np.float32))
         if self.task == "regression":
             yt = torch.from_numpy(ys.astype(np.float32))
         else:
             yt = torch.from_numpy(ys.ravel().astype(np.int64))
+
+        # Cosine annealing with linear warmup (5% of total steps).
+        # Warmup prevents large gradient updates at epoch 0 which destabilise
+        # Transformer attention weights.
+        n_batches = max(1, len(Xt) // self.batch_size)
+        total_steps = self.n_epochs * n_batches
+        warmup_steps = max(1, int(0.05 * total_steps))
+
+        def _lr_lambda(step: int) -> float:
+            if step < warmup_steps:
+                return step / warmup_steps
+            progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+            return 0.5 * (1.0 + float(__import__("math").cos(__import__("math").pi * progress)))
+
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=_lr_lambda)
+        global_step = 0
 
         loader = DataLoader(TensorDataset(Xt, yt), batch_size=self.batch_size, shuffle=True)
         best_loss = float("inf")
@@ -219,13 +237,13 @@ class FTTransformerModel:
             for xb, yb in loader:
                 xb, yb = xb.to(self.device), yb.to(self.device)
                 optimizer.zero_grad()
-                pred = self._net(xb)
-                if self.task == "regression":
-                    loss = criterion(pred, yb)
-                else:
-                    loss = criterion(pred, yb)
+                loss = criterion(self._net(xb), yb)
                 loss.backward()
+                # Gradient clipping stabilises attention weight updates.
+                torch.nn.utils.clip_grad_norm_(self._net.parameters(), max_norm=1.0)
                 optimizer.step()
+                scheduler.step()
+                global_step += 1
                 eloss += loss.item() * len(xb)
             epoch_loss = eloss / len(Xt)
             self.training_history.append({"epoch": epoch + 1, "train_loss": epoch_loss})
