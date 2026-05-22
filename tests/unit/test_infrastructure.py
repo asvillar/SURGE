@@ -302,7 +302,7 @@ def test_constellaration_paper_benchmark_metadata():
     from surge.benchmarks.registry import benchmark_info
 
     info = benchmark_info("plasma.constellaration_paper")
-    assert info["tier"] == "3"
+    assert info["category"] == "plasma"
     assert info["task_type"] == "regression"
     assert "90" in info["shape"]  # shape string mentions 90 input features
     assert info["description"]

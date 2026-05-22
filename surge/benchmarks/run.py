@@ -1,62 +1,51 @@
 #!/usr/bin/env python3
 """
-SURGE benchmark CLI.
+SURGE benchmark runner.
 
-Results are **automatically saved** to ``benchmark_reports/<key>/<timestamp>/result.json``
+Results are automatically saved to ``benchmark_reports/<key>/<timestamp>/result.json``
 after every run (pass ``--no-save`` to skip).  Pass ``--mlflow`` to additionally
 log metrics and tags to an MLflow tracking server.
 
-Usage examples
---------------
-List all benchmarks::
+Quick-start
+-----------
+List all benchmarks (grouped by category)::
 
-    python -m surge.benchmarks.run --list
-    python -m surge.benchmarks.run --list --verbose
-    python -m surge.benchmarks.run --list --task-type classification
+    surge run --list
+    surge run --list --category plasma
+    surge run --list --category tabular
 
-List available models::
+Run a single benchmark with its default model::
 
-    python -m surge.benchmarks.run --list-models
+    surge run -b cifar10
+    surge run -b tabular.diabetes
 
-Run a benchmark with its default model::
+Run a benchmark with a specific model::
 
-    python -m surge.benchmarks.run --benchmark tabular.diabetes
+    surge run -b iris -m sklearn.random_forest
+    surge run -b california_housing -m pytorch.ft_transformer
 
-Run with a specific model from MODEL_REGISTRY::
+Run all models against one or more benchmarks (leaderboard)::
 
-    python -m surge.benchmarks.run --benchmark tabular.iris --model sklearn.logistic_regression
+    surge run -b cifar10 -m all
+    surge run -b cifar10 mnist -m all
+    surge run -b qlknn constellaration -m all --seeds 3
 
-Run all benchmarks (default models)::
+Run all benchmarks in a category::
 
-    python -m surge.benchmarks.run --all
-    python -m surge.benchmarks.run --all --tier 0
-    python -m surge.benchmarks.run --all --task-type classification
+    surge run --category plasma -m all
+    surge run --category tabular --task-type regression -m all
 
-Track with MLflow (local mlruns/ by default)::
+Compare a specific subset of models::
 
-    python -m surge.benchmarks.run --benchmark tabular.iris --mlflow
-    python -m surge.benchmarks.run --all --mlflow --mlflow-experiment my_project
-    python -m surge.benchmarks.run --all --mlflow --mlflow-tracking-uri http://localhost:5000
+    surge run -b diabetes --compare-models sklearn.ridge,pytorch.mlp,pytorch.ft_transformer
 
-Run a leaderboard: all compatible models vs a benchmark or group of benchmarks::
+HPO::
 
-    python -m surge.benchmarks.run --leaderboard --benchmark tabular.iris
-    python -m surge.benchmarks.run --leaderboard --tier 1 --task-type classification
-    python -m surge.benchmarks.run --leaderboard --all-benchmarks --mlflow
+    surge run -b california_housing -m xgboost.xgbregressor --hpo --hpo-trials 40
 
-Compare specific models on a single benchmark::
+MLflow tracking::
 
-    python -m surge.benchmarks.run --benchmark tabular.diabetes \\
-        --compare-models sklearn.random_forest,sklearn.mlp,pytorch.mlp
-
-Hyperparameter optimisation (HPO) via Optuna::
-
-    python -m surge.benchmarks.run --benchmark tabular.california_housing \\
-        --model xgboost.xgbregressor --hpo --hpo-trials 40
-    python -m surge.benchmarks.run --benchmark tabular.iris \\
-        --model xgboost.xgbclassifier --hpo --hpo-trials 30 --mlflow
-    python -m surge.benchmarks.run --benchmark tabular.diabetes \\
-        --model pytorch.residual_mlp --hpo --hpo-trials 20 --hpo-metric test_r2
+    surge run -b iris -m all --mlflow
 """
 
 from __future__ import annotations
@@ -72,7 +61,13 @@ from .leaderboard import (
     print_leaderboard,
     run_leaderboard,
 )
-from .registry import benchmark_info, list_benchmarks, run_benchmark
+from .registry import (
+    benchmark_info,
+    list_benchmarks,
+    list_categories,
+    resolve_benchmark_key,
+    run_benchmark,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -99,35 +94,70 @@ def _print_result_banner(result) -> None:
     print(f"       {_fmt_metrics(result.metrics)}  ({runtime:.2f}s)")
 
 
-def _print_list(verbose: bool, tier: str | None = None, task_type: str | None = None) -> None:
-    keys = list_benchmarks(tier=tier, task_type=task_type)
-    if not verbose:
-        for k in keys:
-            print(k)
+def _print_list(
+    verbose: bool,
+    category: str | None = None,
+    task_type: str | None = None,
+    include_smoke: bool = False,
+) -> None:
+    keys = list_benchmarks(
+        category=category, task_type=task_type, include_smoke=include_smoke
+    )
+    if not keys:
+        print("No benchmarks match the specified filters.")
         return
-    col = (42, 6, 16, 8)
+
+    if not verbose:
+        # Group by category for readability.
+        from collections import defaultdict
+        groups: dict[str, list[str]] = defaultdict(list)
+        for k in keys:
+            info = benchmark_info(k)
+            groups[info["category"]].append(k)
+        for cat in sorted(groups):
+            print(f"\n  [{cat}]")
+            for k in groups[cat]:
+                print(f"    {k}")
+        print()
+        return
+
+    # Verbose table.
+    col = (42, 14, 16, 22)
     header = (
-        f"{'Key':<{col[0]}}  {'Tier':<{col[1]}}  {'Task':<{col[2]}}  {'Shape':<{col[3]}}  Description"
+        f"  {'Key':<{col[0]}}  {'Category':<{col[1]}}  {'Task':<{col[2]}}  "
+        f"{'Shape':<{col[3]}}  Description"
     )
     print(header)
-    print("-" * (len(header) + 20))
+    print("  " + "-" * (sum(col) + 12))
+    prev_cat = None
     for k in keys:
         info = benchmark_info(k)
+        if info["category"] != prev_cat:
+            print()
+            prev_cat = info["category"]
         print(
-            f"{info['key']:<{col[0]}}  "
-            f"{info['tier']:<{col[1]}}  "
+            f"  {info['key']:<{col[0]}}  "
+            f"{info['category']:<{col[1]}}  "
             f"{info['task_type']:<{col[2]}}  "
             f"{info['shape']:<{col[3]}}  "
             f"{info['description']}"
         )
+    print()
 
 
 def _print_list_models() -> None:
     from surge.model.registry import MODEL_REGISTRY
 
-    print("Registered models in MODEL_REGISTRY:")
-    for key, cls_name in sorted(MODEL_REGISTRY.list_models().items()):
-        print(f"  {key:<45}  {cls_name}")
+    print("\nRegistered models in MODEL_REGISTRY:")
+    by_backend: dict[str, list[str]] = {}
+    for key in sorted(MODEL_REGISTRY.list_models()):
+        backend = key.split(".")[0]
+        by_backend.setdefault(backend, []).append(key)
+    for backend in sorted(by_backend):
+        print(f"\n  [{backend}]")
+        for k in by_backend[backend]:
+            print(f"    {k}")
+    print()
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +166,6 @@ def _print_list_models() -> None:
 
 
 def _persist(result, *, save_root: Path | None, no_save: bool) -> Path | None:
-    """Save result JSON; returns path or None."""
     if no_save or save_root is None:
         return None
     try:
@@ -149,9 +178,12 @@ def _persist(result, *, save_root: Path | None, no_save: bool) -> Path | None:
 
 
 def _save_leaderboard_plots(results_by_benchmark: dict, *, save_dir: Path) -> None:
-    """Save PNG/PDF bar charts and metric tables for a leaderboard run."""
     try:
-        from surge.viz.benchmark import plot_benchmark_leaderboard, plot_metric_table, plot_multi_benchmark_dashboard
+        from surge.viz.benchmark import (
+            plot_benchmark_leaderboard,
+            plot_metric_table,
+            plot_multi_benchmark_dashboard,
+        )
     except ImportError:
         print("       [warn] matplotlib not available — skipping plots", file=sys.stderr)
         return
@@ -172,26 +204,23 @@ def _save_leaderboard_plots(results_by_benchmark: dict, *, save_dir: Path) -> No
         if primary_metric:
             try:
                 plot_benchmark_leaderboard(
-                    rl, metric=primary_metric,
+                    rl,
+                    metric=primary_metric,
                     save_path=plots_dir / f"{safe}_leaderboard.png",
                 )
-                print(f"       Plot  → {plots_dir / f'{safe}_leaderboard.png'}", file=sys.stderr)
             except Exception as exc:
                 print(f"       [warn] leaderboard plot failed for {bk}: {exc}", file=sys.stderr)
         try:
             plot_metric_table(rl, save_path=plots_dir / f"{safe}_table.png")
-            print(f"       Plot  → {plots_dir / f'{safe}_table.png'}", file=sys.stderr)
         except Exception as exc:
             print(f"       [warn] metric table failed for {bk}: {exc}", file=sys.stderr)
 
-    # Multi-benchmark dashboard (all benchmarks in one figure).
     if len(results_by_benchmark) > 1:
         try:
             plot_multi_benchmark_dashboard(
                 results_by_benchmark,
                 save_path=plots_dir / "dashboard.png",
             )
-            print(f"       Plot  → {plots_dir / 'dashboard.png'}", file=sys.stderr)
         except Exception as exc:
             print(f"       [warn] dashboard plot failed: {exc}", file=sys.stderr)
 
@@ -216,6 +245,27 @@ def _mlflow_log(result, *, result_path, experiment: str, tracking_uri: str | Non
 
 
 # ---------------------------------------------------------------------------
+# Argument resolution helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_benchmarks(keys: list[str], *, include_smoke: bool = False) -> list[str]:
+    """Resolve a list of keys/short-aliases to canonical registry keys."""
+    resolved = []
+    for k in keys:
+        try:
+            resolved.append(resolve_benchmark_key(k))
+        except KeyError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            sys.exit(2)
+    return resolved
+
+
+def _model_is_all(model_arg: str | None) -> bool:
+    return model_arg is not None and model_arg.strip().lower() in ("all", "*")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -223,104 +273,115 @@ def _mlflow_log(result, *, result_path, experiment: str, tracking_uri: str | Non
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     ap = argparse.ArgumentParser(
+        prog="surge run",
         description="SURGE benchmark runner — train models and report metrics.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    # ── selection ────────────────────────────────────────────────────────────
-    ap.add_argument("--benchmark", "-b", metavar="KEY", nargs="+",
-                    help="One or more benchmark registry keys (see --list).")
-    ap.add_argument("--model", "-m", metavar="KEY", default=None,
-                    help="Model registry key (default: per-benchmark default). See --list-models.")
+
+    # ── selection ─────────────────────────────────────────────────────────────
+    ap.add_argument(
+        "--benchmark", "-b", metavar="KEY", nargs="+",
+        help=(
+            "One or more benchmark keys (full or short alias). "
+            "Examples: -b cifar10  -b tabular.iris diabetes  -b qlknn constellaration"
+        ),
+    )
+    ap.add_argument(
+        "--model", "-m", metavar="KEY",
+        help=(
+            "Model registry key, or 'all' to run all compatible models "
+            "(equivalent to --leaderboard).  See --list-models."
+        ),
+    )
     ap.add_argument("--all", "-a", dest="run_all", action="store_true",
-                    help="Run all registered benchmarks with their default models.")
-    ap.add_argument("--tier", metavar="TIER",
-                    help="Filter by tier (0, 1, …). Works with --list, --all, and --leaderboard.")
+                    help="Run all registered benchmarks (excluding smoke tests).")
+    ap.add_argument(
+        "--category", "-c", metavar="CAT",
+        help=(
+            f"Filter benchmarks by category. "
+            f"Choices: {', '.join(list_categories())}. "
+            f"Use 'smoke' to include inline fixtures."
+        ),
+    )
     ap.add_argument("--task-type", metavar="TYPE",
-                    help="Filter by task type (regression|classification). Works with --list, --all, --leaderboard.")
+                    help="Filter by task type: regression | classification.")
+    ap.add_argument("--smoke", action="store_true",
+                    help="Include synthetic smoke-test benchmarks in --list / --all.")
     ap.add_argument("--seed", type=int, default=42, help="Random seed. Default: 42.")
-    ap.add_argument("--seeds", type=int, default=1, metavar="N",
-                    help=(
-                        "Number of evaluation seeds for the leaderboard. "
-                        "Seeds seed, seed+1, … seed+N-1 are used. "
-                        "Results are reported as mean ± std. Default: 1."
-                    ))
-    # ── leaderboard ──────────────────────────────────────────────────────────
-    ap.add_argument("--leaderboard", action="store_true",
-                    help=(
-                        "Run all compatible models against the selected benchmark(s) and "
-                        "print a per-benchmark comparison table. Use with --benchmark, "
-                        "--tier, --task-type, or --all-benchmarks."
-                    ))
+    ap.add_argument(
+        "--seeds", type=int, default=1, metavar="N",
+        help="Number of evaluation seeds (leaderboard). Reports mean ± std. Default: 1.",
+    )
+
+    # ── leaderboard ───────────────────────────────────────────────────────────
+    ap.add_argument(
+        "--leaderboard", action="store_true",
+        help="Run all compatible models vs the selected benchmark(s). "
+             "Equivalent to passing -m all.",
+    )
     ap.add_argument("--all-benchmarks", action="store_true",
                     help="With --leaderboard: run all registered benchmarks.")
-    ap.add_argument("--compare-models", metavar="KEY1,KEY2,...", default=None,
-                    help=(
-                        "Comma-separated list of model keys to compare on --benchmark. "
-                        "Overrides the default compatible-model set."
-                    ))
+    ap.add_argument(
+        "--compare-models", metavar="KEY1,KEY2,...",
+        help="Comma-separated model keys to compare. Overrides --model.",
+    )
     ap.add_argument("--plot", action="store_true",
-                    help=(
-                        "With --leaderboard: save PNG/PDF leaderboard bar charts and "
-                        "metric tables to <save-dir>/.plots/. Requires matplotlib."
-                    ))
-    # ── HPO ──────────────────────────────────────────────────────────────────
+                    help="Save PNG leaderboard charts to <save-dir>/.plots/. Requires matplotlib.")
+
+    # ── HPO ───────────────────────────────────────────────────────────────────
     ap.add_argument("--hpo", action="store_true",
-                    help=(
-                        "Run Optuna hyperparameter search for --benchmark / --model. "
-                        "Requires optuna (pip install optuna)."
-                    ))
+                    help="Run Optuna HPO for --benchmark / --model. Requires optuna.")
     ap.add_argument("--hpo-trials", type=int, default=20, metavar="N",
                     help="Number of Optuna trials. Default: 20.")
     ap.add_argument("--hpo-metric", default=None, metavar="METRIC",
-                    help=(
-                        "Metric to optimise (e.g. test_r2, test_accuracy, test_rmse). "
-                        "Defaults to the primary metric for the benchmark task type."
-                    ))
+                    help="Metric to optimise (e.g. test_r2, test_accuracy).")
     ap.add_argument("--hpo-epochs-cap", type=int, default=50, metavar="N",
-                    help="Cap n_epochs for PyTorch models during HPO trials. Default: 50.")
+                    help="Cap n_epochs for PyTorch models during HPO. Default: 50.")
     ap.add_argument("--list-hpo-models", action="store_true",
-                    help="Print model keys that have a registered HPO search space and exit.")
+                    help="Print model keys with a registered HPO search space and exit.")
     ap.add_argument("--use-hpo-cache", action="store_true",
-                    help=(
-                        "Load previously cached best hyperparameters from "
-                        "benchmark_reports/hpo_cache/ (written by --hpo) and use them "
-                        "in the leaderboard run.  Falls back to defaults when no cache exists."
-                    ))
-    # ── listing ──────────────────────────────────────────────────────────────
+                    help="Reload cached best hyperparameters from a previous --hpo run.")
+
+    # ── listing ───────────────────────────────────────────────────────────────
     ap.add_argument("--list", "-l", action="store_true",
-                    help="Print registered benchmark keys and exit.")
-    ap.add_argument("--verbose", "-v", action="store_true",
-                    help="With --list: show tier, task_type, shape, and description. "
-                         "With --benchmark: show a live tqdm training progress bar for PyTorch models.")
-    ap.add_argument("--train-log-file", metavar="PATH", default=None,
-                    help=(
-                        "Stream per-epoch loss records to this JSONL file during training. "
-                        "Each run appends to the file (separated by a sentinel line). "
-                        "Can be plotted at any time with: "
-                        "python -c \"from surge.model import plot_training_history; "
-                        "plot_training_history(log_file='PATH')\""
-                    ))
+                    help="Print registered benchmark keys grouped by category and exit.")
     ap.add_argument("--list-models", action="store_true",
                     help="Print all models available in MODEL_REGISTRY and exit.")
-    # ── persistence ──────────────────────────────────────────────────────────
+    ap.add_argument(
+        "--verbose", "-v", action="store_true",
+        help="With --list: show category, task_type, shape, description. "
+             "With --benchmark: show live tqdm training progress bar.",
+    )
+    ap.add_argument("--train-log-file", metavar="PATH", default=None,
+                    help="Stream per-epoch loss records to this JSONL file during training.")
+
+    # ── persistence ───────────────────────────────────────────────────────────
     ap.add_argument("--output", "-o", type=Path, default=None,
-                    help="Also write result JSON to this explicit path (legacy; auto-save still runs).")
-    ap.add_argument("--save-dir", type=Path, default=Path("benchmark_reports"),
-                    metavar="DIR",
+                    help="Write result JSON to this path.")
+    ap.add_argument("--save-dir", type=Path, default=Path("benchmark_reports"), metavar="DIR",
                     help="Root directory for auto-saved results. Default: benchmark_reports/")
     ap.add_argument("--no-save", action="store_true",
-                    help="Disable automatic saving to benchmark_reports/.")
-    # ── MLflow ───────────────────────────────────────────────────────────────
+                    help="Disable automatic result saving.")
+
+    # ── MLflow ────────────────────────────────────────────────────────────────
     ap.add_argument("--mlflow", action="store_true",
                     help="Log results to MLflow (requires mlflow package).")
     ap.add_argument("--mlflow-experiment", default="surge_benchmarks", metavar="NAME",
                     help="MLflow experiment name. Default: surge_benchmarks.")
     ap.add_argument("--mlflow-tracking-uri", default=None, metavar="URI",
                     help="MLflow tracking URI. Default: local ./mlruns.")
+
+    # ── legacy tier filter (kept for back-compat, maps to --category) ─────────
+    ap.add_argument("--tier", metavar="TIER", help=argparse.SUPPRESS)
+
     args = ap.parse_args(argv)
 
-    # ── list-hpo-models ──────────────────────────────────────────────────────
+    # --tier → --category back-compat
+    if args.tier and not args.category:
+        args.category = args.tier
+
+    # ── list-hpo-models ───────────────────────────────────────────────────────
     if args.list_hpo_models:
         from .hpo import list_hpo_models
         print("\nModels with HPO search spaces:")
@@ -328,120 +389,120 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {mk}")
         return 0
 
-    # ── list-models ──────────────────────────────────────────────────────────
+    # ── list-models ───────────────────────────────────────────────────────────
     if args.list_models:
         _print_list_models()
         return 0
 
-    # ── --list ───────────────────────────────────────────────────────────────
+    # ── --list ────────────────────────────────────────────────────────────────
     if args.list:
-        _print_list(verbose=args.verbose, tier=args.tier, task_type=args.task_type)
+        _print_list(
+            verbose=args.verbose,
+            category=args.category,
+            task_type=args.task_type,
+            include_smoke=args.smoke,
+        )
         return 0
 
-    # ── --hpo ────────────────────────────────────────────────────────────────
+    # ── --hpo ─────────────────────────────────────────────────────────────────
     if args.hpo:
         try:
             import optuna as _optuna  # noqa: F401
         except ImportError:
-            print(
-                "ERROR: optuna is required for --hpo.  pip install optuna",
-                file=sys.stderr,
-            )
+            print("ERROR: optuna is required for --hpo.  pip install optuna", file=sys.stderr)
             return 1
-
         if not args.benchmark:
             print("ERROR: --hpo requires --benchmark KEY", file=sys.stderr)
             return 1
         if not args.model:
             print("ERROR: --hpo requires --model KEY", file=sys.stderr)
             return 1
-        hpo_bm_key = args.benchmark[0] if isinstance(args.benchmark, list) else args.benchmark
-
+        hpo_bm_key = _resolve_benchmarks(
+            [args.benchmark[0] if isinstance(args.benchmark, list) else args.benchmark]
+        )[0]
         from .hpo import print_hpo_summary, run_benchmark_hpo
 
-        print(
-            f"\nHPO: {hpo_bm_key}  /  {args.model}"
-            f"  ({args.hpo_trials} trials)",
-            file=sys.stderr,
-        )
-
+        print(f"\nHPO: {hpo_bm_key}  /  {args.model}  ({args.hpo_trials} trials)", file=sys.stderr)
         result, best_params = run_benchmark_hpo(
-            hpo_bm_key,
-            args.model,
-            n_trials=args.hpo_trials,
-            seed=args.seed,
-            metric=args.hpo_metric,
-            n_epochs_cap=args.hpo_epochs_cap,
+            hpo_bm_key, args.model,
+            n_trials=args.hpo_trials, seed=args.seed,
+            metric=args.hpo_metric, n_epochs_cap=args.hpo_epochs_cap,
             save_root=None if args.no_save else args.save_dir,
             verbose=args.verbose,
             mlflow_experiment=args.mlflow_experiment if args.mlflow else None,
             mlflow_tracking_uri=args.mlflow_tracking_uri if args.mlflow else None,
         )
-
         if result is None:
             print("HPO failed — no successful trials.", file=sys.stderr)
             return 1
-
-        metric_used = result.extra.get("hpo_metric", args.hpo_metric or "?")
         print_hpo_summary(
-            result,
-            best_params,
-            benchmark_key=hpo_bm_key,
-            model_key=args.model,
+            result, best_params,
+            benchmark_key=hpo_bm_key, model_key=args.model,
             n_trials=args.hpo_trials,
-            metric=metric_used,
+            metric=result.extra.get("hpo_metric", args.hpo_metric or "?"),
         )
-
         if args.output:
             import json
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(
-                json.dumps(result.to_dict(), indent=2, default=str) + "\n",
-                encoding="utf-8",
+                json.dumps(result.to_dict(), indent=2, default=str) + "\n", encoding="utf-8"
             )
-
         return 0 if result.passed else 1
 
-    # ── --leaderboard ────────────────────────────────────────────────────────
-    if args.leaderboard:
+    # ── Decide whether we're in leaderboard mode ───────────────────────────────
+    # Leaderboard mode = --leaderboard flag  OR  -m all  OR  --compare-models
+    use_leaderboard = (
+        args.leaderboard
+        or args.all_benchmarks
+        or _model_is_all(args.model)
+        or bool(args.compare_models)
+    )
+
+    # ── --leaderboard / -m all ─────────────────────────────────────────────────
+    if use_leaderboard:
         # Determine which benchmarks to run.
-        if args.all_benchmarks or (not args.benchmark):
-            bm_keys = list_benchmarks(tier=args.tier, task_type=args.task_type)
+        if args.all_benchmarks or (not args.benchmark and not args.category):
+            bm_keys = list_benchmarks(
+                category=args.category,
+                task_type=args.task_type,
+                include_smoke=args.smoke,
+            )
+        elif args.category and not args.benchmark:
+            bm_keys = list_benchmarks(
+                category=args.category,
+                task_type=args.task_type,
+                include_smoke=args.smoke,
+            )
         else:
-            bm_keys = args.benchmark if isinstance(args.benchmark, list) else [args.benchmark]
+            raw = args.benchmark or []
+            bm_keys = _resolve_benchmarks(raw)
 
         if not bm_keys:
             print("No benchmarks match the specified filters.", file=sys.stderr)
             return 1
 
-        # Determine which models to use.
         custom_models = (
             [m.strip() for m in args.compare_models.split(",") if m.strip()]
             if args.compare_models
             else None
         )
 
-        print(
-            f"\nLeaderboard: {len(bm_keys)} benchmark(s) — seed={args.seed}\n"
-        )
+        print(f"\nLeaderboard: {len(bm_keys)} benchmark(s) — seed={args.seed}\n")
 
         lb_results = run_leaderboard(
             bm_keys,
             model_keys=custom_models,
             seed=args.seed,
-            n_seeds=getattr(args, "seeds", 1),
+            n_seeds=args.seeds,
             save_root=None if args.no_save else args.save_dir,
-            use_hpo_cache=getattr(args, "use_hpo_cache", False),
+            use_hpo_cache=args.use_hpo_cache,
         )
 
-        # Print per-benchmark tables.
         print_leaderboard(lb_results)
 
-        # Matplotlib plots.
         if args.plot:
             _save_leaderboard_plots(lb_results, save_dir=args.save_dir)
 
-        # MLflow.
         if args.mlflow:
             log_leaderboard_to_mlflow(
                 lb_results,
@@ -451,7 +512,6 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"\nMLflow → experiment={args.mlflow_experiment!r}", file=sys.stderr)
 
-        # Legacy --output: write all results as flat JSON list.
         if args.output is not None:
             import json
             all_res = [r.to_dict() for rl in lb_results.values() for r in rl]
@@ -464,9 +524,13 @@ def main(argv: list[str] | None = None) -> int:
         any_failed = any(not r.passed for rl in lb_results.values() for r in rl)
         return 1 if any_failed else 0
 
-    # ── --all ────────────────────────────────────────────────────────────────
-    if args.run_all:
-        keys = list_benchmarks(tier=args.tier, task_type=args.task_type)
+    # ── --all (default model, no leaderboard) ─────────────────────────────────
+    if args.run_all or (args.category and not args.benchmark):
+        keys = list_benchmarks(
+            category=args.category,
+            task_type=args.task_type,
+            include_smoke=args.smoke,
+        )
         if not keys:
             print("No benchmarks match the specified filters.", file=sys.stderr)
             return 1
@@ -474,7 +538,6 @@ def main(argv: list[str] | None = None) -> int:
         any_failed = False
         print(f"Running {len(keys)} benchmark(s) — seed={args.seed}\n")
         for k in keys:
-            print(f"  → {k}", end="", flush=True)
             try:
                 r = run_benchmark(k, seed=args.seed, model_key=args.model)
                 results.append(r)
@@ -495,29 +558,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Results: {n_pass}/{len(results)} passed")
         if not args.no_save:
             print(f"Reports: {args.save_dir}/")
-
-        # Legacy --output: write list JSON
-        if args.output is not None:
-            import json
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(
-                json.dumps([r.to_dict() for r in results], indent=2, default=str) + "\n",
-                encoding="utf-8",
-            )
-            print(f"Wrote {args.output}", file=sys.stderr)
-
         return 1 if any_failed else 0
 
-    # ── single benchmark (optionally --compare-models) ───────────────────────
+    # ── single / multi benchmark with explicit model ───────────────────────────
     if not args.benchmark:
-        ap.error("provide --benchmark KEY, --all, --leaderboard, --list, or --list-models")
+        ap.error(
+            "provide --benchmark/-b KEY [KEY...], --all/-a, "
+            "--category/-c CAT, --leaderboard, --list, or --list-models"
+        )
 
-    # Normalise to list.
-    bm_key_list = args.benchmark if isinstance(args.benchmark, list) else [args.benchmark]
-    single_bm_key = bm_key_list[0]
+    bm_key_list = _resolve_benchmarks(
+        args.benchmark if isinstance(args.benchmark, list) else [args.benchmark]
+    )
 
-    # If multiple benchmarks given without --leaderboard, run each sequentially.
-    if len(bm_key_list) > 1 and not args.compare_models:
+    # Multiple benchmarks without -m all → run sequentially with default model.
+    if len(bm_key_list) > 1:
         results = []
         any_failed = False
         for bk in bm_key_list:
@@ -533,27 +588,9 @@ def main(argv: list[str] | None = None) -> int:
                 any_failed = True
         return 1 if any_failed else 0
 
-    # If --compare-models is given without --leaderboard, run as a mini-leaderboard.
-    if args.compare_models:
-        models = [m.strip() for m in args.compare_models.split(",") if m.strip()]
-        lb_results = run_leaderboard(
-            bm_key_list,
-            model_keys=models,
-            seed=args.seed,
-            save_root=None if args.no_save else args.save_dir,
-        )
-        print_leaderboard(lb_results)
-        if args.mlflow:
-            log_leaderboard_to_mlflow(
-                lb_results,
-                experiment_name=args.mlflow_experiment,
-                tracking_uri=args.mlflow_tracking_uri,
-            )
-            print(f"MLflow → experiment={args.mlflow_experiment!r}", file=sys.stderr)
-        any_failed = any(not r.passed for rl in lb_results.values() for r in rl)
-        return 1 if any_failed else 0
+    single_bm_key = bm_key_list[0]
 
-    # Build extra model kwargs for verbose / log-file monitoring.
+    # Build monitoring kwargs if requested.
     _monitor_kwargs: dict = {}
     if args.verbose:
         _monitor_kwargs["verbose"] = True
@@ -562,8 +599,6 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if _monitor_kwargs and args.model:
-            # When monitoring is requested with an explicit model, bypass the
-            # task function and run directly so kwargs reach the backend.
             from .leaderboard import _run_with_adapter
             from surge.model.registry import MODEL_REGISTRY
             adapter = MODEL_REGISTRY.create(args.model, **_monitor_kwargs)
@@ -585,7 +620,6 @@ def main(argv: list[str] | None = None) -> int:
                     experiment=args.mlflow_experiment,
                     tracking_uri=args.mlflow_tracking_uri)
 
-    # Legacy --output
     if args.output is not None:
         import json
         text = json.dumps(result.to_dict(), indent=2, default=str)

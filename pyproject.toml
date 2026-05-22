@@ -54,6 +54,7 @@ docs = ["sphinx>=5.0", "furo", "myst-parser"]
 
 [project.scripts]
 surge-benchmark = "surge.benchmarks.run:main"
+surge = "surge.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/S-Villar/SURGE"
