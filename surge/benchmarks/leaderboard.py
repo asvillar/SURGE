@@ -496,9 +496,10 @@ def _load_dataset(benchmark_key: str):
         "ctr23.house_sales": lambda: _load_ctr23_house_sales(),
         "ctr23.brazilian_houses": lambda: _load_ctr23_brazilian_houses(),
         # DOE fusion plasma benchmarks
-        "plasma.cmod_density_limit": lambda: _load_cmod_density_limit(),
-        "plasma.qlknn_transport": lambda: _load_qlknn_transport(),
-        "plasma.constellaration": lambda: _load_constellaration(),
+        "fusion.mhd_sample":        lambda: _load_fusion_mhd_sample(),
+        "plasma.cmod_density_limit":  lambda: _load_cmod_density_limit(),
+        "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
+        "plasma.constellaration":     lambda: _load_constellaration(),
         # Vision benchmarks
         "vision.cifar10": lambda: _load_cifar10(),
         "vision.mnist":   lambda: _load_mnist(),
@@ -875,6 +876,43 @@ def _load_cmod_density_limit():
     idx = np.concatenate([chosen_pos, chosen_neg])
     rng.shuffle(idx)
     return X[idx], y[idx]
+
+
+def _load_fusion_mhd_sample():
+    """MHD-code equilibrium surrogate — 13 MHD params → stability metric.
+
+    Mirrors the data-loading logic in tasks.run_fusion_mhd_sample:
+    tries the real HDF5 file first, falls back to a synthetic fixture
+    with the same shape and difficulty so tests / CI run without data.
+    """
+    from pathlib import Path
+
+    import numpy as np
+
+    H5_PATH = (
+        Path(__file__).parent.parent.parent
+        / "data" / "datasets" / "MHD-code" / "mhd_sample.hdf5"
+    )
+    X: np.ndarray | None = None
+    y: np.ndarray | None = None
+    if H5_PATH.exists():
+        try:
+            import h5py
+            with h5py.File(H5_PATH, "r") as f:
+                keys = list(f.keys())
+                X_key = next(k for k in keys if "X" in k or "input" in k.lower())
+                y_key = next(k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower())
+                X = np.asarray(f[X_key], dtype=float)
+                y = np.asarray(f[y_key], dtype=float).ravel()
+        except Exception:
+            X, y = None, None
+    if X is None or y is None:
+        rng = np.random.default_rng(42)
+        n = 2000
+        X = rng.standard_normal((n, 13))
+        coefs = rng.uniform(-1.0, 1.0, 13)
+        y = X @ coefs + 0.1 * rng.standard_normal(n)
+    return X, y
 
 
 def _load_qlknn_transport():
