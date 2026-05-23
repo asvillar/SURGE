@@ -984,59 +984,61 @@ def _load_qlknn_transport():
 def _load_constellaration(n_samples: int = 10_000):
     """ConStellaration: stellarator boundary shape → quasi-isodynamic quality.
 
-    Predict the QI quality metric from the Fourier coefficients that define
-    the stellarator plasma boundary surface.  Each sample is one VMEC
+    Predict the QI quality metric (log₁₀) from the Fourier coefficients that
+    define the stellarator plasma boundary surface.  Each sample is one VMEC
     equilibrium; the boundary is parameterised by r_cos and z_sin Fourier
     arrays (5×9 each = 90 input features).
 
-    Target: metrics.qi  — quasi-isodynamic quality score (lower = better QI).
+    Target: log₁₀(qi)  — quasi-isodynamic quality (lower = better QI).
+
+    Primary source: local NPZ cache at data/datasets/constellaration/
+    (written by _load_constellaration_paper on first HuggingFace download).
+    Falls back to live HuggingFace streaming if the local file is absent.
 
     Source: proxima-fusion/constellaration on HuggingFace (Cadena et al. 2025).
-    Vacuum subset: 182,156 samples; sub-sampled to `n_samples` for speed.
     DOI: arXiv:2506.19583
-
-    Requires: pip install datasets
     """
+    from pathlib import Path
+
+    # Fast path — reuse the paper NPZ cache written by _load_constellaration_paper.
+    repo_root = Path(__file__).parent.parent.parent
+    npz_path = repo_root / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz"
+    if npz_path.exists():
+        data = np.load(npz_path, allow_pickle=True)
+        X_full = data["X"]                     # (N, 90)
+        Y_full = data["Y"]                     # (N, 12)
+        metric_names = list(data["metric_names"])
+        # Use log_10_qi column (last column) as single-output target.
+        qi_idx = next(
+            (i for i, n in enumerate(metric_names) if "qi" in str(n).lower()),
+            -1,
+        )
+        y_full = Y_full[:, qi_idx]
+        mask = np.isfinite(X_full).all(axis=1) & np.isfinite(y_full)
+        X_full, y_full = X_full[mask], y_full[mask]
+        rng = np.random.default_rng(42)
+        idx = rng.choice(len(X_full), size=min(n_samples, len(X_full)), replace=False)
+        return X_full[idx], y_full[idx]
+
+    # Fallback — stream from HuggingFace (requires internet).
     try:
         import datasets as hf_datasets
     except ImportError as e:
         raise ImportError("pip install datasets  (HuggingFace datasets library)") from e
 
-    # Use cached data when available to avoid SSL / network failures.
-    # HF_DATASETS_OFFLINE=1 forces the datasets library to use its local
-    # cache and raises an error if the dataset has never been downloaded.
-    import os as _os
-    _hf_offline = _os.environ.get("HF_DATASETS_OFFLINE", "0")
-    if _hf_offline != "1":
-        _os.environ["HF_DATASETS_OFFLINE"] = "1"
-    try:
-        ds = hf_datasets.load_dataset(
-            "proxima-fusion/constellaration",
-            split="train",
-            streaming=True,
-        )
-    except Exception:
-        # Cache miss — try online (restores env var, lets HF handle the error).
-        _os.environ["HF_DATASETS_OFFLINE"] = _hf_offline
-        ds = hf_datasets.load_dataset(
-            "proxima-fusion/constellaration",
-            split="train",
-            streaming=True,
-        )
-    finally:
-        _os.environ["HF_DATASETS_OFFLINE"] = _hf_offline
+    ds = hf_datasets.load_dataset(
+        "proxima-fusion/constellaration",
+        split="train",
+        streaming=True,
+    )
 
-    rows_r = []
-    rows_z = []
-    rows_qi = []
-
+    rows_r, rows_z, rows_qi = [], [], []
     for row in ds:
         r = row.get("boundary.r_cos")
         z = row.get("boundary.z_sin")
         qi = row.get("metrics.qi")
         if r is None or z is None or qi is None:
             continue
-        # r and z are lists-of-lists (5×9); flatten to 45 values each.
         r_flat = np.asarray(r, dtype=float).ravel()
         z_flat = np.asarray(z, dtype=float).ravel()
         if r_flat.size != 45 or z_flat.size != 45:
@@ -1047,10 +1049,8 @@ def _load_constellaration(n_samples: int = 10_000):
         if len(rows_qi) >= n_samples:
             break
 
-    X = np.hstack([np.array(rows_r), np.array(rows_z)])   # (n, 90)
-    y = np.array(rows_qi, dtype=float)                      # (n,)
-
-    # Remove samples with NaN/Inf (failed VMEC runs).
+    X = np.hstack([np.array(rows_r), np.array(rows_z)])
+    y = np.array(rows_qi, dtype=float)
     mask = np.isfinite(X).all(axis=1) & np.isfinite(y)
     return X[mask], y[mask]
 
