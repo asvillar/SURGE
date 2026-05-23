@@ -1361,6 +1361,12 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "ctr23.diamonds": ("test_r2", 0.95),
         "ctr23.house_sales": ("test_r2", 0.80),
         "ctr23.brazilian_houses": ("test_r2", 0.75),
+        # Vision benchmarks
+        # MNIST: published LeNet-5 is 99.05%; we use 99.0% as the bar.
+        "vision.mnist": ("test_accuracy", 0.990),
+        # CIFAR-10: ResNet-20 paper result is 91.25% (He et al. 2016).
+        # Threshold set at 91.0% to allow ±0.25% seed variance.
+        "vision.cifar10": ("test_accuracy", 0.910),
         # DOE fusion plasma benchmarks
         "plasma.cmod_density_limit": ("test_accuracy", 0.85),
         "plasma.qlknn_transport": ("test_r2", 0.90),
