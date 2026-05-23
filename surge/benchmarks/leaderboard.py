@@ -261,6 +261,11 @@ def run_leaderboard(
         "pytorch.ft_transformer_classifier": 100,
         "pytorch.vae": 100,
     }
+    # Per-benchmark epoch overrides — take precedence over _PER_MODEL_EPOCH_CAP
+    # when both apply.  CIFAR-10 needs 200 epochs for ResNet-56 to converge.
+    _PER_BENCHMARK_EPOCH_CAP: dict[str, int] = {
+        "vision.cifar10": 200,
+    }
 
     seeds = list(range(seed, seed + n_seeds))
     results: dict[str, list[BenchmarkResult]] = {}
@@ -305,7 +310,9 @@ def run_leaderboard(
                             seed=s,
                         )
                     elif model_key in _PYTORCH_EPOCH_CAP_MODELS or bench_kwargs:
-                        _ecap = _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
+                        # Per-benchmark cap takes precedence over per-model cap.
+                        _bench_ecap = _PER_BENCHMARK_EPOCH_CAP.get(key)
+                        _ecap = _bench_ecap if _bench_ecap is not None else _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
                         epoch_kwargs = {"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
                         adapter = MODEL_REGISTRY.create(model_key, **epoch_kwargs, **bench_kwargs, **cached_hp)
                         res = _run_with_adapter(key, adapter, seed=s)

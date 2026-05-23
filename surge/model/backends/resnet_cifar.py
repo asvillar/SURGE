@@ -165,8 +165,43 @@ class ResNetCIFARModel:
         torch.manual_seed(self.random_state)
         np.random.seed(self.random_state)
 
-        Xt = self._to_4d(X).to(self.device)
-        yt = torch.from_numpy(np.asarray(y, dtype="int64")).to(self.device)
+        X_arr = np.asarray(X, dtype=np.float32)
+        y_arr = np.asarray(y, dtype="int64")
+
+        # Apply standard CIFAR-10 augmentation only for RGB (3-channel) inputs.
+        # He et al. 2016 Appendix: random horizontal flip + 4-pixel padding + random crop.
+        # Grayscale inputs (MNIST) skip augmentation.
+        use_augment = self.in_channels == 3
+        if use_augment:
+            import torchvision.transforms as T
+
+            class _AugDataset(torch.utils.data.Dataset):
+                def __init__(self, X_np, y_np, h, w, c):
+                    # X_np: (N, C*H*W) float32 in [0,1]
+                    self._X = X_np.reshape(-1, c, h, w)
+                    self._y = y_np
+                    self._aug = T.Compose([
+                        T.RandomHorizontalFlip(),
+                        T.RandomCrop(h, padding=4),
+                    ])
+
+                def __len__(self):
+                    return len(self._y)
+
+                def __getitem__(self, idx):
+                    img = torch.from_numpy(self._X[idx])  # (C, H, W)
+                    img = self._aug(img)
+                    return img, int(self._y[idx])
+
+            h = w = int(X_arr.shape[1] // self.in_channels) ** (1 / 2)
+            # More robust: infer spatial dim from known channel count
+            spatial = int((X_arr.shape[1] / self.in_channels) ** 0.5)
+            train_dataset = _AugDataset(X_arr, y_arr, spatial, spatial, self.in_channels)
+            loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        else:
+            Xt = self._to_4d(X).to(self.device)
+            yt = torch.from_numpy(y_arr).to(self.device)
+            loader = DataLoader(TensorDataset(Xt, yt), batch_size=self.batch_size, shuffle=True)
 
         self._net = ResNetCIFAR(n=self.n, n_classes=self.n_classes, in_channels=self.in_channels).to(self.device)
         optimizer = optim.SGD(
@@ -176,7 +211,6 @@ class ResNetCIFARModel:
         milestones = [int(0.5 * self.n_epochs), int(0.75 * self.n_epochs)]
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
         criterion = nn.CrossEntropyLoss()
-        loader = DataLoader(TensorDataset(Xt, yt), batch_size=self.batch_size, shuffle=True)
 
         has_val = X_val is not None and y_val is not None
         if has_val:
@@ -196,6 +230,8 @@ class ResNetCIFARModel:
             self._net.train()
             correct, total = 0, 0
             for xb, yb in loader:
+                xb = xb.to(self.device)
+                yb = torch.as_tensor(yb, dtype=torch.int64).to(self.device)
                 optimizer.zero_grad()
                 logits = self._net(xb)
                 loss = criterion(logits, yb)
