@@ -296,6 +296,11 @@ def run_leaderboard(
             # Per-benchmark model kwargs (e.g. image shape for vision models).
             bench_kwargs = _BENCHMARK_MODEL_KWARGS.get(key, {})
 
+            # Build training-log path for PyTorch models so loss can be tracked.
+            _safe_key = key.replace(".", "_")
+            _safe_model = model_key.replace(".", "_")
+            _log_dir = (save_root / "training_logs" / _safe_key) if save_root else None
+
             # Collect one result per seed.
             seed_results: list[BenchmarkResult] = []
             for s in seeds:
@@ -304,9 +309,12 @@ def run_leaderboard(
                         # Special per-metric runner matching arXiv:2506.19583 Appendix A.4
                         _ecap = _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
                         epoch_kwargs = {"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
+                        _log_kwargs: dict = {}
+                        if _log_dir is not None and model_key in _PYTORCH_EPOCH_CAP_MODELS:
+                            _log_kwargs["log_file"] = str(_log_dir / f"{_safe_model}_seed{s}.jsonl")
                         res = _run_constellaration_paper_benchmark(
                             model_key,
-                            model_kwargs={**epoch_kwargs, **cached_hp},
+                            model_kwargs={**epoch_kwargs, **cached_hp, **_log_kwargs},
                             seed=s,
                         )
                     elif model_key in _PYTORCH_EPOCH_CAP_MODELS or bench_kwargs:
@@ -314,7 +322,10 @@ def run_leaderboard(
                         _bench_ecap = _PER_BENCHMARK_EPOCH_CAP.get(key)
                         _ecap = _bench_ecap if _bench_ecap is not None else _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
                         epoch_kwargs = {"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
-                        adapter = MODEL_REGISTRY.create(model_key, **epoch_kwargs, **bench_kwargs, **cached_hp)
+                        _log_kwargs = {}
+                        if _log_dir is not None:
+                            _log_kwargs["log_file"] = str(_log_dir / f"{_safe_model}_seed{s}.jsonl")
+                        adapter = MODEL_REGISTRY.create(model_key, **epoch_kwargs, **bench_kwargs, **cached_hp, **_log_kwargs)
                         res = _run_with_adapter(key, adapter, seed=s)
                     elif cached_hp:
                         adapter = MODEL_REGISTRY.create(model_key, **cached_hp)
