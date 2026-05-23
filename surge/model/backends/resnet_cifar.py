@@ -61,12 +61,12 @@ class _BasicBlock(nn.Module if TORCH_AVAILABLE else object):
 class ResNetCIFAR(nn.Module if TORCH_AVAILABLE else object):
     """He et al. 2016 CIFAR ResNet.  Set ``n=3`` for ResNet-20, ``n=9`` for ResNet-56."""
 
-    def __init__(self, n: int = 3, n_classes: int = 10) -> None:
+    def __init__(self, n: int = 3, n_classes: int = 10, in_channels: int = 3) -> None:
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required")
         super().__init__()
         self.stem = nn.Sequential(
-            nn.Conv2d(3, 16, 3, padding=1, bias=False),
+            nn.Conv2d(in_channels, 16, 3, padding=1, bias=False),
             nn.BatchNorm2d(16),
             nn.ReLU(),
         )
@@ -168,7 +168,7 @@ class ResNetCIFARModel:
         Xt = self._to_4d(X).to(self.device)
         yt = torch.from_numpy(np.asarray(y, dtype="int64")).to(self.device)
 
-        self._net = ResNetCIFAR(n=self.n, n_classes=self.n_classes).to(self.device)
+        self._net = ResNetCIFAR(n=self.n, n_classes=self.n_classes, in_channels=self.in_channels).to(self.device)
         optimizer = optim.SGD(
             self._net.parameters(), lr=self.learning_rate,
             momentum=0.9, weight_decay=self.weight_decay, nesterov=True,
@@ -272,5 +272,5 @@ class ResNetCIFARModel:
         self.n = cfg["n"]
         self.n_classes = cfg["n_classes"]
         if data["state_dict"] is not None:
-            self._net = ResNetCIFAR(n=cfg["n"], n_classes=cfg["n_classes"]).to(self.device)
+            self._net = ResNetCIFAR(n=cfg["n"], n_classes=cfg["n_classes"], in_channels=self.in_channels).to(self.device)
             self._net.load_state_dict(data["state_dict"])

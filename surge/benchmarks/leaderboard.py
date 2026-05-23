@@ -1002,11 +1002,29 @@ def _load_constellaration(n_samples: int = 10_000):
     except ImportError as e:
         raise ImportError("pip install datasets  (HuggingFace datasets library)") from e
 
-    ds = hf_datasets.load_dataset(
-        "proxima-fusion/constellaration",
-        split="train",
-        streaming=True,
-    )
+    # Use cached data when available to avoid SSL / network failures.
+    # HF_DATASETS_OFFLINE=1 forces the datasets library to use its local
+    # cache and raises an error if the dataset has never been downloaded.
+    import os as _os
+    _hf_offline = _os.environ.get("HF_DATASETS_OFFLINE", "0")
+    if _hf_offline != "1":
+        _os.environ["HF_DATASETS_OFFLINE"] = "1"
+    try:
+        ds = hf_datasets.load_dataset(
+            "proxima-fusion/constellaration",
+            split="train",
+            streaming=True,
+        )
+    except Exception:
+        # Cache miss — try online (restores env var, lets HF handle the error).
+        _os.environ["HF_DATASETS_OFFLINE"] = _hf_offline
+        ds = hf_datasets.load_dataset(
+            "proxima-fusion/constellaration",
+            split="train",
+            streaming=True,
+        )
+    finally:
+        _os.environ["HF_DATASETS_OFFLINE"] = _hf_offline
 
     rows_r = []
     rows_z = []
@@ -1099,14 +1117,28 @@ def _load_constellaration_paper(
     METRIC_COLS_SRC = [m for m in _CONSTELLARATION_METRICS if m != "log_10_qi"] + ["qi"]
 
     print(
-        f"[constellaration] downloading full dataset (first run only, will be cached)…",
+        "[constellaration] loading dataset (cached if available)…",
         flush=True,
     )
-    ds = hf_datasets.load_dataset(
-        "proxima-fusion/constellaration",
-        split="train",
-        streaming=True,
-    )
+    import os as _os2
+    _hf_offline2 = _os2.environ.get("HF_DATASETS_OFFLINE", "0")
+    if _hf_offline2 != "1":
+        _os2.environ["HF_DATASETS_OFFLINE"] = "1"
+    try:
+        ds = hf_datasets.load_dataset(
+            "proxima-fusion/constellaration",
+            split="train",
+            streaming=True,
+        )
+    except Exception:
+        _os2.environ["HF_DATASETS_OFFLINE"] = _hf_offline2
+        ds = hf_datasets.load_dataset(
+            "proxima-fusion/constellaration",
+            split="train",
+            streaming=True,
+        )
+    finally:
+        _os2.environ["HF_DATASETS_OFFLINE"] = _hf_offline2
 
     rows_X: list[np.ndarray] = []
     rows_Y: list[list[float]] = []
