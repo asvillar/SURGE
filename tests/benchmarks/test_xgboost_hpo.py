@@ -164,6 +164,8 @@ def test_list_hpo_models():
     assert "xgboost.xgbclassifier" in models
     assert "sklearn.random_forest" in models
     assert "pytorch.residual_mlp" in models
+    assert "tabpfn.regressor" in models
+    assert "tabpfn.classifier" in models
 
 
 def test_suggest_params_xgbr():
@@ -189,6 +191,17 @@ def test_suggest_params_unknown_raises():
     trial = study.ask()
     with pytest.raises(KeyError, match="No HPO search space"):
         suggest_params("nonexistent.model", trial)
+
+
+def test_suggest_params_decodes_categorical_values():
+    import optuna
+    from surge.benchmarks.hpo import suggest_params
+
+    study = optuna.create_study()
+    trial = study.ask()
+    params = suggest_params("pytorch.residual_mlp", trial)
+    assert isinstance(params["hidden_layers"], list)
+    assert all(isinstance(v, int) for v in params["hidden_layers"])
 
 
 def test_run_benchmark_hpo_rf(tmp_path):

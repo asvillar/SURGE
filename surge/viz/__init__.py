@@ -42,6 +42,7 @@ from .classification import (
 from .benchmark import (
     load_benchmark_results,
     plot_benchmark_leaderboard,
+    plot_model_spider_chart,
     plot_metric_table,
     plot_multi_benchmark_dashboard,
 )
@@ -85,7 +86,7 @@ __all__ = [
     "plot_benchmark_leaderboard",
     "plot_metric_table",
     "plot_multi_benchmark_dashboard",
+    "plot_model_spider_chart",
     "load_benchmark_results",
 ]
-
 

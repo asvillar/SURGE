@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 from typing import Any
+import inspect
 
 import numpy as np
 
 from ...hpc import ResourceProfile
 from ..base import BaseModelAdapter
+
+
+def _filter_supported_kwargs(cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Drop kwargs unsupported by the installed TabPFN version."""
+    try:
+        sig = inspect.signature(cls)
+    except (TypeError, ValueError):
+        return kwargs
+    if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+        return kwargs
+    return {k: v for k, v in kwargs.items() if k in sig.parameters}
 
 
 _REG_PROFILE = ResourceProfile(
@@ -44,7 +56,7 @@ class TabPFNRegressorAdapter(BaseModelAdapter):
             from tabpfn import TabPFNRegressor
         except ImportError as exc:
             raise ImportError("tabpfn required. Install with pip install 'surge-ml[tabpfn]'.") from exc
-        return TabPFNRegressor(**kwargs)
+        return TabPFNRegressor(**_filter_supported_kwargs(TabPFNRegressor, kwargs))
 
     def fit(self, X: Any, y: Any) -> Any:
         y_arr = np.asarray(y)
@@ -69,7 +81,7 @@ class TabPFNClassifierAdapter(BaseModelAdapter):
             from tabpfn import TabPFNClassifier
         except ImportError as exc:
             raise ImportError("tabpfn required. Install with pip install 'surge-ml[tabpfn]'.") from exc
-        return TabPFNClassifier(**kwargs)
+        return TabPFNClassifier(**_filter_supported_kwargs(TabPFNClassifier, kwargs))
 
     def fit(self, X: Any, y: Any) -> Any:
         return self._model.fit(X, y)

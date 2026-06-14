@@ -21,7 +21,6 @@ try:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    import matplotlib.ticker as mticker
     from matplotlib.figure import Figure
 
     MPL_AVAILABLE = True
@@ -47,7 +46,14 @@ def _save_figure(fig: Any, save_path: Path | None) -> None:
 
 
 # Metrics where lower is better (affects coloring and axis direction).
-_LOWER_IS_BETTER: frozenset[str] = frozenset({"runtime_s", "test_rmse"})
+_LOWER_IS_BETTER: frozenset[str] = frozenset({
+    "runtime_s",
+    "test_rmse",
+    "test_nrmse",
+    "test_relative_l2",
+    "peak_memory_mb",
+    "gpu_peak_memory_mb",
+})
 
 # Human-readable metric labels for axis titles.
 _METRIC_LABELS: dict[str, str] = {
@@ -56,7 +62,11 @@ _METRIC_LABELS: dict[str, str] = {
     "test_auroc": "AUROC",
     "test_r2": "R²",
     "test_rmse": "RMSE",
+    "test_nrmse": "NRMSE",
+    "test_relative_l2": "Relative L2",
     "runtime_s": "Runtime (s)",
+    "peak_memory_mb": "Peak memory (MB)",
+    "gpu_peak_memory_mb": "GPU memory (MB)",
 }
 
 # Color scheme: green for pass, coral for fail.
@@ -396,6 +406,135 @@ def plot_multi_benchmark_dashboard(
     fig.suptitle("SURGE Benchmark Leaderboard", fontsize=13, fontweight="bold", y=1.01)
     fig.tight_layout()
     _save_figure(fig, save_path)
+    return fig
+
+
+def _default_spider_metrics(results: list[Any]) -> list[str]:
+    preferred = [
+        "test_accuracy",
+        "test_f1_macro",
+        "test_auroc",
+        "test_r2",
+        "test_nrmse",
+        "test_relative_l2",
+        "test_rmse",
+        "runtime_s",
+        "peak_memory_mb",
+        "gpu_peak_memory_mb",
+    ]
+    metrics: list[str] = []
+    seen: set[str] = set()
+    for key in preferred:
+        if any(key in r.metrics for r in results):
+            metrics.append(key)
+            seen.add(key)
+    for r in results:
+        for key, value in sorted(r.metrics.items()):
+            if key not in seen and isinstance(value, (int, float)) and np.isfinite(value):
+                metrics.append(key)
+                seen.add(key)
+    return metrics
+
+
+def _normalise_metric_values(values: np.ndarray, *, lower_better: bool) -> np.ndarray:
+    finite = np.isfinite(values)
+    scores = np.zeros_like(values, dtype=float)
+    if not finite.any():
+        return scores
+    vmin = float(np.nanmin(values[finite]))
+    vmax = float(np.nanmax(values[finite]))
+    if np.isclose(vmin, vmax):
+        scores[finite] = 1.0
+        return scores
+    if lower_better:
+        scores[finite] = (vmax - values[finite]) / (vmax - vmin)
+    else:
+        scores[finite] = (values[finite] - vmin) / (vmax - vmin)
+    return np.clip(scores, 0.0, 1.0)
+
+
+def plot_model_spider_chart(
+    results: list[Any],
+    *,
+    metrics: list[str] | None = None,
+    title: str | None = None,
+    model_keys: list[str] | None = None,
+    fill: bool = True,
+    save_path: Path | None = None,
+    ax: Any = None,
+) -> Any:
+    """Spider/radar chart comparing models across multiple metrics.
+
+    Each metric is min-max normalised across the selected models to a 0-1
+    score where 1 is best. Lower-is-better metrics such as runtime and memory
+    are inverted before plotting.
+    """
+    _ensure_mpl()
+    if not results:
+        raise ValueError("results list is empty")
+
+    selected = [
+        r for r in results
+        if r.metrics and (model_keys is None or r.model_key in model_keys)
+    ]
+    if not selected:
+        raise ValueError("no results with metrics to plot")
+
+    metrics = metrics or _default_spider_metrics(selected)
+    metrics = [m for m in metrics if any(m in r.metrics for r in selected)]
+    if len(metrics) < 3:
+        raise ValueError("spider chart requires at least three metrics")
+
+    raw = np.array(
+        [
+            [
+                float(r.metrics[m]) if m in r.metrics and np.isfinite(r.metrics[m]) else np.nan
+                for m in metrics
+            ]
+            for r in selected
+        ],
+        dtype=float,
+    )
+    scores = np.column_stack([
+        _normalise_metric_values(raw[:, i], lower_better=metrics[i] in _LOWER_IS_BETTER)
+        for i in range(len(metrics))
+    ])
+
+    n_metrics = len(metrics)
+    angles = np.linspace(0, 2 * np.pi, n_metrics, endpoint=False)
+    closed_angles = np.concatenate([angles, [angles[0]]])
+
+    own_fig = ax is None
+    if own_fig:
+        fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"projection": "polar"})
+    else:
+        fig = ax.get_figure()
+
+    cmap = plt.get_cmap("tab10")
+    for idx, (result, row) in enumerate(zip(selected, scores)):
+        closed_values = np.concatenate([row, [row[0]]])
+        color = cmap(idx % 10)
+        ax.plot(closed_angles, closed_values, label=result.model_key, color=color, linewidth=2)
+        if fill:
+            ax.fill(closed_angles, closed_values, color=color, alpha=0.12)
+
+    labels = [
+        f"{_METRIC_LABELS.get(m, m)}\n{'lower' if m in _LOWER_IS_BETTER else 'higher'} is better"
+        for m in metrics
+    ]
+    ax.set_xticks(angles)
+    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylim(0.0, 1.0)
+    ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+    ax.set_yticklabels(["0.25", "0.50", "0.75", "1.00"], fontsize=8)
+    ax.grid(True, alpha=0.35)
+    bk = selected[0].benchmark_key
+    ax.set_title(title or f"{bk} — model spider plot", fontsize=12, fontweight="bold", pad=20)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.25, 1.15), fontsize=8)
+
+    if own_fig:
+        fig.tight_layout()
+        _save_figure(fig, save_path)
     return fig
 
 

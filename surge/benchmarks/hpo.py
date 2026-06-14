@@ -341,6 +341,19 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "n_disc_layers": ("int", 2, 4),
         "batch_size": ("categorical", [32, 64, 128]),
     },
+    # ------------------------------------------------------------------
+    # TabPFN optional tabular foundation model
+    # ------------------------------------------------------------------
+    "tabpfn.regressor": {
+        "n_estimators": ("categorical", [4, 8, 16, 32]),
+        "softmax_temperature": ("float_log", 0.5, 2.0),
+        "average_before_softmax": ("categorical", [False, True]),
+    },
+    "tabpfn.classifier": {
+        "n_estimators": ("categorical", [4, 8, 16, 32]),
+        "softmax_temperature": ("float_log", 0.5, 2.0),
+        "average_before_softmax": ("categorical", [False, True]),
+    },
 }
 
 # Primary metric to maximise/minimise per task type.
@@ -464,7 +477,6 @@ def run_benchmark_hpo(
     """
     import optuna
 
-    from .leaderboard import _run_with_adapter
     from .registry import benchmark_info
     from surge.model.registry import MODEL_REGISTRY
 
@@ -486,11 +498,9 @@ def run_benchmark_hpo(
     if direction is None:
         direction = default_dir
 
-    _PYTORCH_KEYS = {
-        "pytorch.mlp", "pytorch.residual_mlp", "pytorch.mlp_classifier",
-        "pytorch.cnn1d", "pytorch.lstm", "pytorch.gru",
-        "pytorch.fno1d", "pytorch.deeponet",
-        "pytorch.lenet5", "pytorch.resnet20", "pytorch.resnet56",
+    _EPOCH_CAPPED_KEYS = {
+        key for key in _SEARCH_SPACES
+        if key.startswith("pytorch.") or key.startswith("botorch.")
     }
     epochs_cap = n_epochs_cap if n_epochs_cap is not None else 50
 
@@ -514,11 +524,12 @@ def run_benchmark_hpo(
 
     best_result: list[Any] = [None]
     best_value: list[float] = [float("-inf") if direction == "maximize" else float("inf")]
+    best_decoded_params: list[dict[str, Any]] = [{}]
     trial_results: list[dict] = []
 
     def objective(trial: Any) -> float:
         params = suggest_params(model_key, trial)
-        if model_key in _PYTORCH_KEYS:
+        if model_key in _EPOCH_CAPPED_KEYS:
             params.setdefault("n_epochs", epochs_cap)
             params["n_epochs"] = min(params.get("n_epochs", epochs_cap), epochs_cap)
 
@@ -550,6 +561,7 @@ def run_benchmark_hpo(
         if is_better:
             best_value[0] = value
             best_result[0] = result
+            best_decoded_params[0] = dict(params)
 
         if verbose:
             arrow = "↑" if direction == "maximize" else "↓"
@@ -566,20 +578,12 @@ def run_benchmark_hpo(
     study = optuna.create_study(direction=direction, sampler=sampler)
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
 
-    best_params: dict[str, Any] = {}
+    best_params: dict[str, Any] = dict(best_decoded_params[0])
     try:
-        best_trial = study.best_trial
-        raw = best_trial.params
-        # Decode categorical indices back to actual values.
-        space = _SEARCH_SPACES.get(model_key, {})
-        for name, spec in space.items():
-            if spec[0] == "categorical" and name in raw:
-                best_params[name] = spec[1][raw[name]]
-            elif name in raw:
-                best_params[name] = raw[name]
+        _ = study.best_trial
     except ValueError:
         # All trials were pruned — no best trial available.
-        best_trial = None
+        pass
 
     # If all trials pruned, run once with default params as fallback.
     if best_result[0] is None:
