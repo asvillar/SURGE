@@ -18,13 +18,14 @@ Typical usage
 from __future__ import annotations
 
 import sys
+import tracemalloc
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from .base import BenchmarkResult
-from .registry import benchmark_info, list_benchmarks, run_benchmark
+from .registry import benchmark_info, benchmark_metadata, run_benchmark
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +94,14 @@ _CLASSIFICATION_MODELS: list[str] = [
     "catboost.classifier",
 ]
 
+try:
+    import importlib.util as _importlib_util
+    if _importlib_util.find_spec("tabpfn") is not None:
+        _REGRESSION_MODELS.append("tabpfn.regressor")
+        _CLASSIFICATION_MODELS.append("tabpfn.classifier")
+except Exception:
+    pass
+
 
 # Per-benchmark overrides: map a benchmark key to a specific model list.
 # PDEBench benchmarks only use neural-operator / deep-learning models.
@@ -101,6 +110,7 @@ _CLASSIFICATION_MODELS: list[str] = [
 _PDEBENCH_OPERATOR_MODELS: list[str] = []
 _PDEBENCH_2D_MODELS: list[str] = []
 _VISION_MODELS: list[str] = []
+_CIFAR10_MODELS: list[str] = []
 _SEQUENCE_MODELS: list[str] = []
 try:
     from surge.model.pytorch import PYTORCH_AVAILABLE as _PT
@@ -231,7 +241,58 @@ _METRIC_ORDER: list[str] = [
     "uq_crps",
     "uq_nll",
     "runtime_s",
+    "peak_memory_mb",
+    "gpu_peak_memory_mb",
 ]
+
+
+def _skip_result(
+    benchmark_key: str,
+    model_key: str,
+    *,
+    reason: str,
+    stage: str,
+    message: str | None = None,
+) -> BenchmarkResult:
+    """Build a persisted N/A result instead of dropping a failed attempt."""
+    info = benchmark_info(benchmark_key)
+    return BenchmarkResult(
+        benchmark_key=info["key"],
+        model_key=model_key,
+        tier=info["tier"],
+        task_type=info["task_type"],
+        metrics={},
+        passed=False,
+        message=message or reason,
+        extra={
+            "status": "skipped",
+            "skip_stage": stage,
+            "skip_reason": reason,
+            "benchmark_metadata": benchmark_metadata(benchmark_key),
+        },
+    )
+
+
+def _gpu_peak_memory_mb() -> float | None:
+    """Return CUDA peak memory if torch/cuda is available."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return float(torch.cuda.max_memory_allocated() / (1024 * 1024))
+    except Exception:
+        return None
+    return None
+
+
+def _reset_gpu_peak_memory() -> None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +381,15 @@ def run_leaderboard(
 
         for model_key in candidates:
             if model_key not in MODEL_REGISTRY:
+                res = _skip_result(
+                    key,
+                    model_key,
+                    reason=f"{model_key} not in MODEL_REGISTRY",
+                    stage="model_lookup",
+                )
+                if save_root is not None:
+                    res.save(root=save_root)
+                results[key].append(res)
                 print(f"  [skip] {model_key} not in MODEL_REGISTRY", file=sys.stderr)
                 continue
 
@@ -379,7 +449,17 @@ def run_leaderboard(
                             res.save(root=save_root)
                         seed_results.append(res)
                 except Exception as exc:
-                    print(f"  [error] {key}/{model_key} seed={s}: {exc}", file=sys.stderr)
+                    res = _skip_result(
+                        key,
+                        model_key,
+                        reason=str(exc),
+                        stage="run",
+                        message=f"leaderboard run skipped for {model_key}",
+                    )
+                    if save_root is not None:
+                        res.save(root=save_root)
+                    seed_results.append(res)
+                    print(f"  [skip] {key}/{model_key} seed={s}: {exc}", file=sys.stderr)
 
             if not seed_results:
                 continue
@@ -441,18 +521,33 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
 
     info = benchmark_info(benchmark_key)
     task_type = info["task_type"]
+    model_key = getattr(adapter, "name", adapter.__class__.__name__)
 
     try:
         X, y = _load_dataset(benchmark_key)
     except Exception as exc:
         print(f"  [error] could not load {benchmark_key}: {exc}", file=sys.stderr)
-        return None
+        return _skip_result(benchmark_key, model_key, reason=str(exc), stage="data_load")
 
     stratify = y if task_type == "classification" else None
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=seed, stratify=stratify
     )
 
+    resource_info: dict[str, Any] | None = None
+    if hasattr(adapter, "prepare_for_fit"):
+        try:
+            resource_info = adapter.prepare_for_fit(
+                X_shape=getattr(X_train, "shape", None),
+                y_shape=getattr(y_train, "shape", None),
+            )
+        except Exception as exc:
+            resource_info = {"warning": f"resource policy unavailable: {exc}"}
+
+    was_tracing = tracemalloc.is_tracing()
+    if not was_tracing:
+        tracemalloc.start()
+    _reset_gpu_peak_memory()
     t0 = time.perf_counter()
     try:
         adapter.fit(X_train, y_train)
@@ -460,7 +555,12 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         elapsed = time.perf_counter() - t0
     except Exception as exc:
         print(f"  [error] fit/predict failed for {benchmark_key}: {exc}", file=sys.stderr)
-        return None
+        if not was_tracing and tracemalloc.is_tracing():
+            tracemalloc.stop()
+        return _skip_result(benchmark_key, model_key, reason=str(exc), stage="fit_predict")
+    _, peak_memory = tracemalloc.get_traced_memory()
+    if not was_tracing:
+        tracemalloc.stop()
 
     if task_type == "regression":
         # Sequence benchmarks: compute NRMSE instead of / in addition to R².
@@ -491,7 +591,7 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
                     if len(_uq_std) == len(y_test.ravel()):
                         from .tasks import _uq_metrics
                         metrics.update(_uq_metrics(y_test.ravel(), _uq_mean, _uq_std))
-            except Exception as exc:
+            except Exception:
                 pass  # UQ is optional — silently skip on failure
     else:
         y_prob = None
@@ -503,17 +603,27 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         metrics = _clf_metrics(y_test, y_pred, y_prob)
 
     metrics["runtime_s"] = elapsed
+    metrics["peak_memory_mb"] = float(peak_memory / (1024 * 1024))
+    gpu_peak = _gpu_peak_memory_mb()
+    if gpu_peak is not None:
+        metrics["gpu_peak_memory_mb"] = gpu_peak
     passed = _check_pass(benchmark_key, metrics)
 
     return BenchmarkResult(
         benchmark_key=benchmark_key,
-        model_key=adapter.name,
+        model_key=model_key,
         tier=info["tier"],
         task_type=task_type,
         metrics=metrics,
         passed=passed,
-        message=f"leaderboard run via {adapter.name}",
-        extra={"n_train": len(X_train), "n_test": len(X_test)},
+        message=f"leaderboard run via {model_key}",
+        extra={
+            "status": "completed",
+            "n_train": len(X_train),
+            "n_test": len(X_test),
+            "benchmark_metadata": benchmark_metadata(benchmark_key),
+            "resources": resource_info,
+        },
     )
 
 
@@ -915,7 +1025,8 @@ def _load_cmod_density_limit():
         d = np.load(cache)
         return d["X"], d["y"]
 
-    import io, urllib.request
+    import io
+    import urllib.request
     import pandas as pd
 
     url = (
@@ -1488,6 +1599,7 @@ def format_leaderboard_table(
     # Build value matrix and find best per column.
     model_names = [r.model_key for r in results]
     passed_flags = [r.passed for r in results]
+    has_skips = any(r.extra.get("status") == "skipped" for r in results)
     matrix: list[list[float | None]] = [
         [r.metrics.get(k) for k in all_keys] for r in results
     ]
@@ -1520,6 +1632,8 @@ def format_leaderboard_table(
 
     header = f"{'Model':<{model_w}}  {'Pass':4}  "
     header += "".join(f"{k:>{col_w}}" for k in all_keys)
+    if has_skips:
+        header += "  Reason"
     lines.append(header)
     lines.append("─" * (model_w + col_w * len(all_keys) + 8))
 
@@ -1529,7 +1643,7 @@ def format_leaderboard_table(
     for row_idx, (result, model_name, passed) in enumerate(
         zip(results, model_names, passed_flags)
     ):
-        status = "PASS" if passed else "FAIL"
+        status = "N/A" if result.extra.get("status") == "skipped" else ("PASS" if passed else "FAIL")
         n_seeds = result.extra.get("n_seeds", 1)
         seed_tag = f"(n={n_seeds})" if n_seeds > 1 else ""
         row = f"{model_name:<{model_w}}  {status:4}  "
@@ -1541,6 +1655,8 @@ def format_leaderboard_table(
                 cell = "—"
             elif metric_key == "runtime_s":
                 cell = f"{val:.2f}s"
+            elif metric_key in {"peak_memory_mb", "gpu_peak_memory_mb"}:
+                cell = f"{val:.1f}MB"
             elif has_std and metric_key in std_map and std_map[metric_key] > 0:
                 cell = f"{val:.4f}±{std_map[metric_key]:.4f}"
             else:
@@ -1550,6 +1666,8 @@ def format_leaderboard_table(
             row += f"{cell:>{col_w}}"
         if seed_tag:
             row += f"  {seed_tag}"
+        if has_skips:
+            row += f"  {result.extra.get('skip_reason', '')}"
         lines.append(row)
 
     lines.append("─" * (model_w + col_w * len(all_keys) + 8))

@@ -308,6 +308,199 @@ _SHORT_ALIASES: dict[str, str] = {
     "scm20d":               "multioutput.scm20d",
 }
 
+_DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
+    "tabular.diabetes": {
+        "dataset_source": "sklearn.datasets",
+        "license": "scikit-learn bundled dataset",
+        "access": "bundled",
+        "cache_path": None,
+        "sample_count": 442,
+        "feature_shape": "10",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "tabular.california_housing": {
+        "dataset_source": "sklearn.datasets",
+        "license": "sklearn/OpenML source dataset",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/tabular/sklearn_cache",
+        "sample_count": 20640,
+        "feature_shape": "8",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": []},
+    },
+    "tabular.concrete_strength": {
+        "dataset_source": "OpenML #4353",
+        "license": "OpenML dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/tabular/sklearn_cache",
+        "sample_count": 1030,
+        "feature_shape": "8",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "classification.flow_regime": {
+        "dataset_source": "SURGE inline generator",
+        "license": "project generated fixture",
+        "access": "generated",
+        "cache_path": None,
+        "sample_count": 800,
+        "feature_shape": "3",
+        "target_shape": "4 classes",
+        "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "sequence.lorenz63": {
+        "dataset_source": "SURGE RK4 Lorenz-63 generator",
+        "license": "project generated fixture",
+        "access": "generated_cached",
+        "cache_path": "data/datasets/benchmarks/sequence/lorenz63.npz",
+        "sample_count": 1200,
+        "feature_shape": "60",
+        "target_shape": "60",
+        "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "pde.burgers_1d": {
+        "dataset_source": "SURGE finite-difference Burgers generator",
+        "license": "project generated fixture",
+        "access": "generated_cached",
+        "cache_path": "data/datasets/benchmarks/pde/burgers_1d.npz",
+        "sample_count": 1024,
+        "feature_shape": "64",
+        "target_shape": "64",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["torch"]},
+    },
+    "classification.plasma_stability": {
+        "dataset_source": "UCI Electrical Grid Stability",
+        "license": "UCI dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/classification/plasma_stability.npz",
+        "sample_count": 10000,
+        "feature_shape": "12",
+        "target_shape": "2 classes",
+        "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "tabular.plasma_stability": {
+        "dataset_source": "UCI Electrical Grid Stability",
+        "license": "UCI dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/classification/plasma_stability.npz",
+        "sample_count": 10000,
+        "feature_shape": "12",
+        "target_shape": "2 classes",
+        "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "plasma.cmod_density_limit": {
+        "dataset_source": "MIT-PSFC/open_density_limit_database",
+        "license": "upstream GitHub repository terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/plasma/cmod_density_limit.npz",
+        "sample_count": 264385,
+        "feature_shape": "6",
+        "target_shape": "2 classes",
+        "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": []},
+    },
+    "plasma.qlknn_transport": {
+        "dataset_source": "Google DeepMind fusion_surrogates QLKNN",
+        "license": "upstream package/model terms",
+        "access": "generated_cached",
+        "cache_path": "data/datasets/benchmarks/plasma/qlknn_transport.npz",
+        "sample_count": 20000,
+        "feature_shape": "10",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["fusion_surrogates", "jax"]},
+    },
+    "fusion.mhd_sample": {
+        "dataset_source": "MHD-code HDF5 supplied out-of-band",
+        "license": "data-owner controlled",
+        "access": "local_file",
+        "cache_path": "data/datasets/benchmarks/fusion/mhd_code/mhd_sample.hdf5",
+        "sample_count": None,
+        "feature_shape": "13",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": ["h5py"]},
+    },
+    "plasma.constellaration": {
+        "dataset_source": "proxima-fusion/constellaration on HuggingFace",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/plasma/constellaration",
+        "sample_count": 10000,
+        "feature_shape": "90",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
+    },
+    "plasma.constellaration_paper": {
+        "dataset_source": "proxima-fusion/constellaration on HuggingFace",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/plasma/constellaration",
+        "sample_count": 23000,
+        "feature_shape": "90",
+        "target_shape": "12",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
+    },
+    "vision.mnist": {
+        "dataset_source": "torchvision MNIST",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/vision",
+        "sample_count": 70000,
+        "feature_shape": "784",
+        "target_shape": "10 classes",
+        "resource_expectation": {"device": "gpu recommended", "memory_tier": "medium", "optional_dependencies": ["torch", "torchvision"]},
+    },
+    "vision.cifar10": {
+        "dataset_source": "torchvision CIFAR-10",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/vision",
+        "sample_count": 60000,
+        "feature_shape": "3072",
+        "target_shape": "10 classes",
+        "resource_expectation": {"device": "gpu recommended", "memory_tier": "medium", "optional_dependencies": ["torch", "torchvision"]},
+    },
+}
+
+
+def benchmark_metadata(key: str) -> dict[str, Any]:
+    """Return structured dataset and resource metadata for a benchmark."""
+    key = resolve_benchmark_key(key)
+    _, category, task_type, shape, _ = _META[key]
+    default = {
+        "dataset_source": "OpenML/sklearn or SURGE benchmark registry",
+        "license": "upstream dataset terms",
+        "access": "download_cached" if category != "smoke" else "generated",
+        "cache_path": "data/datasets/benchmarks/tabular/sklearn_cache" if category == "tabular" else None,
+        "task_family": category,
+        "task_type": task_type,
+        "sample_count": None,
+        "feature_shape": shape.split("(")[0].strip(),
+        "target_shape": "",
+        "resource_expectation": {
+            "device": "cpu",
+            "memory_tier": "small",
+            "optional_dependencies": [],
+        },
+    }
+    merged = {**default, **_DATASET_METADATA_OVERRIDES.get(key, {})}
+    merged["task_family"] = category
+    merged["task_type"] = task_type
+    return merged
+
+
+def _legacy_tier_for(category: str, key: str | None = None) -> str:
+    """Return the historical numeric tier while category remains primary."""
+    if key == "sequence.lorenz63":
+        return "0"
+    if category == "smoke":
+        return "0"
+    if category == "tabular":
+        return "1"
+    if category in {"image", "field", "plasma"}:
+        return "2"
+    return category
+
+
 # Flat runner registry (key → callable) — None entries use the generic adapter path.
 REGISTRY: dict[str, Callable[..., BenchmarkResult]] = {
     k: v[0] for k, v in _META.items() if v[0] is not None
@@ -338,8 +531,7 @@ def list_benchmarks(
     *,
     category: str | None = None,
     task_type: str | None = None,
-    include_smoke: bool = False,
-    # legacy arg kept for back-compat; ignored silently
+    include_smoke: bool = True,
     tier: str | None = None,
 ) -> list[str]:
     """Return sorted benchmark keys, optionally filtered.
@@ -353,8 +545,9 @@ def list_benchmarks(
     task_type:
         ``regression`` or ``classification``.
     include_smoke:
-        If *False* (default), synthetic smoke-test benchmarks are excluded.
-        Pass *True* or ``--smoke`` from the CLI to include them.
+        If *False*, synthetic smoke-test benchmarks are excluded. The CLI
+        passes this explicitly so ``surge run --list`` can stay quiet by
+        default while the Python API remains exhaustive.
     """
     _CAT_ALIASES = {
         "vision": "image",       # legacy
@@ -370,6 +563,8 @@ def list_benchmarks(
             continue
         if effective_category is not None and cat != effective_category:
             continue
+        if tier is not None and _legacy_tier_for(cat, k) != str(tier):
+            continue
         if task_type is not None and tt != task_type:
             continue
         keys.append(k)
@@ -381,18 +576,20 @@ def list_categories() -> list[str]:
     return sorted({cat for _, cat, *_ in _META.values() if cat != "smoke"})
 
 
-def benchmark_info(key: str) -> dict[str, str]:
+def benchmark_info(key: str) -> dict[str, Any]:
     """Return metadata dict for a registered benchmark key (full or short)."""
     key = resolve_benchmark_key(key)
     _, category, task_type, shape, description = _META[key]
+    metadata = benchmark_metadata(key)
     return {
         "key": key,
         "category": category,
-        # keep 'tier' for any code that still reads it
-        "tier": category,
+        # keep numeric 'tier' for older code/tests while category is primary
+        "tier": _legacy_tier_for(category, key),
         "task_type": task_type,
         "shape": shape,
         "description": description,
+        **metadata,
     }
 
 

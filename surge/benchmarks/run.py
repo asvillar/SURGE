@@ -55,8 +55,6 @@ import sys
 from pathlib import Path
 
 from .leaderboard import (
-    _default_models_for,
-    format_leaderboard_table,
     log_leaderboard_to_mlflow,
     print_leaderboard,
     run_leaderboard,
@@ -99,9 +97,10 @@ def _print_list(
     category: str | None = None,
     task_type: str | None = None,
     include_smoke: bool = False,
+    tier: str | None = None,
 ) -> None:
     keys = list_benchmarks(
-        category=category, task_type=task_type, include_smoke=include_smoke
+        category=category, task_type=task_type, include_smoke=include_smoke, tier=tier
     )
     if not keys:
         print("No benchmarks match the specified filters.")
@@ -377,9 +376,11 @@ def main(argv: list[str] | None = None) -> int:
 
     args = ap.parse_args(argv)
 
-    # --tier → --category back-compat
-    if args.tier and not args.category:
+    # --tier accepted legacy category names historically; numeric tiers stay
+    # numeric and are passed to the registry.
+    if args.tier and not args.category and not str(args.tier).isdigit():
         args.category = args.tier
+    _include_smoke = args.smoke or str(args.tier) == "0"
 
     # ── list-hpo-models ───────────────────────────────────────────────────────
     if args.list_hpo_models:
@@ -400,7 +401,8 @@ def main(argv: list[str] | None = None) -> int:
             verbose=args.verbose,
             category=args.category,
             task_type=args.task_type,
-            include_smoke=args.smoke,
+            include_smoke=_include_smoke,
+            tier=args.tier if args.tier and str(args.tier).isdigit() else None,
         )
         return 0
 
@@ -465,13 +467,15 @@ def main(argv: list[str] | None = None) -> int:
             bm_keys = list_benchmarks(
                 category=args.category,
                 task_type=args.task_type,
-                include_smoke=args.smoke,
+                include_smoke=_include_smoke,
+                tier=args.tier if args.tier and str(args.tier).isdigit() else None,
             )
         elif args.category and not args.benchmark:
             bm_keys = list_benchmarks(
                 category=args.category,
                 task_type=args.task_type,
-                include_smoke=args.smoke,
+                include_smoke=_include_smoke,
+                tier=args.tier if args.tier and str(args.tier).isdigit() else None,
             )
         else:
             raw = args.benchmark or []
@@ -529,7 +533,8 @@ def main(argv: list[str] | None = None) -> int:
         keys = list_benchmarks(
             category=args.category,
             task_type=args.task_type,
-            include_smoke=args.smoke,
+            include_smoke=_include_smoke,
+            tier=args.tier if args.tier and str(args.tier).isdigit() else None,
         )
         if not keys:
             print("No benchmarks match the specified filters.", file=sys.stderr)

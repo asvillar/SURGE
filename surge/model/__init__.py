@@ -244,6 +244,16 @@ try:
 except Exception:
     pass
 
+try:
+    import importlib.util as _importlib_util
+    from .adapters.tabpfn import TabPFNClassifierAdapter, TabPFNRegressorAdapter
+
+    if _importlib_util.find_spec("tabpfn") is not None:
+        register_model(TabPFNRegressorAdapter, key='tabpfn.regressor', aliases=['tabpfn'])
+        register_model(TabPFNClassifierAdapter, key='tabpfn.classifier', aliases=['tabpfn_clf'])
+except Exception:
+    pass
+
 
 def __getattr__(name: str):  # PEP 562: avoid importing TensorFlow/GPflow at import time
     if name == "GPFLOW_AVAILABLE":
@@ -275,4 +285,7 @@ __all__ = [
     "create_model",
     "list_models",
     "register_model",
+    "compare_training_histories",
+    "load_training_history",
+    "plot_training_history",
 ]
