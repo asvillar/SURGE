@@ -226,6 +226,12 @@ catboost_info/
 # Cached HuggingFace / processed plasma datasets (large, re-downloadable)
 data/datasets/constellaration/
 
+# Benchmark runtime data cache (downloaded or generated on first run).
+# Directory skeleton (subdirs + .gitkeep files) IS tracked; data files are not.
+data/datasets/benchmarks/**
+!data/datasets/benchmarks/**/
+!data/datasets/benchmarks/**/.gitkeep
+
 # Conda environment backup files
 env_backup.yml
 pip_requirements.txt

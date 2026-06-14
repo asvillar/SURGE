@@ -26,6 +26,48 @@ import numpy as np
 from .base import BenchmarkResult
 from .registry import benchmark_info, list_benchmarks, run_benchmark
 
+
+# ---------------------------------------------------------------------------
+# Unified benchmark data cache
+# ---------------------------------------------------------------------------
+
+def _bench_data_root() -> Path:
+    """Return the repo-local runtime cache for all benchmark datasets.
+
+    Layout (all ignored by git except .gitkeep files)::
+
+        data/datasets/benchmarks/
+            vision/          ← torchvision downloads (MNIST, CIFAR-10)
+            tabular/
+                sklearn_cache/  ← sklearn/OpenML downloads
+            plasma/          ← QLkNN NPZ, C-Mod NPZ, Constellaration NPZ
+            fusion/mhd_code/    ← MHD-code HDF5
+            pde/             ← Burgers 1-D generated NPZ
+            sequence/        ← Lorenz-63 generated NPZ
+            classification/  ← UCI-downloaded classification NPZ files
+
+    On first run each loader creates its subdirectory and saves the data.
+    Subsequent runs load from the local cache without re-downloading.
+    """
+    root = Path(__file__).parent.parent.parent / "data" / "datasets" / "benchmarks"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _fetch_openml(*args, **kwargs):
+    """sklearn fetch_openml redirected to the unified benchmark cache."""
+    from sklearn.datasets import fetch_openml as _sk_fetch_openml
+    kwargs.setdefault("data_home", str(_bench_data_root() / "tabular" / "sklearn_cache"))
+    return _sk_fetch_openml(*args, **kwargs)
+
+
+def _fetch_california_housing(**kwargs):
+    """sklearn fetch_california_housing redirected to the unified benchmark cache."""
+    from sklearn.datasets import fetch_california_housing as _sk
+    kwargs.setdefault("data_home", str(_bench_data_root() / "tabular" / "sklearn_cache"))
+    return _sk(**kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Model compatibility matrix
 # ---------------------------------------------------------------------------
@@ -478,7 +520,6 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
 def _load_dataset(benchmark_key: str):
     """Load the raw (X, y) arrays for a benchmark key."""
     from sklearn.datasets import (
-        fetch_california_housing,
         load_breast_cancer,
         load_diabetes,
         load_digits,
@@ -491,7 +532,7 @@ def _load_dataset(benchmark_key: str):
         "synthetic.classification_binary": lambda: _synthetic_classification_binary(),
         "synthetic.multioutput_2d": lambda: _synthetic_multioutput_2d(),
         "tabular.diabetes": lambda: load_diabetes(return_X_y=True),
-        "tabular.california_housing": lambda: fetch_california_housing(return_X_y=True),
+        "tabular.california_housing": lambda: _fetch_california_housing(return_X_y=True),
         "tabular.concrete_strength": lambda: _load_concrete_strength(),
         "tabular.energy_efficiency": lambda: _load_energy_efficiency(),
         "tabular.iris": lambda: load_iris(return_X_y=True),
@@ -558,9 +599,7 @@ def _synthetic_multioutput_2d():
 
 
 def _load_concrete_strength():
-    from sklearn.datasets import fetch_openml
-
-    data = fetch_openml(data_id=4353, as_frame=True, parser="auto")
+    data = _fetch_openml(data_id=4353, as_frame=True, parser="auto")
     df = data.frame
     target_col = df.columns[-1]   # last column is compressive strength
     y = df[target_col].values.astype(float)
@@ -569,15 +608,27 @@ def _load_concrete_strength():
 
 
 def _load_lorenz63():
+    cache = _bench_data_root() / "sequence" / "lorenz63.npz"
+    if cache.exists():
+        d = np.load(cache)
+        return d["X"], d["y"]
     from .tasks import _generate_lorenz_trajectories
-
-    return _generate_lorenz_trajectories(n_trajectories=1200, T_in=20, T_out=20, dt=0.01, warmup=500, seed=42)
+    X, y = _generate_lorenz_trajectories(n_trajectories=1200, T_in=20, T_out=20, dt=0.01, warmup=500, seed=42)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, X=X, y=y)
+    return X, y
 
 
 def _load_burgers_1d():
+    cache = _bench_data_root() / "pde" / "burgers_1d.npz"
+    if cache.exists():
+        d = np.load(cache)
+        return d["X"], d["y"]
     from .tasks import _generate_burgers_dataset
-
-    return _generate_burgers_dataset(n_samples=1024, n_x=64, nt=100, dt=1e-3, nu=0.01, seed=42)
+    X, y = _generate_burgers_dataset(n_samples=1024, n_x=64, nt=100, dt=1e-3, nu=0.01, seed=42)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, X=X, y=y)
+    return X, y
 
 
 def _load_flow_regime(seed: int = 42):
@@ -598,22 +649,25 @@ def _load_flow_regime(seed: int = 42):
 
 
 def _load_airfoil_noise():
-    from sklearn.datasets import fetch_openml
-    data = fetch_openml(name="airfoil_self_noise", version=1, as_frame=True, parser="auto")
+    data = _fetch_openml(name="airfoil_self_noise", version=1, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     y = data.target.values.astype(float) if hasattr(data.target, "values") else np.asarray(data.target, dtype=float)
     return X, y
 
 
 def _load_yacht_dynamics():
-    from sklearn.datasets import fetch_openml
-    data = fetch_openml(name="yacht_hydrodynamics", version=1, as_frame=True, parser="auto")
+    data = _fetch_openml(name="yacht_hydrodynamics", version=1, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     y = data.target.values.astype(float) if hasattr(data.target, "values") else np.asarray(data.target, dtype=float)
     return X, y
 
 
 def _load_plasma_stability():
+    cache = _bench_data_root() / "classification" / "plasma_stability.npz"
+    if cache.exists():
+        d = np.load(cache)
+        return d["X"], d["y"]
+
     import io
     import urllib.request
     import pandas as pd
@@ -628,38 +682,35 @@ def _load_plasma_stability():
     X = df[feature_cols].values.astype(float)
     le = LabelEncoder()
     y = le.fit_transform(df["stabf"].values)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, X=X, y=y)
     return X, y
 
 
 def _load_energy_efficiency():
-    from sklearn.datasets import fetch_openml
-
-    data = fetch_openml(name="energy-efficiency", version=1, as_frame=True, parser="auto")
+    data = _fetch_openml(name="energy-efficiency", version=1, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     y = data.target.values.astype(float) if data.target.ndim == 1 else data.target.iloc[:, 0].values.astype(float)
     return X, y
 
 
 def _load_superconductor():
-    from sklearn.datasets import fetch_openml
-    data = fetch_openml(name="superconduct", version=1, as_frame=True, parser="auto")
+    data = _fetch_openml(name="superconduct", version=1, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     y = data.target.values.astype(float)
     return X, y
 
 
 def _load_scm20d():
-    from sklearn.datasets import fetch_openml
-    data = fetch_openml(name="scm20d", version=2, as_frame=True, parser="auto")
+    data = _fetch_openml(name="scm20d", version=2, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     y = data.target.values.astype(float)
     return X, y
 
 
 def _load_covertype():
-    from sklearn.datasets import fetch_openml
     from sklearn.preprocessing import LabelEncoder
-    data = fetch_openml(name="covertype", version=3, as_frame=True, parser="auto")
+    data = _fetch_openml(name="covertype", version=3, as_frame=True, parser="auto")
     X = data.data.values.astype(float)
     le = LabelEncoder()
     y = le.fit_transform(data.target.values if hasattr(data.target, "values") else data.target)
@@ -686,8 +737,7 @@ def _load_cifar10():
     except ImportError as exc:
         raise ImportError("torchvision required. pip install torchvision") from exc
 
-    from pathlib import Path
-    root = str(Path.home() / ".surge" / "data" / "torchvision")
+    root = str(_bench_data_root() / "vision")
     transform = T.Compose([T.ToTensor()])
     train_ds = torchvision.datasets.CIFAR10(root, train=True,  download=True, transform=transform)
     test_ds  = torchvision.datasets.CIFAR10(root, train=False, download=True, transform=transform)
@@ -720,8 +770,7 @@ def _load_mnist():
     except ImportError as exc:
         raise ImportError("torchvision required. pip install torchvision") from exc
 
-    from pathlib import Path
-    root = str(Path.home() / ".surge" / "data" / "torchvision")
+    root = str(_bench_data_root() / "vision")
     transform = T.Compose([T.ToTensor()])
     train_ds = torchvision.datasets.MNIST(root, train=True,  download=True, transform=transform)
     test_ds  = torchvision.datasets.MNIST(root, train=False, download=True, transform=transform)
@@ -753,10 +802,9 @@ def _load_ctr23_abalone():
     n=4177, d=8 (7 numeric + 1 nominal sex → encoded).
     OpenML ID: 183 | Grinsztajn et al. 2022, Table 1.
     """
-    from sklearn.datasets import fetch_openml
     from sklearn.preprocessing import OrdinalEncoder
 
-    data = fetch_openml(data_id=183, as_frame=True, parser="auto")
+    data = _fetch_openml(data_id=183, as_frame=True, parser="auto")
     df = data.frame.copy()
     # Sex column is nominal; encode to integer.
     cat_cols = [c for c in df.columns[:-1] if df[c].dtype == "object" or str(df[c].dtype) == "category"]
@@ -774,9 +822,7 @@ def _load_ctr23_bike_sharing():
 
     n=17,389, d=12.  OpenML ID: 42712 | Grinsztajn et al. 2022.
     """
-    from sklearn.datasets import fetch_openml
-
-    data = fetch_openml(data_id=42712, as_frame=True, parser="auto")
+    data = _fetch_openml(data_id=42712, as_frame=True, parser="auto")
     df = data.frame
     target = df.columns[-1]
     y = df[target].values.astype(float)
@@ -790,10 +836,9 @@ def _load_ctr23_diamonds():
     n=53,940, d=9.  OpenML ID: 42225 | Grinsztajn et al. 2022.
     Sub-sampled to 15k for speed.
     """
-    from sklearn.datasets import fetch_openml
     from sklearn.preprocessing import OrdinalEncoder
 
-    data = fetch_openml(data_id=42225, as_frame=True, parser="auto")
+    data = _fetch_openml(data_id=42225, as_frame=True, parser="auto")
     df = data.frame.copy()
     cat_cols = [c for c in df.columns[:-1] if df[c].dtype == "object" or str(df[c].dtype) == "category"]
     if cat_cols:
@@ -813,9 +858,7 @@ def _load_ctr23_house_sales():
 
     n=21,613, d=19.  OpenML ID: 42731 | Grinsztajn et al. 2022.
     """
-    from sklearn.datasets import fetch_openml
-
-    data = fetch_openml(data_id=42731, as_frame=True, parser="auto")
+    data = _fetch_openml(data_id=42731, as_frame=True, parser="auto")
     df = data.frame.copy()
     cat_cols = [c for c in df.columns[:-1] if df[c].dtype == "object" or str(df[c].dtype) == "category"]
     if cat_cols:
@@ -835,9 +878,7 @@ def _load_ctr23_brazilian_houses():
 
     n=10,692, d=11.  OpenML ID: 42688 | Grinsztajn et al. 2022.
     """
-    from sklearn.datasets import fetch_openml
-
-    data = fetch_openml(data_id=42688, as_frame=True, parser="auto")
+    data = _fetch_openml(data_id=42688, as_frame=True, parser="auto")
     df = data.frame.copy()
     cat_cols = [c for c in df.columns[:-1] if df[c].dtype == "object" or str(df[c].dtype) == "category"]
     if cat_cols:
@@ -869,6 +910,11 @@ def _load_cmod_density_limit():
     We balance the dataset to 50/50 by downsampling the majority class to
     keep n ≤ 40k for fast leaderboard runs.
     """
+    cache = _bench_data_root() / "plasma" / "cmod_density_limit.npz"
+    if cache.exists():
+        d = np.load(cache)
+        return d["X"], d["y"]
+
     import io, urllib.request
     import pandas as pd
 
@@ -893,44 +939,47 @@ def _load_cmod_density_limit():
     chosen_neg = rng.choice(neg_idx, size=n_per_class, replace=False)
     idx = np.concatenate([chosen_pos, chosen_neg])
     rng.shuffle(idx)
-    return X[idx], y[idx]
+    X_out, y_out = X[idx], y[idx]
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, X=X_out, y=y_out)
+    return X_out, y_out
 
 
 def _load_fusion_mhd_sample():
     """MHD-code equilibrium surrogate — 13 MHD params → stability metric.
 
-    Mirrors the data-loading logic in tasks.run_fusion_mhd_sample:
-    tries the real HDF5 file first, falls back to a synthetic fixture
-    with the same shape and difficulty so tests / CI run without data.
+    Searches for the HDF5 file in two locations (in order):
+      1. data/datasets/benchmarks/fusion/mhd_code/mhd_sample.hdf5  (unified cache)
+      2. data/datasets/MHD-code/mhd_sample.hdf5                    (legacy path)
+
+    Raises FileNotFoundError if neither location contains the file.
+    There is no synthetic fallback — results from this benchmark must
+    come from real MHD-code data.
     """
-    from pathlib import Path
-
-    import numpy as np
-
-    H5_PATH = (
-        Path(__file__).parent.parent.parent
-        / "data" / "datasets" / "MHD-code" / "mhd_sample.hdf5"
-    )
-    X: np.ndarray | None = None
-    y: np.ndarray | None = None
-    if H5_PATH.exists():
-        try:
-            import h5py
-            with h5py.File(H5_PATH, "r") as f:
-                keys = list(f.keys())
-                X_key = next(k for k in keys if "X" in k or "input" in k.lower())
-                y_key = next(k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower())
-                X = np.asarray(f[X_key], dtype=float)
-                y = np.asarray(f[y_key], dtype=float).ravel()
-        except Exception:
-            X, y = None, None
-    if X is None or y is None:
-        rng = np.random.default_rng(42)
-        n = 2000
-        X = rng.standard_normal((n, 13))
-        coefs = rng.uniform(-1.0, 1.0, 13)
-        y = X @ coefs + 0.1 * rng.standard_normal(n)
-    return X, y
+    repo_root = Path(__file__).parent.parent.parent
+    candidate_paths = [
+        _bench_data_root() / "fusion" / "mhd_code" / "mhd_sample.hdf5",
+        repo_root / "data" / "datasets" / "MHD-code" / "mhd_sample.hdf5",
+    ]
+    h5_path = next((p for p in candidate_paths if p.exists()), None)
+    if h5_path is None:
+        raise FileNotFoundError(
+            "MHD-code HDF5 not found.  Place the file at:\n"
+            f"  {candidate_paths[0]}\n"
+            "or obtain it from the PPPL MHD-code team.  "
+            "No synthetic fallback is provided — benchmark results must use real data."
+        )
+    try:
+        import h5py
+        with h5py.File(h5_path, "r") as f:
+            keys = list(f.keys())
+            X_key = next(k for k in keys if "X" in k or "input" in k.lower())
+            y_key = next(k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower())
+            X = np.asarray(f[X_key], dtype=float)
+            y = np.asarray(f[y_key], dtype=float).ravel()
+        return X, y
+    except Exception as exc:
+        raise RuntimeError(f"Failed to read MHD-code HDF5 at {h5_path}: {exc}") from exc
 
 
 def _load_qlknn_transport():
@@ -963,6 +1012,11 @@ def _load_qlknn_transport():
     Reference: van de Plassche et al. Physics of Plasmas 27, 022310 (2020).
                Google DeepMind fusion_surrogates (2024).
     """
+    cache = _bench_data_root() / "plasma" / "qlknn_transport.npz"
+    if cache.exists():
+        d = np.load(cache)
+        return d["X"], d["y"]
+
     try:
         from fusion_surrogates.qlknn import qlknn_model
         import jax.numpy as jnp
@@ -996,7 +1050,10 @@ def _load_qlknn_transport():
 
     # Keep only samples where QLKNN predicts nonzero transport (mode is active).
     mask = y > 0
-    return X[mask].astype(float), y[mask].astype(float)
+    X_out, y_out = X[mask].astype(float), y[mask].astype(float)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, X=X_out, y=y_out)
+    return X_out, y_out
 
 
 def _load_constellaration(n_samples: int = 10_000):
@@ -1016,12 +1073,14 @@ def _load_constellaration(n_samples: int = 10_000):
     Source: proxima-fusion/constellaration on HuggingFace (Cadena et al. 2025).
     DOI: arXiv:2506.19583
     """
-    from pathlib import Path
-
-    # Fast path — reuse the paper NPZ cache written by _load_constellaration_paper.
+    # Fast path — check both the new unified cache location and the legacy path.
     repo_root = Path(__file__).parent.parent.parent
-    npz_path = repo_root / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz"
-    if npz_path.exists():
+    _npz_candidates = [
+        _bench_data_root() / "plasma" / "constellaration" / "paper_nfp3_clip0.05.npz",
+        repo_root / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz",
+    ]
+    npz_path = next((p for p in _npz_candidates if p.exists()), None)
+    if npz_path is not None:
         data = np.load(npz_path, allow_pickle=True)
         X_full = data["X"]                     # (N, 90)
         Y_full = data["Y"]                     # (N, 12)
@@ -1110,14 +1169,19 @@ def _load_constellaration_paper(
     re-downloading on repeated runs.
     """
     import math
-    from pathlib import Path
 
-    repo_root = Path(__file__).parent.parent.parent
     _cache_dir = Path(cache_dir) if cache_dir else (
-        repo_root / "data" / "datasets" / "constellaration"
+        _bench_data_root() / "plasma" / "constellaration"
     )
     _cache_dir.mkdir(parents=True, exist_ok=True)
     cache_file = _cache_dir / f"paper_nfp{n_field_periods}_clip{outlier_clip_pct}.npz"
+
+    # Also check legacy path so existing local caches are reused.
+    if not cache_file.exists():
+        repo_root = Path(__file__).parent.parent.parent
+        legacy = repo_root / "data" / "datasets" / "constellaration" / cache_file.name
+        if legacy.exists():
+            cache_file = legacy
 
     if cache_file.exists():
         data = np.load(cache_file, allow_pickle=True)
