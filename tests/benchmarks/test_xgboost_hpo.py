@@ -204,6 +204,20 @@ def test_suggest_params_decodes_categorical_values():
     assert all(isinstance(v, int) for v in params["hidden_layers"])
 
 
+def test_all_hpo_search_spaces_suggest_params():
+    import optuna
+    from surge.benchmarks.hpo import list_hpo_models, suggest_params
+
+    for model_key in list_hpo_models():
+        study = optuna.create_study()
+        trial = study.ask()
+        params = suggest_params(model_key, trial)
+        assert isinstance(params, dict)
+        assert params, f"{model_key} returned no params"
+        for value in params.values():
+            assert not isinstance(value, range)
+
+
 def test_run_benchmark_hpo_rf(tmp_path):
     """Fast HPO smoke test: 5 trials, RF on synthetic.regression_1d."""
     from surge.benchmarks.hpo import run_benchmark_hpo
@@ -224,6 +238,24 @@ def test_run_benchmark_hpo_rf(tmp_path):
     # auto-saved
     saved = list(tmp_path.rglob("result.json"))
     assert len(saved) == 1
+
+
+def test_run_benchmark_hpo_sklearn_mlp(tmp_path):
+    """Fast non-tree HPO smoke test: sklearn MLP on synthetic regression."""
+    from surge.benchmarks.hpo import run_benchmark_hpo
+
+    result, best_params = run_benchmark_hpo(
+        "synthetic.regression_1d",
+        "sklearn.mlp",
+        n_trials=2,
+        seed=3,
+        save_root=None,
+    )
+    assert result is not None
+    assert "test_r2" in result.metrics
+    assert np.isfinite(result.metrics["test_r2"])
+    assert "hidden_layer_sizes" in best_params
+    assert isinstance(best_params["hidden_layer_sizes"], tuple)
 
 
 def test_run_benchmark_hpo_classification(tmp_path):

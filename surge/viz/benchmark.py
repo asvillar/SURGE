@@ -530,7 +530,12 @@ def plot_model_spider_chart(
     ax.grid(True, alpha=0.35)
     bk = selected[0].benchmark_key
     ax.set_title(title or f"{bk} — model spider plot", fontsize=12, fontweight="bold", pad=20)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.25, 1.15), fontsize=8)
+    ax.legend(
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.22),
+        ncol=min(3, len(selected)),
+        fontsize=8,
+    )
 
     if own_fig:
         fig.tight_layout()
