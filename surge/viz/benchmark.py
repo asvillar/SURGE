@@ -75,6 +75,29 @@ _FAIL_COLOR = "#EF5350"
 _BEST_COLOR = "#1565C0"   # highlighted best bar
 _BASE_COLOR = "#90A4AE"   # other bars
 
+_SPIDER_THEME = {
+    "figure_bg": "#050A14",
+    "axes_bg": "#07111F",
+    "grid": "#2AF6FF",
+    "grid_secondary": "#7C5CFF",
+    "text": "#EAF8FF",
+    "muted_text": "#94A9C9",
+    "ring_fill": "#11395A",
+    "legend_bg": "#0A1326",
+    "legend_edge": "#27E8FF",
+}
+
+_SPIDER_PALETTE = (
+    "#20F7FF",
+    "#FF3AF2",
+    "#6DFF8F",
+    "#FFD166",
+    "#8A7CFF",
+    "#FF7A45",
+    "#46A6FF",
+    "#F5FF3D",
+)
+
 
 def plot_benchmark_leaderboard(
     results: list[Any],
@@ -453,6 +476,55 @@ def _normalise_metric_values(values: np.ndarray, *, lower_better: bool) -> np.nd
     return np.clip(scores, 0.0, 1.0)
 
 
+def _style_spider_axis(ax: Any, angles: np.ndarray, closed_angles: np.ndarray) -> None:
+    ax.set_facecolor(_SPIDER_THEME["axes_bg"])
+    ax.figure.patch.set_facecolor(_SPIDER_THEME["figure_bg"])
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_ylim(0.0, 1.0)
+
+    ax.grid(color=_SPIDER_THEME["grid"], alpha=0.22, linewidth=0.8)
+    ax.xaxis.grid(True, color=_SPIDER_THEME["grid_secondary"], alpha=0.18, linewidth=0.7)
+    ax.yaxis.grid(True, color=_SPIDER_THEME["grid"], alpha=0.22, linewidth=0.8)
+    ax.tick_params(colors=_SPIDER_THEME["muted_text"], pad=8)
+    ax.spines["polar"].set_color(_SPIDER_THEME["grid"])
+    ax.spines["polar"].set_alpha(0.5)
+    ax.spines["polar"].set_linewidth(1.1)
+
+    for radius, alpha, linewidth in (
+        (1.00, 0.24, 1.2),
+        (0.75, 0.16, 0.9),
+        (0.50, 0.12, 0.8),
+        (0.25, 0.10, 0.7),
+    ):
+        ax.plot(
+            closed_angles,
+            np.full_like(closed_angles, radius, dtype=float),
+            color=_SPIDER_THEME["grid"],
+            alpha=alpha,
+            linewidth=linewidth,
+            zorder=0,
+        )
+
+    for angle in angles:
+        ax.plot(
+            [angle, angle],
+            [0.0, 1.0],
+            color=_SPIDER_THEME["grid_secondary"],
+            alpha=0.14,
+            linewidth=0.7,
+            zorder=0,
+        )
+
+    ax.fill(
+        closed_angles,
+        np.full_like(closed_angles, 1.0, dtype=float),
+        color=_SPIDER_THEME["ring_fill"],
+        alpha=0.10,
+        zorder=-1,
+    )
+
+
 def plot_model_spider_chart(
     results: list[Any],
     *,
@@ -460,6 +532,7 @@ def plot_model_spider_chart(
     title: str | None = None,
     model_keys: list[str] | None = None,
     fill: bool = True,
+    futuristic: bool = True,
     save_path: Path | None = None,
     ax: Any = None,
 ) -> Any:
@@ -467,7 +540,9 @@ def plot_model_spider_chart(
 
     Each metric is min-max normalised across the selected models to a 0-1
     score where 1 is best. Lower-is-better metrics such as runtime and memory
-    are inverted before plotting.
+    are inverted before plotting. The default style uses a dark SURGE theme
+    with high-contrast guide rings and glow lines; set ``futuristic=False`` for
+    a plain Matplotlib radar chart.
     """
     _ensure_mpl()
     if not results:
@@ -506,39 +581,98 @@ def plot_model_spider_chart(
 
     own_fig = ax is None
     if own_fig:
-        fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={"projection": "polar"})
+        fig, ax = plt.subplots(figsize=(8, 8), subplot_kw={"projection": "polar"})
     else:
         fig = ax.get_figure()
+
+    if futuristic:
+        _style_spider_axis(ax, angles, closed_angles)
 
     cmap = plt.get_cmap("tab10")
     for idx, (result, row) in enumerate(zip(selected, scores)):
         closed_values = np.concatenate([row, [row[0]]])
-        color = cmap(idx % 10)
-        ax.plot(closed_angles, closed_values, label=result.model_key, color=color, linewidth=2)
+        color = _SPIDER_PALETTE[idx % len(_SPIDER_PALETTE)] if futuristic else cmap(idx % 10)
+        if futuristic:
+            for glow_width, glow_alpha in ((9, 0.045), (6, 0.075), (4, 0.10)):
+                ax.plot(
+                    closed_angles,
+                    closed_values,
+                    color=color,
+                    linewidth=glow_width,
+                    alpha=glow_alpha,
+                    solid_capstyle="round",
+                    zorder=2,
+                )
+        ax.plot(
+            closed_angles,
+            closed_values,
+            label=result.model_key,
+            color=color,
+            linewidth=2.3 if futuristic else 2,
+            marker="o" if futuristic else None,
+            markersize=4.5 if futuristic else None,
+            markerfacecolor=_SPIDER_THEME["figure_bg"] if futuristic else None,
+            markeredgecolor=color if futuristic else None,
+            markeredgewidth=1.3 if futuristic else None,
+            solid_capstyle="round",
+            zorder=3,
+        )
         if fill:
-            ax.fill(closed_angles, closed_values, color=color, alpha=0.12)
+            ax.fill(
+                closed_angles,
+                closed_values,
+                color=color,
+                alpha=0.16 if futuristic else 0.12,
+                zorder=1,
+            )
 
     labels = [
         f"{_METRIC_LABELS.get(m, m)}\n{'lower' if m in _LOWER_IS_BETTER else 'higher'} is better"
         for m in metrics
     ]
     ax.set_xticks(angles)
-    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_xticklabels(
+        labels,
+        fontsize=8,
+        color=_SPIDER_THEME["text"] if futuristic else None,
+        fontweight="bold" if futuristic else None,
+    )
     ax.set_ylim(0.0, 1.0)
     ax.set_yticks([0.25, 0.5, 0.75, 1.0])
-    ax.set_yticklabels(["0.25", "0.50", "0.75", "1.00"], fontsize=8)
-    ax.grid(True, alpha=0.35)
+    ax.set_yticklabels(
+        ["0.25", "0.50", "0.75", "1.00"],
+        fontsize=8,
+        color=_SPIDER_THEME["muted_text"] if futuristic else None,
+    )
+    if not futuristic:
+        ax.grid(True, alpha=0.35)
     bk = selected[0].benchmark_key
-    ax.set_title(title or f"{bk} — model spider plot", fontsize=12, fontweight="bold", pad=20)
-    ax.legend(
+    ax.set_title(
+        title or f"{bk} — model spider plot",
+        fontsize=13 if futuristic else 12,
+        fontweight="bold",
+        color=_SPIDER_THEME["text"] if futuristic else None,
+        pad=24 if futuristic else 20,
+    )
+    legend = ax.legend(
         loc="lower center",
-        bbox_to_anchor=(0.5, -0.22),
+        bbox_to_anchor=(0.5, -0.25),
         ncol=min(3, len(selected)),
         fontsize=8,
+        frameon=futuristic,
     )
+    if futuristic and legend is not None:
+        legend.get_frame().set_facecolor(_SPIDER_THEME["legend_bg"])
+        legend.get_frame().set_edgecolor(_SPIDER_THEME["legend_edge"])
+        legend.get_frame().set_alpha(0.82)
+        for text in legend.get_texts():
+            text.set_color(_SPIDER_THEME["text"])
 
     if own_fig:
-        fig.tight_layout()
+        if futuristic:
+            fig.subplots_adjust(left=0.18, right=0.82, top=0.87, bottom=0.23)
+        else:
+            fig.tight_layout()
         _save_figure(fig, save_path)
     return fig
 
