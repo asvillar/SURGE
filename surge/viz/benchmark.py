@@ -85,6 +85,8 @@ _SPIDER_THEME = {
     "ring_fill": "#11395A",
     "legend_bg": "#0A1326",
     "legend_edge": "#27E8FF",
+    "font_family": "Avenir Next",
+    "font_fallback": "Helvetica Neue",
 }
 
 _SPIDER_PALETTE = (
@@ -477,6 +479,7 @@ def _normalise_metric_values(values: np.ndarray, *, lower_better: bool) -> np.nd
 
 
 def _style_spider_axis(ax: Any, angles: np.ndarray, closed_angles: np.ndarray) -> None:
+    font_family = [_SPIDER_THEME["font_family"], _SPIDER_THEME["font_fallback"], "DejaVu Sans"]
     ax.set_facecolor(_SPIDER_THEME["axes_bg"])
     ax.figure.patch.set_facecolor(_SPIDER_THEME["figure_bg"])
     ax.set_theta_offset(np.pi / 2)
@@ -487,6 +490,8 @@ def _style_spider_axis(ax: Any, angles: np.ndarray, closed_angles: np.ndarray) -
     ax.xaxis.grid(True, color=_SPIDER_THEME["grid_secondary"], alpha=0.18, linewidth=0.7)
     ax.yaxis.grid(True, color=_SPIDER_THEME["grid"], alpha=0.22, linewidth=0.8)
     ax.tick_params(colors=_SPIDER_THEME["muted_text"], pad=8)
+    for tick_label in [*ax.get_xticklabels(), *ax.get_yticklabels()]:
+        tick_label.set_fontfamily(font_family)
     ax.spines["polar"].set_color(_SPIDER_THEME["grid"])
     ax.spines["polar"].set_alpha(0.5)
     ax.spines["polar"].set_linewidth(1.1)
@@ -588,6 +593,11 @@ def plot_model_spider_chart(
     if futuristic:
         _style_spider_axis(ax, angles, closed_angles)
 
+    spider_font = [
+        _SPIDER_THEME["font_family"],
+        _SPIDER_THEME["font_fallback"],
+        "DejaVu Sans",
+    ]
     cmap = plt.get_cmap("tab10")
     for idx, (result, row) in enumerate(zip(selected, scores)):
         closed_values = np.concatenate([row, [row[0]]])
@@ -636,6 +646,7 @@ def plot_model_spider_chart(
         fontsize=8,
         color=_SPIDER_THEME["text"] if futuristic else None,
         fontweight="bold" if futuristic else None,
+        fontfamily=spider_font if futuristic else None,
     )
     ax.set_ylim(0.0, 1.0)
     ax.set_yticks([0.25, 0.5, 0.75, 1.0])
@@ -643,6 +654,7 @@ def plot_model_spider_chart(
         ["0.25", "0.50", "0.75", "1.00"],
         fontsize=8,
         color=_SPIDER_THEME["muted_text"] if futuristic else None,
+        fontfamily=spider_font if futuristic else None,
     )
     if not futuristic:
         ax.grid(True, alpha=0.35)
@@ -652,6 +664,7 @@ def plot_model_spider_chart(
         fontsize=13 if futuristic else 12,
         fontweight="bold",
         color=_SPIDER_THEME["text"] if futuristic else None,
+        fontfamily=spider_font if futuristic else None,
         pad=24 if futuristic else 20,
     )
     legend = ax.legend(
@@ -667,6 +680,7 @@ def plot_model_spider_chart(
         legend.get_frame().set_alpha(0.82)
         for text in legend.get_texts():
             text.set_color(_SPIDER_THEME["text"])
+            text.set_fontfamily(spider_font)
 
     if own_fig:
         if futuristic:
