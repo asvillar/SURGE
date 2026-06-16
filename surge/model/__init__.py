@@ -63,6 +63,12 @@ try:
 
     if _PTA:
         register_model(ResidualMLPAdapter, key='pytorch.residual_mlp', aliases=['residual_mlp'])
+        from .adapters.geometric_residual_mlp import GeometricResidualMLPAdapter
+        register_model(
+            GeometricResidualMLPAdapter,
+            key='pytorch.geom_residual_mlp',
+            aliases=['geom_residual_mlp', 'geometric_residual_mlp'],
+        )
 except Exception:
     pass
 

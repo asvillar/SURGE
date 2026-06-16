@@ -80,6 +80,7 @@ Core Functionalities
    overview
    installation
    quickstart
+   CUSTOM_DATASET_TUTORIAL
    citation
    SURGE_OVERVIEW
    comparison

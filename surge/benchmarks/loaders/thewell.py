@@ -63,7 +63,17 @@ import numpy as np
 
 _LOG = logging.getLogger("surge.benchmarks.thewell")
 
-_CACHE_DIR = Path.home() / ".surge" / "data" / "thewell"
+# well_download(base_path=...) writes under <base_path>/datasets/<well_name>/data/<split>/
+_DOWNLOAD_ROOT = Path.home() / ".surge" / "data" / "thewell"
+
+
+def _download_root(cache_dir: Path | str | None = None) -> Path:
+    return Path(cache_dir) if cache_dir is not None else _DOWNLOAD_ROOT
+
+
+def _well_base_path(cache_dir: Path | str | None = None) -> Path:
+    """Directory passed to WellDataset as ``well_base_path``."""
+    return _download_root(cache_dir) / "datasets"
 
 THEWELL_AVAILABLE = False
 try:
@@ -116,10 +126,9 @@ def is_cached(key: str, *, cache_dir: Path | str | None = None) -> bool:
     """Return True if the dataset has already been downloaded."""
     if key not in _DATASETS:
         raise KeyError(f"Unknown TheWell dataset {key!r}.")
-    root = Path(cache_dir) if cache_dir is not None else _CACHE_DIR
     well_name = _DATASETS[key]["well_name"]
-    # well_download creates <base_path>/<well_name>/data/train/
-    return (root / well_name / "data" / "train").exists()
+    data_dir = _well_base_path(cache_dir) / well_name / "data"
+    return (data_dir / "train").exists() or (data_dir / "valid").exists()
 
 
 def download_thewell(
@@ -148,7 +157,7 @@ def download_thewell(
         )
     from the_well.utils.download import well_download
 
-    root = Path(cache_dir) if cache_dir is not None else _CACHE_DIR
+    root = _download_root(cache_dir)
     root.mkdir(parents=True, exist_ok=True)
     well_name = _DATASETS[key]["well_name"]
     for split in (splits or ["train", "valid"]):
@@ -202,26 +211,51 @@ def load_thewell(
 
     from the_well.data import WellDataset
 
-    root = Path(cache_dir) if cache_dir is not None else _CACHE_DIR
+    well_root = _well_base_path(cache_dir)
     meta = _DATASETS[key]
     well_name = meta["well_name"]
 
     # Download train + valid splits if absent.
     for split, needed in [("train", n_train), ("valid", n_test)]:
-        split_path = root / well_name / "data" / split
+        if needed <= 0:
+            continue
+        split_path = well_root / well_name / "data" / split
         if not split_path.exists():
             if not download:
                 raise FileNotFoundError(
                     f"TheWell data not found at {split_path}.\n"
                     "Run with download=True or call download_thewell(key) manually."
                 )
-            download_thewell(key, splits=[split], cache_dir=root)
+            download_thewell(key, splits=[split], cache_dir=_download_root(cache_dir))
 
     rng = np.random.default_rng(seed)
 
+    def _assert_split_hdf5_ready(split: str) -> None:
+        split_path = well_root / well_name / "data" / split
+        h5_files = sorted(split_path.glob("*.hdf5"))
+        if not h5_files:
+            raise FileNotFoundError(f"No HDF5 files in {split_path}")
+        import h5py
+        bad: list[str] = []
+        for path in h5_files:
+            try:
+                with h5py.File(path, "r"):
+                    pass
+            except OSError:
+                bad.append(path.name)
+        if bad:
+            raise RuntimeError(
+                f"TheWell {well_name}/{split}: incomplete download "
+                f"({len(bad)} corrupt file(s), e.g. {bad[0]}). "
+                "Wait for download_thewell() to finish or re-run it."
+            )
+
     def _collect(split: str, n_samples: int) -> tuple[np.ndarray, np.ndarray]:
+        if n_samples <= 0:
+            return np.empty((0, 0), dtype=np.float32), np.empty((0, 0), dtype=np.float32)
+        _assert_split_hdf5_ready(split)
         ds = WellDataset(
-            well_base_path=str(root),
+            well_base_path=str(well_root),
             well_dataset_name=well_name,
             well_split_name=split,
             n_steps_input=meta["n_steps_input"],

@@ -1,0 +1,32 @@
+# Workflow spec for docs/CUSTOM_DATASET_TUTORIAL.md
+# Run from the repo root:
+#   python examples/run_workflow.py --spec examples/configs/custom_dataset_tutorial.yaml
+#
+# Create the sample CSV first (or use examples/custom_dataset_tutorial.py):
+#   python examples/custom_dataset_tutorial.py --prepare-only
+
+dataset_path: examples/data/tutorial_sample.csv
+dataset_format: auto
+metadata_path: examples/configs/custom_dataset_meta.yaml
+
+test_fraction: 0.2
+val_fraction: 0.1
+standardize_inputs: true
+standardize_outputs: false
+seed: 42
+
+output_dir: .
+run_tag: custom_dataset_tutorial
+overwrite_existing_run: true
+
+resources:
+  device: cpu
+  num_workers: 2
+
+models:
+  - key: sklearn.random_forest
+    name: rf_tutorial
+    params:
+      n_estimators: 50
+      max_depth: 8
+      n_jobs: -1

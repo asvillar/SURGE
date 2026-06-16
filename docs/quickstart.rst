@@ -145,5 +145,6 @@ and invoke ``run_surrogate_workflow`` with it. The schema matches
 Next steps
 ----------
 
+* :doc:`CUSTOM_DATASET_TUTORIAL` — train on your own CSV, pickle, or HDF5 file
 * :doc:`api_reference/index` — class and method reference
 * :doc:`comparison` — how SURGE compares to neighbouring tools

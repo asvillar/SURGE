@@ -112,6 +112,7 @@ _PDEBENCH_2D_MODELS: list[str] = []
 _VISION_MODELS: list[str] = []
 _CIFAR10_MODELS: list[str] = []
 _SEQUENCE_MODELS: list[str] = []
+_THEWELL_FIELD_MODELS: list[str] = []
 try:
     from surge.model.pytorch import PYTORCH_AVAILABLE as _PT
     if _PT:
@@ -150,6 +151,13 @@ try:
             "pytorch.lstm",
             "pytorch.gru",
         ]
+        _THEWELL_FIELD_MODELS = [
+            "sklearn.random_forest",
+            "sklearn.gradient_boosting_regressor",
+            "xgboost.xgbregressor",
+            "pytorch.mlp",
+            "pytorch.residual_mlp",
+        ]
 except Exception:
     pass
 
@@ -166,6 +174,10 @@ _BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
     # Vision benchmarks
     "vision.mnist":              _VISION_MODELS,
     "vision.cifar10":            _CIFAR10_MODELS,
+    # TheWell field benchmarks (flattened spatiotemporal tensors)
+    "thewell.gray_scott":        _THEWELL_FIELD_MODELS,
+    "thewell.turbulence_2d":     _THEWELL_FIELD_MODELS,
+    "thewell.mhd":               _THEWELL_FIELD_MODELS,
 }
 
 # Per-benchmark model constructor kwargs (e.g. image shape for vision models).
@@ -346,7 +358,7 @@ def run_leaderboard(
 
     # Cap models applied inside the loop.
     _PYTORCH_EPOCH_CAP_MODELS = {
-        "pytorch.mlp", "pytorch.residual_mlp", "pytorch.mlp_classifier",
+        "pytorch.mlp", "pytorch.residual_mlp", "pytorch.geom_residual_mlp", "pytorch.mlp_classifier",
         "pytorch.cnn1d", "pytorch.lstm", "pytorch.gru",
         "pytorch.fno1d", "pytorch.deeponet",
         "pytorch.lenet5", "pytorch.resnet20", "pytorch.resnet56",
@@ -368,6 +380,7 @@ def run_leaderboard(
     # when both apply.  CIFAR-10 needs 200 epochs for ResNet-56 to converge.
     _PER_BENCHMARK_EPOCH_CAP: dict[str, int] = {
         "vision.cifar10": 200,
+        "plasma.constellaration_multioutput": 100,
     }
 
     seeds = list(range(seed, seed + n_seeds))
@@ -433,11 +446,15 @@ def run_leaderboard(
                         # Per-benchmark cap takes precedence over per-model cap.
                         _bench_ecap = _PER_BENCHMARK_EPOCH_CAP.get(key)
                         _ecap = _bench_ecap if _bench_ecap is not None else _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
-                        epoch_kwargs = {"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {}
+                        epoch_kwargs = (
+                            {}
+                            if cached_hp and "n_epochs" in cached_hp
+                            else ({"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {})
+                        )
                         _log_kwargs = {}
                         if _log_dir is not None:
                             _log_kwargs["log_file"] = str(_log_dir / f"{_safe_model}_seed{s}.jsonl")
-                        adapter = MODEL_REGISTRY.create(model_key, **epoch_kwargs, **bench_kwargs, **cached_hp, **_log_kwargs)
+                        adapter = MODEL_REGISTRY.create(model_key, **bench_kwargs, **cached_hp, **epoch_kwargs, **_log_kwargs)
                         res = _run_with_adapter(key, adapter, seed=s)
                     elif cached_hp:
                         adapter = MODEL_REGISTRY.create(model_key, **cached_hp)
@@ -516,7 +533,7 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
     from sklearn.model_selection import train_test_split
 
     from .base import BenchmarkResult
-    from .tasks import _clf_metrics, _reg_metrics
+    from .tasks import _clf_metrics, _multioutput_reg_extras, _reg_metrics
     from .registry import benchmark_info
 
     info = benchmark_info(benchmark_key)
@@ -529,10 +546,27 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         print(f"  [error] could not load {benchmark_key}: {exc}", file=sys.stderr)
         return _skip_result(benchmark_key, model_key, reason=str(exc), stage="data_load")
 
-    stratify = y if task_type == "classification" else None
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=seed, stratify=stratify
-    )
+    # Vision benchmarks: official train/test split + 10% train holdout for val/early-stop.
+    X_val, y_val = None, None
+    if benchmark_key == "vision.cifar10":
+        from .tasks import _load_cifar10_arrays
+
+        X_tr, y_tr, X_test, y_test = _load_cifar10_arrays()
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_tr, y_tr, test_size=0.1, random_state=seed, stratify=y_tr
+        )
+    elif benchmark_key == "vision.mnist":
+        from .tasks import _load_mnist_arrays
+
+        X_tr, y_tr, X_test, y_test = _load_mnist_arrays()
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_tr, y_tr, test_size=0.1, random_state=seed, stratify=y_tr
+        )
+    else:
+        stratify = y if task_type == "classification" else None
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=seed, stratify=stratify
+        )
 
     resource_info: dict[str, Any] | None = None
     if hasattr(adapter, "prepare_for_fit"):
@@ -550,7 +584,14 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
     _reset_gpu_peak_memory()
     t0 = time.perf_counter()
     try:
-        adapter.fit(X_train, y_train)
+        import inspect
+
+        fit_kwargs: dict[str, Any] = {}
+        if X_val is not None and y_val is not None:
+            fit_sig = inspect.signature(adapter.fit)
+            if "X_val" in fit_sig.parameters:
+                fit_kwargs = {"X_val": X_val, "y_val": y_val}
+        adapter.fit(X_train, y_train, **fit_kwargs)
         y_pred = np.asarray(adapter.predict(X_test))
         elapsed = time.perf_counter() - t0
     except Exception as exc:
@@ -562,6 +603,7 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
     if not was_tracing:
         tracemalloc.stop()
 
+    mo_extra: dict[str, Any] = {}
     if task_type == "regression":
         # Sequence benchmarks: compute NRMSE instead of / in addition to R².
         if benchmark_key.startswith("sequence.") or benchmark_key.startswith("pde.") or benchmark_key.startswith("pdebench."):
@@ -576,7 +618,10 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
                 pass
         else:
             # Support multi-output: only ravel for 1-D targets.
-            metrics = _reg_metrics(y_test, y_pred.ravel() if y_test.ndim == 1 else y_pred)
+            y_pred_mo = y_pred.ravel() if y_test.ndim == 1 else y_pred
+            metrics = _reg_metrics(y_test, y_pred_mo)
+            mo_metrics, mo_extra = _multioutput_reg_extras(y_test, y_pred_mo)
+            metrics.update(mo_metrics)
 
         # UQ metrics — computed when the model exposes predict_with_uncertainty.
         _uq_model = getattr(adapter, "_model", adapter)
@@ -609,6 +654,15 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         metrics["gpu_peak_memory_mb"] = gpu_peak
     passed = _check_pass(benchmark_key, metrics)
 
+    result_extra: dict[str, Any] = {
+        "status": "completed",
+        "n_train": len(X_train),
+        "n_test": len(X_test),
+        "benchmark_metadata": benchmark_metadata(benchmark_key),
+        "resources": resource_info,
+    }
+    result_extra.update(mo_extra)
+
     return BenchmarkResult(
         benchmark_key=benchmark_key,
         model_key=model_key,
@@ -617,13 +671,7 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         metrics=metrics,
         passed=passed,
         message=f"leaderboard run via {model_key}",
-        extra={
-            "status": "completed",
-            "n_train": len(X_train),
-            "n_test": len(X_test),
-            "benchmark_metadata": benchmark_metadata(benchmark_key),
-            "resources": resource_info,
-        },
+        extra=result_extra,
     )
 
 
@@ -668,7 +716,9 @@ def _load_dataset(benchmark_key: str):
         "fusion.mhd_sample":        lambda: _load_fusion_mhd_sample(),
         "plasma.cmod_density_limit":  lambda: _load_cmod_density_limit(),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
-        "plasma.constellaration":     lambda: _load_constellaration(),
+        "plasma.constellaration":              lambda: _load_constellaration(),
+        "plasma.constellaration_multioutput":  lambda: _load_constellaration_multioutput(),
+        "thewell.gray_scott":         lambda: _load_thewell_gray_scott(),
         # Vision benchmarks
         "vision.cifar10": lambda: _load_cifar10(),
         "vision.mnist":   lambda: _load_mnist(),
@@ -1167,6 +1217,18 @@ def _load_qlknn_transport():
     return X_out, y_out
 
 
+def _load_thewell_gray_scott(*, n_train: int = 500, n_test: int = 100, seed: int = 42):
+    """Gray-Scott TheWell split for leaderboard runs (train + valid subsamples)."""
+    from surge.benchmarks.loaders.thewell import load_thewell
+
+    X_train, y_train, X_test, y_test = load_thewell(
+        "gray_scott", n_train=n_train, n_test=n_test, seed=seed,
+    )
+    X = np.vstack([X_train, X_test])
+    y = np.vstack([y_train, y_test])
+    return X, y
+
+
 def _load_constellaration(n_samples: int = 10_000):
     """ConStellaration: stellarator boundary shape → quasi-isodynamic quality.
 
@@ -1405,7 +1467,13 @@ def _load_constellaration_paper(
         Y=Y,
         metric_names=np.array(_CONSTELLARATION_METRICS),
     )
-    return X, Y, _CONSTELLARATION_METRICS
+    return X, Y, list(_CONSTELLARATION_METRICS)
+
+
+def _load_constellaration_multioutput():
+    """ConStellaration 90→12: single multi-output model on the paper-filtered cache."""
+    X, Y, _ = _load_constellaration_paper()
+    return X, Y
 
 
 def _run_constellaration_paper_benchmark(
@@ -1546,8 +1614,10 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "plasma.cmod_density_limit": ("test_accuracy", 0.85),
         "plasma.qlknn_transport": ("test_r2", 0.90),
         "plasma.constellaration": ("test_r2", 0.50),
+        "thewell.gray_scott": ("test_relative_l2", 0.30),
         # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
         "plasma.constellaration_paper": ("test_r2_mean", 0.97),
+        "plasma.constellaration_multioutput": ("test_r2", 0.85),
     }
     if benchmark_key not in _THRESHOLDS:
         return True

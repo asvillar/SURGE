@@ -1,0 +1,89 @@
+# QLKNN plasma transport — RF + Residual MLP with HPO (one workflow call)
+#
+# Prepare the Parquet cache first:
+#   python examples/qlknn_multi_hpo_workflow.py --prepare-only   # not implemented
+# Or run the full script instead:
+#   python examples/qlknn_multi_hpo_workflow.py --hpo-trials 10 --overwrite
+#
+# This YAML is for run_workflow.py once runs/.cache/qlknn_transport.parquet exists.
+
+dataset_path: runs/.cache/qlknn_transport.parquet
+dataset_format: parquet
+
+metadata_overrides:
+  inputs:
+    - Ati
+    - Ate
+    - Ane
+    - Ani
+    - q
+    - smag
+    - x
+    - Ti_Te
+    - LogNuStar
+    - normni
+  outputs:
+    - efeITG
+
+test_fraction: 0.2
+val_fraction: 0.1
+standardize_inputs: true
+standardize_outputs: false
+seed: 42
+
+output_dir: .
+run_tag: qlknn_multi_hpo
+overwrite_existing_run: true
+
+models:
+  - key: sklearn.random_forest
+    name: qlknn_rf
+    params:
+      n_jobs: -1
+    hpo:
+      enabled: true
+      n_trials: 10
+      direction: maximize
+      metric: val_r2
+      search_space:
+        n_estimators:
+          type: int
+          low: 50
+          high: 400
+        max_depth:
+          type: categorical
+          choices: [null, 8, 12, 16, 24]
+        min_samples_leaf:
+          type: int
+          low: 1
+          high: 8
+        max_features:
+          type: categorical
+          choices: ["sqrt", "log2", 0.5, 0.8]
+
+  - key: pytorch.residual_mlp
+    name: qlknn_residual_mlp
+    params:
+      n_epochs: 50
+      verbose: true
+      checkpoint_every_n_epochs: 10
+    hpo:
+      enabled: true
+      n_trials: 10
+      direction: maximize
+      metric: val_r2
+      search_space:
+        hidden_layers:
+          type: categorical
+          choices:
+            - [128, 128]
+            - [256, 128]
+            - [256, 256, 128]
+        learning_rate:
+          type: loguniform
+          low: 1.0e-4
+          high: 1.0e-1
+        dropout_rate:
+          type: float
+          low: 0.0
+          high: 0.4

@@ -27,7 +27,9 @@ class ResidualMLPAdapter(BaseModelAdapter):
 
     Default hyperparameters
     -----------------------
-    hidden_layers : [128, 128]
+    hidden_layers : [128, 128]  (any widths in [1, max_hidden_width])
+    max_hidden_width : 1024
+    layer_schedule : explicit | geometric
     n_epochs      : 200
     learning_rate : 1e-3
     dropout_rate  : 0.1
@@ -42,6 +44,9 @@ class ResidualMLPAdapter(BaseModelAdapter):
 
     default_params: dict[str, Any] = {
         "hidden_layers": [128, 128],
+        "layer_schedule": "explicit",
+        "max_hidden_width": 1024,
+        "min_hidden_width": 1,
         "n_epochs": 200,
         "learning_rate": 1e-3,
         "dropout_rate": 0.1,
@@ -58,7 +63,7 @@ class ResidualMLPAdapter(BaseModelAdapter):
         params.update(kwargs)
         return ResidualMLPModel(**params)
 
-    def fit(self, X: Any, y: Any, X_val: Any = None, y_val: Any = None) -> None:
+    def fit(self, X: Any, y: Any, X_val: Any = None, y_val: Any = None, **kwargs: Any) -> None:
         self._model.fit(X, y, X_val, y_val)
 
     def predict(self, X: Any) -> Any:

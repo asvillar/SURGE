@@ -1,0 +1,9 @@
+# Column map for examples/data/tutorial_sample.csv
+# (bundled with the custom-dataset tutorial).
+inputs:
+  - input_a
+  - input_b
+  - input_c
+outputs:
+  - output_x
+  - output_y

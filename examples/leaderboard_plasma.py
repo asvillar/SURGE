@@ -33,9 +33,16 @@ plasma.constellaration
     Requires: pip install datasets
 
 plasma.constellaration_paper
-    Paper-exact reproduction: 12 metrics, per-metric training, 23k samples,
-    0.05% outlier removal, log10(qi), Z-score normalisation.
-    Paper baseline: mean R² > 0.97 with 10-member MLP ensemble.
+    Paper-exact reproduction: 12 metrics, per-metric training, 26,897 samples,
+    0.05% outlier removal, log10(qi). Paper baseline: mean R² > 0.97.
+
+plasma.constellaration_multioutput  (aliases: constellaration_multi, constellaration_mimo)
+    Joint 90→12 multi-output model on the same filtered cache. One fit predicts all
+    metrics; score is sklearn uniform-average test R². Works with residual_mlp,
+    mlp, sklearn, boosting models, and Optuna HPO::
+
+        surge run -b constellaration_multi -m pytorch.residual_mlp
+        surge run -b constellaration_multi -m pytorch.residual_mlp --hpo --hpo-trials 40
 
 plasma.cmod_density_limit
     Alcator C-Mod density limit disruption classification.
@@ -55,6 +62,7 @@ ALL_PLASMA = [
 ]
 
 PAPER_BENCHMARK = ["plasma.constellaration_paper"]
+MIMO_BENCHMARK = ["plasma.constellaration_multioutput"]
 
 
 def main() -> None:

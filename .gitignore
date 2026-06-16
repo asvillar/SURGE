@@ -211,6 +211,8 @@ templates/internal/
 
 # DataGenerator batch outputs (generated data, not tracked)
 examples/datagen/batch*/
+examples/data/*
+!examples/data/.gitkeep
 
 # Large datasets and workflow outputs
 runs/

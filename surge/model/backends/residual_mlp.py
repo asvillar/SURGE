@@ -15,9 +15,13 @@ where ``proj`` is a 1×1 projection when dimensions differ.
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Any, Optional
 
 from sklearn.preprocessing import StandardScaler
+
+from ..layer_schedule import LayerSchedule, resolve_hidden_layers
 
 _LOG = logging.getLogger("surge.pytorch.residual_mlp")
 
@@ -85,7 +89,18 @@ class ResidualMLPModel:
     Parameters
     ----------
     hidden_layers:
-        Sizes of hidden layers.  Default ``[128, 128]``.
+        Explicit hidden widths when ``layer_schedule='explicit'``.
+        Each width is clamped to ``[min_hidden_width, max_hidden_width]``.
+        Example: ``[2, 139, 205, 125]`` or ``[302, 230, 510, 24, 125, 20]``.
+    layer_schedule:
+        ``'explicit'`` — use ``hidden_layers`` as given.
+        ``'geometric'`` — compute widths from I/O dims and ``n_hidden_layers``.
+    n_hidden_layers:
+        Number of hidden layers for the geometric schedule (default 2).
+    max_hidden_width:
+        Upper cap on any hidden layer width (default 1024).
+    min_hidden_width:
+        Lower cap on any hidden layer width (default 1).
     n_epochs:
         Training epochs.  Default 200.
     learning_rate:
@@ -106,6 +121,10 @@ class ResidualMLPModel:
     def __init__(
         self,
         hidden_layers: list[int] | None = None,
+        layer_schedule: LayerSchedule = "explicit",
+        n_hidden_layers: int | None = None,
+        max_hidden_width: int = 1024,
+        min_hidden_width: int = 1,
         n_epochs: int = 200,
         learning_rate: float = 1e-3,
         batch_size: int = 64,
@@ -115,11 +134,16 @@ class ResidualMLPModel:
         random_state: int = 42,
         verbose: bool = False,
         log_file: str | None = None,
+        checkpoint_every_n_epochs: int = 0,
         **_kwargs: Any,
     ) -> None:
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch required. pip install torch")
         self.hidden_layers = hidden_layers or [128, 128]
+        self.layer_schedule: LayerSchedule = layer_schedule
+        self.n_hidden_layers = n_hidden_layers
+        self.max_hidden_width = max(1, int(max_hidden_width))
+        self.min_hidden_width = max(1, int(min_hidden_width))
         self.n_epochs = n_epochs
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -128,13 +152,42 @@ class ResidualMLPModel:
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.random_state = random_state
         self.verbose = verbose
-        self.log_file = log_file
+        self.log_file = log_file or os.environ.get("SURGE_TRAINING_PROGRESS_JSONL")
+        self.checkpoint_every_n_epochs = max(0, int(checkpoint_every_n_epochs))
+        self._checkpoint_dir = os.environ.get("SURGE_CHECKPOINT_DIR")
 
         self._net: Any = None
         self.scaler_X = StandardScaler()
         self.scaler_y = StandardScaler()
         self.is_fitted = False
         self.training_history: list[dict] = []
+
+    def _maybe_save_epoch_checkpoint(self, epoch_num: int) -> None:
+        if not self._checkpoint_dir or self.checkpoint_every_n_epochs <= 0:
+            return
+        if epoch_num % self.checkpoint_every_n_epochs != 0:
+            return
+        if self._net is None:
+            return
+        try:
+            d = Path(self._checkpoint_dir)
+            d.mkdir(parents=True, exist_ok=True)
+            path = d / f"epoch_{epoch_num:04d}.pt"
+            torch.save(
+                {
+                    "epoch": epoch_num,
+                    "state_dict": self._net.state_dict(),
+                    "scaler_X": self.scaler_X,
+                    "scaler_y": self.scaler_y,
+                    "config": {
+                        "hidden_layers": self.hidden_layers,
+                        "dropout_rate": self.dropout_rate,
+                    },
+                },
+                path,
+            )
+        except OSError:
+            pass
 
     # ------------------------------------------------------------------
     # Fit
@@ -163,9 +216,20 @@ class ResidualMLPModel:
         n_in = X_s.shape[1]
         n_out = y_s.shape[1]
 
+        resolved = resolve_hidden_layers(
+            n_in=n_in,
+            n_out=n_out,
+            schedule=self.layer_schedule,
+            hidden_layers=self.hidden_layers,
+            n_hidden_layers=self.n_hidden_layers,
+            min_width=self.min_hidden_width,
+            max_width=self.max_hidden_width,
+        )
+        self._resolved_hidden_layers = resolved
+
         self._net = ResidualMLPNet(
             input_size=n_in,
-            hidden_layers=self.hidden_layers,
+            hidden_layers=resolved,
             output_size=n_out,
             dropout=self.dropout_rate,
         ).to(self.device)
@@ -231,6 +295,7 @@ class ResidualMLPModel:
                         self.training_history.append(record)
                         break
             self.training_history.append(record)
+            self._maybe_save_epoch_checkpoint(epoch + 1)
 
         if best_state is not None:
             self._net.load_state_dict(best_state)
@@ -269,7 +334,11 @@ class ResidualMLPModel:
             "scaler_X": self.scaler_X,
             "scaler_y": self.scaler_y,
             "config": {
-                "hidden_layers": self.hidden_layers,
+                "hidden_layers": getattr(self, "_resolved_hidden_layers", self.hidden_layers),
+                "layer_schedule": self.layer_schedule,
+                "n_hidden_layers": self.n_hidden_layers,
+                "max_hidden_width": self.max_hidden_width,
+                "min_hidden_width": self.min_hidden_width,
                 "dropout_rate": self.dropout_rate,
                 "n_in": self._net.blocks[0].linear1.in_features if self._net else None,
                 "n_out": self._net.head.out_features if self._net else None,
@@ -287,6 +356,12 @@ class ResidualMLPModel:
         self.scaler_y = data["scaler_y"]
         self.is_fitted = data["is_fitted"]
         self._is_1d = data.get("_is_1d", True)
+        self.layer_schedule = cfg.get("layer_schedule", "explicit")
+        self.n_hidden_layers = cfg.get("n_hidden_layers")
+        self.max_hidden_width = cfg.get("max_hidden_width", 1024)
+        self.min_hidden_width = cfg.get("min_hidden_width", 1)
+        self.hidden_layers = cfg["hidden_layers"]
+        self._resolved_hidden_layers = cfg["hidden_layers"]
         if data["state_dict"] is not None and cfg["n_in"] is not None:
             self._net = ResidualMLPNet(
                 input_size=cfg["n_in"],

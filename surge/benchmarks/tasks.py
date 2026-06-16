@@ -44,6 +44,9 @@ _DEFAULTS: dict[str, str] = {
     "vision.mnist": "pytorch.lenet5",
     "vision.cifar10": "pytorch.resnet20",
     "fusion.mhd_sample": "sklearn.random_forest",
+    "plasma.qlknn_transport": "sklearn.random_forest",
+    "plasma.cmod_density_limit": "sklearn.random_forest_classifier",
+    "thewell.gray_scott": "sklearn.random_forest",
 }
 
 # Which task type each benchmark expects of its model.
@@ -152,6 +155,27 @@ def _reg_metrics(y_test, y_pred) -> dict[str, float]:
     r2 = float(r2_score(y_test, y_pred))
     rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
     return {"test_r2": r2, "test_rmse": rmse}
+
+
+def _multioutput_reg_extras(y_test, y_pred) -> tuple[dict[str, float], dict[str, Any]]:
+    """Per-column R² and normalised RMSE for vector-valued regression targets."""
+    import numpy as np
+    from sklearn.metrics import r2_score
+
+    y_test = np.asarray(y_test)
+    y_pred = np.asarray(y_pred)
+    if y_test.ndim < 2 or y_test.shape[1] <= 1:
+        return {}, {}
+    per = [float(r2_score(y_test[:, j], y_pred[:, j])) for j in range(y_test.shape[1])]
+    std_y = float(np.std(y_test))
+    rmse = float(np.sqrt(np.mean((y_pred - y_test) ** 2)))
+    metrics = {
+        "min_r2": min(per),
+        "max_r2": max(per),
+        "test_nrmse": rmse / (std_y + 1e-12),
+    }
+    extra = {"per_metric_r2": per}
+    return metrics, extra
 
 
 def _uq_metrics(y_true, mean_pred, std_pred, *, coverage: float = 0.95) -> dict[str, float]:
@@ -1290,9 +1314,7 @@ def run_vision_mnist(*, seed: int = 42, model_key: str | None = None,
     """
     X_train, y_train, X_test, y_test = _load_mnist_arrays()
 
-    key = model_key or "pytorch.lenet5"
-    from surge.model.registry import MODEL_REGISTRY
-    adapter = MODEL_REGISTRY.create(key)
+    adapter = _resolve_model(model_key, "vision.mnist", model_kwargs)
 
     t0 = time.perf_counter()
     adapter.fit(X_train, y_train)
@@ -1330,9 +1352,7 @@ def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None,
     """
     X_train, y_train, X_test, y_test = _load_cifar10_arrays()
 
-    key = model_key or "pytorch.resnet20"
-    from surge.model.registry import MODEL_REGISTRY
-    adapter = MODEL_REGISTRY.create(key)
+    adapter = _resolve_model(model_key, "vision.cifar10", model_kwargs)
 
     t0 = time.perf_counter()
     adapter.fit(X_train, y_train)
@@ -1445,6 +1465,11 @@ def _run_thewell_benchmark(
     thewell_key: str,
     benchmark_key: str,
     model_key: str | None,
+    *,
+    seed: int = 42,
+    model_kwargs: dict | None = None,
+    n_train: int = 500,
+    n_test: int = 100,
     description: str = "",
     pass_threshold: float = 0.30,
 ) -> "BenchmarkResult":
@@ -1454,11 +1479,20 @@ def _run_thewell_benchmark(
     if not THEWELL_AVAILABLE:
         raise ImportError("the_well required. pip install the-well  or  pip install 'surge-ml[thewell]'")
 
-    X_train, y_train, X_test, y_test = load_thewell(thewell_key)
+    X_train, y_train, X_test, y_test = load_thewell(
+        thewell_key, n_train=n_train, n_test=n_test, seed=seed,
+    )
+    if len(X_train) == 0:
+        raise RuntimeError(
+            f"TheWell {thewell_key!r}: n_train=0 — need at least one training sample. "
+            "Download the train split or set n_train > 0."
+        )
+    if len(X_test) == 0:
+        raise RuntimeError(
+            f"TheWell {thewell_key!r}: n_test=0 — need at least one test sample."
+        )
 
-    key = model_key or "sklearn.random_forest"
-    from surge.model.registry import MODEL_REGISTRY
-    adapter = MODEL_REGISTRY.create(key)
+    adapter = _resolve_model(model_key, benchmark_key, model_kwargs)
 
     t0 = time.perf_counter()
     adapter.fit(X_train, y_train)
@@ -1467,6 +1501,8 @@ def _run_thewell_benchmark(
 
     rel_l2 = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
     metrics: dict = {"test_relative_l2": rel_l2, "runtime_s": elapsed}
+    if y_test.ndim == 1 or y_test.shape[1] == 1:
+        metrics.update(_reg_metrics(np.ravel(y_test), np.ravel(y_pred)))
     return BenchmarkResult(
         benchmark_key=benchmark_key,
         model_key=adapter.name,
@@ -1484,6 +1520,7 @@ def run_thewell_gray_scott(*, seed: int = 42, model_key: str | None = None,
     """Gray-Scott reaction-diffusion (Tier 4, TheWell, requires the-well package + download)."""
     return _run_thewell_benchmark(
         "gray_scott", "thewell.gray_scott", model_key,
+        seed=seed, model_kwargs=model_kwargs,
         description="TheWell Gray-Scott reaction-diffusion (Ohana et al. NeurIPS 2024)",
     )
 
@@ -1493,6 +1530,7 @@ def run_thewell_turbulence_2d(*, seed: int = 42, model_key: str | None = None,
     """2D homogeneous turbulence (Tier 4, TheWell, requires the-well package + download)."""
     return _run_thewell_benchmark(
         "turbulence_2d", "thewell.turbulence_2d", model_key,
+        seed=seed, model_kwargs=model_kwargs,
         description="TheWell 2D turbulence (Ohana et al. NeurIPS 2024)",
     )
 
@@ -1502,5 +1540,6 @@ def run_thewell_mhd(*, seed: int = 42, model_key: str | None = None,
     """3D MHD turbulence (Tier 4, TheWell, requires the-well package + download)."""
     return _run_thewell_benchmark(
         "mhd", "thewell.mhd", model_key,
+        seed=seed, model_kwargs=model_kwargs,
         description="TheWell 3D MHD turbulence (Ohana et al. NeurIPS 2024)",
     )

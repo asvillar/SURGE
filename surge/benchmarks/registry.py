@@ -243,22 +243,29 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "[MIT-PSFC/open_density_limit_database, GitHub]",
     ),
     "plasma.qlknn_transport": (
-        None, "plasma", "regression", "10→1 (n=20,000)",
-        "QuaLiKiz/QLKNN turbulent electron heat flux surrogate — 10 gyrokinetic params → efeITG. "
+        None, "plasma", "regression", "10→1 (n≈7,475 post mask)",
+        "QuaLiKiz/QLKNN turbulent electron heat flux surrogate. "
+        "Inputs: Ati, Ate, Ane, Ani, q, smag, x, Ti_Te, LogNuStar, normni "
+        "(normalised gyrokinetic parameters). "
+        "Output: efeITG (ITG electron heat flux, gyroBohm units). "
         "van de Plassche et al. Nuclear Fusion 2020. "
         "[requires: pip install fusion_surrogates]",
     ),
     "plasma.constellaration": (
-        None, "plasma", "regression", "90→1 (n=10k subsample)",
-        "ConStellaration: stellarator boundary shape → quasi-isodynamic quality (QI). "
-        "182k QI-like VMEC equilibria, Proxima Fusion 2025. "
-        "[proxima-fusion/constellaration on HuggingFace, requires: pip install datasets]",
+        None, "plasma", "regression", "90→1 (10k subsample)",
+        "ConStellaration boundary → log₁₀(qi). Subsamples 10k from paper-filtered cache (26,897 rows). "
+        "[HF: proxima-fusion/constellaration, pip install datasets]",
     ),
     "plasma.constellaration_paper": (
-        None, "plasma", "regression", "90→12 (n≈23k optimised, paper protocol)",
-        "ConStellaration 12-metric per-metric evaluation (Goodman et al. 2025, arXiv:2506.19583 §A.4). "
-        "One model per metric; paper baseline R²>0.97. "
-        "[proxima-fusion/constellaration on HuggingFace, requires: pip install datasets]",
+        None, "plasma", "regression", "90→12 (n=26,897)",
+        "Paper protocol (arXiv:2506.19583 §A.4): 12 metrics, one model each, mean test R². "
+        "[HF: proxima-fusion/constellaration, pip install datasets]",
+    ),
+    "plasma.constellaration_multioutput": (
+        None, "plasma", "regression", "90→12 (n=26,897)",
+        "Single residual-MLP-style multi-output model: 90 boundary coeffs → 12 metrics. "
+        "Same filtered cache as constellaration_paper. "
+        "[HF: proxima-fusion/constellaration, pip install datasets]",
     ),
 }
 
@@ -304,6 +311,8 @@ _SHORT_ALIASES: dict[str, str] = {
     "cmod":                 "plasma.cmod_density_limit",
     "constellaration":      "plasma.constellaration",
     "constellaration_paper":"plasma.constellaration_paper",
+    "constellaration_multi":"plasma.constellaration_multioutput",
+    "constellaration_mimo":"plasma.constellaration_multioutput",
     # multi-output
     "scm20d":               "multioutput.scm20d",
 }
@@ -404,7 +413,7 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "license": "upstream package/model terms",
         "access": "generated_cached",
         "cache_path": "data/datasets/benchmarks/plasma/qlknn_transport.npz",
-        "sample_count": 20000,
+        "sample_count": 7475,
         "feature_shape": "10",
         "target_shape": "1",
         "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["fusion_surrogates", "jax"]},
@@ -434,9 +443,19 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "license": "upstream dataset terms",
         "access": "download_cached",
         "cache_path": "data/datasets/benchmarks/plasma/constellaration",
-        "sample_count": 23000,
+        "sample_count": 26897,
         "feature_shape": "90",
         "target_shape": "12",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
+    },
+    "plasma.constellaration_multioutput": {
+        "dataset_source": "proxima-fusion/constellaration on HuggingFace",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/constellaration",
+        "sample_count": 26897,
+        "feature_shape": "90",
+        "target_shape": "12 (joint model)",
         "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
     },
     "vision.mnist": {

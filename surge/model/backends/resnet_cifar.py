@@ -24,6 +24,10 @@ import numpy as np
 
 _LOG = logging.getLogger("surge.pytorch.resnet_cifar")
 
+# CIFAR-10 channel mean/std — must match in training (aug path) and predict.
+_CIFAR_MEAN = (0.4914, 0.4822, 0.4465)
+_CIFAR_STD = (0.2470, 0.2435, 0.2616)
+
 try:
     import torch
     import torch.nn as nn
@@ -154,9 +158,9 @@ class ResNetCIFARModel:
         elif X.ndim == 3:
             # (B, H, W) → add channel dim
             X = X[:, np.newaxis, :, :]
-        # Normalise to ImageNet-like range for CIFAR.
-        mean = np.array([0.4914, 0.4822, 0.4465], dtype="float32").reshape(1, 3, 1, 1)
-        std = np.array([0.2470, 0.2435, 0.2616], dtype="float32").reshape(1, 3, 1, 1)
+        # Normalise to CIFAR-10 statistics (must match training augmentation path).
+        mean = np.array(_CIFAR_MEAN, dtype="float32").reshape(1, 3, 1, 1)
+        std = np.array(_CIFAR_STD, dtype="float32").reshape(1, 3, 1, 1)
         if X.shape[1] == 3:
             X = (X - mean) / std
         return torch.from_numpy(X)
@@ -184,13 +188,16 @@ class ResNetCIFARModel:
                         T.RandomHorizontalFlip(),
                         T.RandomCrop(h, padding=4),
                     ])
+                    self._mean = torch.tensor(_CIFAR_MEAN).view(c, 1, 1)
+                    self._std = torch.tensor(_CIFAR_STD).view(c, 1, 1)
 
                 def __len__(self):
                     return len(self._y)
 
                 def __getitem__(self, idx):
-                    img = torch.from_numpy(self._X[idx])  # (C, H, W)
+                    img = torch.from_numpy(self._X[idx].copy())  # (C, H, W)
                     img = self._aug(img)
+                    img = (img - self._mean) / self._std
                     return img, int(self._y[idx])
 
             h = w = int(X_arr.shape[1] // self.in_channels) ** (1 / 2)

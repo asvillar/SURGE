@@ -14,6 +14,7 @@
 | [index.rst](index.rst) | Landing page, status, pipeline overview |
 | [installation.rst](installation.rst) | `surge-ml`, extras, verify |
 | [quickstart.rst](quickstart.rst) | CLI + `examples/quickstart.py` |
+| [CUSTOM_DATASET_TUTORIAL.md](CUSTOM_DATASET_TUTORIAL.md) | Train on your own CSV/PKL/H5 file |
 | [citation.rst](citation.rst) | OSTI / MLA and DOE Code |
 | [SURGE_OVERVIEW.md](SURGE_OVERVIEW.md) | Deeper tour of the codebase |
 | [setup/INSTALLATION.md](setup/INSTALLATION.md) | Long-form install and tips |

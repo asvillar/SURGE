@@ -147,6 +147,8 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [32, 64, 128]),
         "patience": ("int", 10, 40),
     },
+    "pytorch.residual_mlp_flex": "_special",
+    "pytorch.geom_residual_mlp": "_special",
     "pytorch.mlp_classifier": {
         "hidden_layers": ("categorical", [
             [64, 32], [128, 64], [256, 128],
@@ -372,6 +374,54 @@ _BENCHMARK_PRIMARY_METRIC: dict[str, tuple[str, str]] = {
 }
 
 
+def _suggest_residual_mlp_flex(trial: Any) -> dict[str, Any]:
+    """Arbitrary hidden widths in [1, max_hidden_width] per layer."""
+    max_w = trial.suggest_int("max_hidden_width", 32, 1024)
+    n_layers = trial.suggest_int("hidden_layers_num_layers", 1, 6)
+    layers = [
+        trial.suggest_int(f"hidden_layers_{i}", 1, max_w) for i in range(n_layers)
+    ]
+    return {
+        "hidden_layers": layers,
+        "layer_schedule": "explicit",
+        "max_hidden_width": max_w,
+        "min_hidden_width": 1,
+        "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-1, log=True),
+        "dropout_rate": trial.suggest_float("dropout_rate", 0.0, 0.4),
+        "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128]),
+        "patience": trial.suggest_int("patience", 10, 40),
+    }
+
+
+def _suggest_geom_residual_mlp(trial: Any) -> dict[str, Any]:
+    """Geometric hidden schedule between I/O dims."""
+    return {
+        "layer_schedule": "geometric",
+        "n_hidden_layers": trial.suggest_int("n_hidden_layers", 1, 8),
+        "max_hidden_width": trial.suggest_int("max_hidden_width", 32, 1024),
+        "min_hidden_width": 1,
+        "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-1, log=True),
+        "dropout_rate": trial.suggest_float("dropout_rate", 0.0, 0.4),
+        "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128]),
+        "patience": trial.suggest_int("patience", 10, 40),
+    }
+
+
+_SPECIAL_SUGGESTERS: dict[str, Any] = {
+    "pytorch.residual_mlp_flex": _suggest_residual_mlp_flex,
+    "pytorch.geom_residual_mlp": _suggest_geom_residual_mlp,
+}
+
+# HPO-only keys that map to a registered adapter.
+_HPO_ADAPTER_ALIASES: dict[str, str] = {
+    "pytorch.residual_mlp_flex": "pytorch.residual_mlp",
+}
+
+
+def _adapter_key_for_hpo(model_key: str) -> str:
+    return _HPO_ADAPTER_ALIASES.get(model_key, model_key)
+
+
 def suggest_params(model_key: str, trial: Any) -> dict[str, Any]:
     """
     Draw a hyperparameter dict for *model_key* from an Optuna ``trial``.
@@ -392,12 +442,16 @@ def suggest_params(model_key: str, trial: Any) -> dict[str, Any]:
     KeyError
         If ``model_key`` has no registered search space.
     """
+    if model_key in _SPECIAL_SUGGESTERS:
+        return _SPECIAL_SUGGESTERS[model_key](trial)
     if model_key not in _SEARCH_SPACES:
         raise KeyError(
             f"No HPO search space for {model_key!r}. "
             f"Available: {', '.join(sorted(_SEARCH_SPACES))}"
         )
     space = _SEARCH_SPACES[model_key]
+    if space == "_special":
+        raise KeyError(f"Model {model_key!r} requires a special suggester (misconfigured).")
     params: dict[str, Any] = {}
     for name, spec in space.items():
         kind = spec[0]
@@ -423,7 +477,9 @@ def suggest_params(model_key: str, trial: Any) -> dict[str, Any]:
 
 def list_hpo_models() -> list[str]:
     """Return model keys that have a registered HPO search space."""
-    return sorted(_SEARCH_SPACES)
+    keys = {k for k, v in _SEARCH_SPACES.items() if v != "_special"}
+    keys.update(_SPECIAL_SUGGESTERS)
+    return sorted(keys)
 
 
 def run_benchmark_hpo(
@@ -534,7 +590,7 @@ def run_benchmark_hpo(
             params["n_epochs"] = min(params.get("n_epochs", epochs_cap), epochs_cap)
 
         try:
-            adapter = MODEL_REGISTRY.create(model_key, **params)
+            adapter = MODEL_REGISTRY.create(_adapter_key_for_hpo(model_key), **params)
         except Exception as exc:
             LOG.warning("Trial %d: create failed: %s", trial.number, exc)
             raise optuna.exceptions.TrialPruned()
@@ -588,7 +644,7 @@ def run_benchmark_hpo(
     # If all trials pruned, run once with default params as fallback.
     if best_result[0] is None:
         LOG.warning("All HPO trials were pruned; running with default params.")
-        adapter = MODEL_REGISTRY.create(model_key)
+        adapter = MODEL_REGISTRY.create(_adapter_key_for_hpo(model_key))
         best_result[0] = _run_with_adapter_data(
             benchmark_key, adapter,
             X_train, X_test, y_train, y_test,
@@ -649,7 +705,7 @@ def _run_with_adapter_data(
     import time
 
     from .base import BenchmarkResult
-    from .tasks import _clf_metrics, _reg_metrics
+    from .tasks import _clf_metrics, _multioutput_reg_extras, _reg_metrics
     from .leaderboard import _check_pass
 
     try:
@@ -661,8 +717,12 @@ def _run_with_adapter_data(
         LOG.debug("fit/predict failed: %s", exc)
         return None
 
+    mo_extra: dict[str, Any] = {}
     if task_type == "regression":
-        metrics = _reg_metrics(y_test, y_pred.ravel() if np.asarray(y_test).ndim == 1 else y_pred)
+        y_pred_mo = y_pred.ravel() if np.asarray(y_test).ndim == 1 else y_pred
+        metrics = _reg_metrics(y_test, y_pred_mo)
+        mo_metrics, mo_extra = _multioutput_reg_extras(y_test, y_pred_mo)
+        metrics.update(mo_metrics)
     else:
         y_prob = None
         if hasattr(adapter, "predict_proba"):
@@ -675,6 +735,9 @@ def _run_with_adapter_data(
     metrics["runtime_s"] = elapsed
     passed = _check_pass(benchmark_key, metrics)
 
+    extra: dict[str, Any] = {"n_train": len(X_train), "n_test": len(X_test)}
+    extra.update(mo_extra)
+
     return BenchmarkResult(
         benchmark_key=benchmark_key,
         model_key=adapter.name,
@@ -683,7 +746,7 @@ def _run_with_adapter_data(
         metrics=metrics,
         passed=passed,
         message=f"HPO trial via {adapter.name}",
-        extra={"n_train": len(X_train), "n_test": len(X_test)},
+        extra=extra,
     )
 
 

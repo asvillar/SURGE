@@ -280,6 +280,7 @@ def test_plasma_benchmarks_registered():
         "plasma.qlknn_transport",
         "plasma.constellaration",
         "plasma.constellaration_paper",
+        "plasma.constellaration_multioutput",
     }
     assert expected.issubset(keys), f"Missing: {expected - keys}"
 
@@ -306,6 +307,42 @@ def test_constellaration_paper_benchmark_metadata():
     assert info["task_type"] == "regression"
     assert "90" in info["shape"]  # shape string mentions 90 input features
     assert info["description"]
+
+
+def test_constellaration_multioutput_benchmark_metadata():
+    from surge.benchmarks.registry import benchmark_info
+
+    info = benchmark_info("plasma.constellaration_multioutput")
+    assert info["category"] == "plasma"
+    assert info["task_type"] == "regression"
+    assert "90" in info["shape"]
+    assert "12" in info["shape"]
+
+
+def test_constellaration_multioutput_run():
+    from surge.benchmarks.registry import run_benchmark
+
+    result = run_benchmark(
+        "plasma.constellaration_multioutput",
+        model_key="sklearn.ridge",
+        seed=42,
+    )
+    assert result.metrics["test_r2"] > 0.3
+
+
+def test_constellaration_multioutput_hpo(tmp_path):
+    from surge.benchmarks.hpo import run_benchmark_hpo
+
+    result, best_params = run_benchmark_hpo(
+        "plasma.constellaration_multioutput",
+        "pytorch.residual_mlp",
+        n_trials=2,
+        n_epochs_cap=3,
+        save_root=tmp_path,
+    )
+    assert "test_r2" in result.metrics
+    assert best_params
+    assert result.extra.get("hpo_n_trials") == 2
 
 
 def test_benchmark_runner_works_tabular():
