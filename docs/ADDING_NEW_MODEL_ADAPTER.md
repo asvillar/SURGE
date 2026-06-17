@@ -1,5 +1,8 @@
 # Adding a New Model Adapter to SURGE
 
+> **Embedding policy and feature checklist:**
+> [`BUILD_YOUR_OWN_SURROGATE.md`](BUILD_YOUR_OWN_SURROGATE.md) Part II
+
 This guide explains how to extend SURGE with a new model type. We'll use a **Convolutional Neural Network (CNN)** as a concrete example, but the same pattern applies to any model architecture.
 
 ---

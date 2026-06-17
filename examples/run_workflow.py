@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run a SURGE workflow from a YAML spec file.
 
-This is the generic CLI wrapper referenced by docs/CUSTOM_DATASET_TUTORIAL.md.
+This is the generic CLI wrapper referenced by docs/BUILD_YOUR_OWN_SURROGATE.md.
 It loads a :class:`~surge.workflow.spec.SurrogateWorkflowSpec` and calls
 :func:`~surge.workflow.run.run_surrogate_workflow`.
 

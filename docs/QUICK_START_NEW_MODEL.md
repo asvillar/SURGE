@@ -1,5 +1,7 @@
 # Quick Start: Adding a New Model to SURGE
 
+> **Full policy and checklist:** [`BUILD_YOUR_OWN_SURROGATE.md`](BUILD_YOUR_OWN_SURROGATE.md) Part II
+
 ## TL;DR - 3 Steps
 
 1. **Create adapter class** inheriting from `BaseModelAdapter`
@@ -160,7 +162,8 @@ class YourAdapter(BaseModelAdapter):
 
 ## Full Example: CNN Adapter
 
-See `docs/ADDING_NEW_MODEL_ADAPTER.md` for a complete CNN implementation example.
+See also [`BUILD_YOUR_OWN_SURROGATE.md`](BUILD_YOUR_OWN_SURROGATE.md) Part II for the
+full embedding policy and checklist.
 
 ---
 

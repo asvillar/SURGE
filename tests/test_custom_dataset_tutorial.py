@@ -1,4 +1,4 @@
-"""Tests that docs/CUSTOM_DATASET_TUTORIAL.md is practical and reproducible."""
+"""Tests that docs/BUILD_YOUR_OWN_SURROGATE.md Part I is practical and reproducible."""
 
 from __future__ import annotations
 

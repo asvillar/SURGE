@@ -1,4 +1,4 @@
-# Workflow spec for docs/CUSTOM_DATASET_TUTORIAL.md
+# Workflow spec for docs/BUILD_YOUR_OWN_SURROGATE.md (Part I)
 # Run from the repo root:
 #   python examples/run_workflow.py --spec examples/configs/custom_dataset_tutorial.yaml
 #

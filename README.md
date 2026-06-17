@@ -107,7 +107,7 @@ python examples/custom_dataset_tutorial.py
 python examples/run_workflow.py --spec examples/configs/custom_dataset_tutorial.yaml
 ```
 
-Full guide: [`docs/CUSTOM_DATASET_TUTORIAL.md`](docs/CUSTOM_DATASET_TUTORIAL.md)
+Full guide: [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md)
 
 ### 5 · Benchmark suite (built-in datasets)
 
@@ -141,7 +141,69 @@ runs/<tag>/
 ├── scalers/inputs.joblib
 ├── models/<name>.joblib
 ├── predictions/              # parquet per split
-└── hpo/                      # when HPO is enabled
+├── plots/                    # parity + HPO + training dashboards (see below)
+└── hpo/                      # when HPO is enabled (*_hpo.json trial logs)
+```
+
+---
+
+## Visualize results
+
+After any workflow run, generate **regression parity plots** (predicted vs
+ground truth, R² per split) and **HPO convergence** curves from the saved
+artifacts. Requires matplotlib (included in the base install).
+
+### Quick path — add `--viz` to quickstart
+
+```bash
+python -m examples.quickstart --dataset california --model mlp --n-trials 5 --viz
+# writes runs/california_mlp_hpo5/plots/
+```
+
+### Any run directory — `surge.viz.viz_run`
+
+Works for quickstart runs, QLKNN multi-HPO, custom YAML workflows, etc.:
+
+```bash
+python examples/qlknn_multi_hpo_workflow.py --hpo-trials 10 --overwrite
+
+python -c "
+from pathlib import Path
+from surge.viz import viz_run
+result = viz_run(Path('runs/qlknn_multi_hpo'), dpi=150, include_hpo=True)
+for p in result['saved_paths']:
+    print(p)
+"
+```
+
+### What gets written to `runs/<tag>/plots/`
+
+| Plot | Source | When |
+|------|--------|------|
+| `inference_comparison_output_*.png` | `predictions/*_{train,val,test}.parquet` | Every run with predictions |
+| `inference_comparison_grid.png` | Same (combined layout) | Every run with predictions |
+| `hpo_convergence.png` | `hpo/*_hpo.json` | Runs with Optuna HPO |
+| `training_dashboard_*.png` | `training_history_*.json` | PyTorch / Residual MLP (auto during train) |
+
+**Regression maps:** each panel is a 2D density scatter of ground truth vs
+prediction with a diagonal reference and R² for train / val / test. Multi-model
+runs (e.g. QLKNN RF + Residual MLP) show one row per model.
+
+**HPO:** `hpo_convergence.png` tracks the best validation metric across trials
+(R² when available, otherwise RMSE). Raw trial data stays in `hpo/`.
+
+**Neural training curves:** PyTorch backends also write
+`training_log_<model>.jsonl` and `training_progress_*.jsonl` under the run
+root. Re-plot or compare epochs with:
+
+```bash
+python -c "
+from pathlib import Path
+from surge.viz.training import load_training_history, plot_training_dashboard
+hist = load_training_history(Path('runs/california_mlp_hpo5/training_log_pytorch.mlp.jsonl'))
+plot_training_dashboard(hist, model_name='pytorch.mlp', save_path='training_dashboard.png')
+print('saved training_dashboard.png')
+"
 ```
 
 ---
@@ -150,7 +212,7 @@ runs/<tag>/
 
 | Topic | Link |
 |-------|------|
-| Custom dataset workflow | [`docs/CUSTOM_DATASET_TUTORIAL.md`](docs/CUSTOM_DATASET_TUTORIAL.md) |
+| Build your own surrogate | [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md) |
 | First-run walkthrough (HPC) | [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md) |
 | Install reference | [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) |
 | Codebase tour | [`docs/SURGE_OVERVIEW.md`](docs/SURGE_OVERVIEW.md) |

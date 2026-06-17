@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end demo for docs/CUSTOM_DATASET_TUTORIAL.md.
+"""End-to-end demo for docs/BUILD_YOUR_OWN_SURROGATE.md (Part I).
 
 Creates a small synthetic CSV (or PKL/H5 when requested), then runs the bundled
 workflow spec. This script is the fastest way to verify the tutorial path.
