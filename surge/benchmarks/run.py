@@ -525,7 +525,11 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"Wrote {args.output}", file=sys.stderr)
 
-        any_failed = any(not r.passed for rl in lb_results.values() for r in rl)
+        any_failed = any(
+            not r.passed and r.extra.get("status") != "skipped"
+            for rl in lb_results.values()
+            for r in rl
+        )
         return 1 if any_failed else 0
 
     # ── --all (default model, no leaderboard) ─────────────────────────────────

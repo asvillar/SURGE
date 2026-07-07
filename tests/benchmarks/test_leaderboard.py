@@ -111,7 +111,10 @@ def test_run_leaderboard_unknown_model_skips():
     rl = results["synthetic.regression_1d"]
     model_keys = {r.model_key for r in rl}
     assert "sklearn.random_forest" in model_keys
-    assert "nonexistent.model_xyz" not in model_keys
+    unknown = [r for r in rl if r.model_key == "nonexistent.model_xyz"]
+    assert len(unknown) == 1
+    assert unknown[0].extra.get("status") == "skipped"
+    assert "not in MODEL_REGISTRY" in unknown[0].extra.get("skip_reason", "")
 
 
 def test_run_leaderboard_multiple_benchmarks(tmp_path):
