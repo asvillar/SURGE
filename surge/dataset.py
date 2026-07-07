@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import pandas as pd
 
 from .preprocessing import analyze_dataset_structure, get_dataset_statistics, print_dataset_analysis
+from .utils import posix_str
 
 try:  # pragma: no cover - optional dependency
     import yaml
@@ -160,7 +161,7 @@ class SurrogateDataset:
     # ------------------------------------------------------------------
     def summary(self) -> Dict[str, Any]:
         base = {
-            "file_path": str(self.file_path) if self.file_path else "<in-memory>",
+            "file_path": posix_str(self.file_path) if self.file_path else "<in-memory>",
             "n_rows": len(self.df) if self.df is not None else 0,
             "n_inputs": len(self.input_columns),
             "n_outputs": len(self.output_columns),

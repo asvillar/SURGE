@@ -41,6 +41,7 @@ from ..io.artifacts import (
 from ..io.run_logging import TeeText
 from ..io.load_compat import load_model_compat
 from ..registry import registry_summary
+from ..utils import posix_str
 from .spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
 LOGGER = logging.getLogger(__name__)
@@ -320,9 +321,9 @@ def run_surrogate_workflow(
         scalers = engine.scalers
         scaler_artifacts: Dict[str, Optional[str]] = {}
         if scalers.input_scaler is not None:
-            scaler_artifacts["input_scaler"] = str(save_scaler(scalers.input_scaler, "inputs", paths))
+            scaler_artifacts["input_scaler"] = posix_str(save_scaler(scalers.input_scaler, "inputs", paths))
         if scalers.output_scaler is not None:
-            scaler_artifacts["output_scaler"] = str(save_scaler(scalers.output_scaler, "outputs", paths))
+            scaler_artifacts["output_scaler"] = posix_str(save_scaler(scalers.output_scaler, "outputs", paths))
 
         workflow_metrics: Dict[str, Any] = {}
         workflow_models: List[Dict[str, Any]] = []
@@ -337,7 +338,7 @@ def run_surrogate_workflow(
             if model_cfg.hpo and model_cfg.hpo.enabled and model_cfg.hpo.search_space:
                 next_step(f"HPO for {model_name} ({model_cfg.hpo.n_trials} trials)...")
                 model_spec, hpo_summary = _run_hpo(engine, model_spec, model_cfg.hpo, run_tag, paths)
-                hpo_artifact = str(save_hpo_results(hpo_summary, paths, filename=f"{model_spec.name}_hpo.json"))
+                hpo_artifact = posix_str(save_hpo_results(hpo_summary, paths, filename=f"{model_spec.name}_hpo.json"))
 
             next_step(f"Training {model_name}...")
             pretrained_adapter = pretrained_models.get(model_name) if pretrained_dir else None
@@ -367,7 +368,7 @@ def run_surrogate_workflow(
                 os.environ.pop("SURGE_CHECKPOINT_DIR", None)
             training_config = {
                 "run_tag": run_tag,
-                "dataset_path": str(spec.dataset_path),
+                "dataset_path": posix_str(spec.dataset_path),
                 "sample_rows": spec.sample_rows,
                 "n_train": split_info["train"],
                 "n_val": split_info["val"],
@@ -407,15 +408,15 @@ def run_surrogate_workflow(
             "models": workflow_models,
             "registry": registry_summary(),
         "artifacts": {
-            "root": str(paths.root),
-            "metrics": str(metrics_path),
-            "summary": str(paths.summary_file),
-            "spec": str(paths.spec_file),
-            "train_data_ranges": str(ranges_path) if ranges_path.exists() else None,
-            "invocation": str(paths.root / "invocation.json")
+            "root": posix_str(paths.root),
+            "metrics": posix_str(metrics_path),
+            "summary": posix_str(paths.summary_file),
+            "spec": posix_str(paths.spec_file),
+            "train_data_ranges": posix_str(ranges_path) if ranges_path.exists() else None,
+            "invocation": posix_str(paths.root / "invocation.json")
             if (paths.root / "invocation.json").exists()
             else None,
-            "run_log": str(paths.root / "run.log")
+            "run_log": posix_str(paths.root / "run.log")
             if (paths.root / "run.log").exists()
             else None,
         },
@@ -489,7 +490,7 @@ def _persist_model_artifacts(
         payload = result.predictions.get(split)
         if payload is None:
             continue
-        prediction_files[split] = str(
+        prediction_files[split] = posix_str(
             save_predictions(payload, model_name, split, paths, format=predictions_format)
         )
 
@@ -498,7 +499,7 @@ def _persist_model_artifacts(
         uq_path = paths.predictions_dir / f"{model_name}_val_uq.json"
         with uq_path.open("w", encoding="utf-8") as handle:
             json.dump(_ensure_serializable(uq_payload), handle, indent=2)
-        prediction_files["val_uq"] = str(uq_path)
+        prediction_files["val_uq"] = posix_str(uq_path)
 
     artifact_extra: Dict[str, str] = {}
     tag = _safe_model_artifact_tag(model_name)
@@ -507,13 +508,13 @@ def _persist_model_artifacts(
         th_path = paths.root / f"training_history_{tag}.json"
         with th_path.open("w", encoding="utf-8") as handle:
             json.dump(th, handle, indent=2)
-        artifact_extra["training_history"] = str(th_path)
+        artifact_extra["training_history"] = posix_str(th_path)
         log_path = paths.root / f"training_log_{tag}.jsonl"
         try:
             with log_path.open("w", encoding="utf-8") as handle:
                 for row in th:
                     handle.write(json.dumps(row, default=str) + "\n")
-            artifact_extra["training_log_jsonl"] = str(log_path.resolve())
+            artifact_extra["training_log_jsonl"] = posix_str(log_path.resolve())
         except OSError:
             LOGGER.warning("Could not write training_log_jsonl for %s", model_name, exc_info=True)
         try:
@@ -534,10 +535,10 @@ def _persist_model_artifacts(
             )
     prog_jsonl = paths.root / f"training_progress_{tag}.jsonl"
     if prog_jsonl.is_file() and prog_jsonl.stat().st_size > 0:
-        artifact_extra["training_progress_jsonl"] = str(prog_jsonl.resolve())
+        artifact_extra["training_progress_jsonl"] = posix_str(prog_jsonl.resolve())
     ck_dir = paths.root / "checkpoints" / tag
     if ck_dir.is_dir() and any(ck_dir.glob("*.pt")):
-        artifact_extra["checkpoints_dir"] = str(ck_dir.resolve())
+        artifact_extra["checkpoints_dir"] = posix_str(ck_dir.resolve())
 
     entry: Dict[str, Any] = {
         "name": model_name,
@@ -550,7 +551,7 @@ def _persist_model_artifacts(
         },
         "timings": result.timings,
         "artifacts": {
-            "model": str(model_path),
+            "model": posix_str(model_path),
             "predictions": prediction_files,
             **artifact_extra,
         },
@@ -805,18 +806,18 @@ def _run_hpo(
     ]
     if hpo_track:
         hpo_summary["artifact_files"] = {
-            "trials_manifest": str((paths.root / "hpo_trials_manifest.jsonl").resolve()),
-            "training_progress_current": str(
+            "trials_manifest": posix_str((paths.root / "hpo_trials_manifest.jsonl").resolve()),
+            "training_progress_current": posix_str(
                 (paths.root / "training_progress_hpo_current.jsonl").resolve()
             ),
-            "training_progress_all": str(
+            "training_progress_all": posix_str(
                 (paths.root / "training_progress_hpo_all.jsonl").resolve()
             ),
-            "training_progress_best": str(
+            "training_progress_best": posix_str(
                 (paths.root / "training_progress_hpo_best.jsonl").resolve()
             ),
             "trial_training_history_glob": "hpo_trial_*_training_history.json",
-            "hpo_checkpoints_dir": str((paths.root / "hpo_checkpoints").resolve()),
+            "hpo_checkpoints_dir": posix_str((paths.root / "hpo_checkpoints").resolve()),
         }
     return updated_spec, hpo_summary
 

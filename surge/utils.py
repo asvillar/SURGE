@@ -9,6 +9,19 @@ from typing import Optional
 
 import joblib
 
+
+def posix_str(path) -> str:
+    """Return ``path`` as a forward-slash string for portable persistence.
+
+    Artifact/summary JSON (and the canvas data derived from it) is often
+    generated on one OS and read on another. Forward slashes are accepted by
+    Windows, macOS and Linux alike and avoid the backslash-escaping problems
+    that native Windows paths cause inside JSON, so we normalise every path we
+    *write* to disk with this helper.
+    """
+    return Path(path).as_posix()
+
+
 # Guard torch import for environments without PyTorch
 try:
     import torch

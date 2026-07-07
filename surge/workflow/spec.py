@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
 from ..hpc import ResourceSpec
+from ..utils import posix_str
 
 
 @dataclass
@@ -120,9 +121,9 @@ class SurrogateWorkflowSpec:
 
     def to_dict(self) -> Dict[str, Any]:
         spec_dict = asdict(self)
-        spec_dict["dataset_path"] = str(self.dataset_path)
-        spec_dict["metadata_path"] = str(self.metadata_path) if self.metadata_path else None
-        spec_dict["output_dir"] = str(self.output_dir)
+        spec_dict["dataset_path"] = posix_str(self.dataset_path)
+        spec_dict["metadata_path"] = posix_str(self.metadata_path) if self.metadata_path else None
+        spec_dict["output_dir"] = posix_str(self.output_dir)
         return spec_dict
 
 
