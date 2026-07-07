@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from typing import List, Sequence, Optional
 import json
 from datetime import datetime
@@ -50,7 +51,7 @@ class DataGenerator:
         dry_run: bool = False,
         use_python_replacement: bool = False,
     ):
-        self.bin_dir = bin_dir or os.path.join(os.environ.get("HOME", "."), "tools", "bin")
+        self.bin_dir = bin_dir or str(Path.home() / "tools" / "bin")
         self.replace_script = replace_script
         # If dry_run is True, the generator will not execute external scripts and
         # will only print the replacement commands. Useful for testing on systems
@@ -77,6 +78,16 @@ class DataGenerator:
 
         if self.use_python_replacement:
             return self._replace_in_file(varname, value, filepath)
+
+        # The external replace script is a bash script (replace_var.sh) and is
+        # not portable to Windows. Steer callers to the pure-Python path instead
+        # of failing with an opaque OS error.
+        if os.name == "nt":
+            raise RuntimeError(
+                "The bash replace script is not supported on Windows. "
+                "Pass use_python_replacement=True to DataGenerator(...) to use "
+                "the built-in pure-Python variable replacement instead."
+            )
 
         if not os.path.exists(script_path):
             raise FileNotFoundError(f"Replace script not found: {script_path}")
@@ -326,7 +337,7 @@ class DataGenerator:
         if len(inpnames) != len(ranges) or len(inpnames) != len(integer_mask):
             raise ValueError("Lengths of inpnames, ranges and integer_mask must match")
 
-        out_dir = out_dir or os.path.join(os.environ.get("HOME", "."), "Simulations", "param_cases")
+        out_dir = out_dir or str(Path.home() / "sims" / "param_cases")
         base_case_dir = base_case_dir or os.path.join(out_dir, f"case_default")
         os.makedirs(out_dir, exist_ok=True)
 
@@ -756,8 +767,8 @@ def example_usage():
         integer_mask=[False, False],
         n_samples=3,
         method="lhs",
-        out_dir=os.path.join(os.environ.get("HOME", "."), "Simulations", "project", "model", "param_cases"),
-        base_case_dir=os.path.join(os.environ.get("HOME", "."), "Simulations", "project", "model", "base_case"),
+        out_dir=str(Path.home() / "sims" / "project" / "model" / "param_cases"),
+        base_case_dir=str(Path.home() / "sims" / "project" / "model" / "base_case"),
         seed=42,
     )
     for r in res:
