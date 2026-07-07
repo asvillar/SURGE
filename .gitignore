@@ -220,6 +220,7 @@ runs
 
 # Benchmark run outputs (timestamped result directories and CatBoost logs)
 # Only the .plots/ subdirectory and top-level result JSONs are tracked.
+# Timestamp dirs use a Windows-safe format (no ':' in folder names).
 benchmark_reports/*/
 !benchmark_reports/.plots/
 !benchmark_reports/.leaderboard_tables/

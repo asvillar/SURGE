@@ -84,6 +84,31 @@ class TestConstellarationCanonicalSplit:
         assert not np.array_equal(test_a, test_b)
 
 
+class TestBenchmarkTimestamp:
+    def test_timestamp_has_no_colons(self):
+        from surge.benchmarks.base import benchmark_timestamp
+
+        ts = benchmark_timestamp()
+        assert ":" not in ts
+        assert "T" in ts
+        assert ts.endswith("Z")
+
+    def test_save_creates_windows_safe_directory(self, tmp_path: Path):
+        from surge.benchmarks.base import BenchmarkResult
+
+        result = BenchmarkResult(
+            benchmark_key="synthetic.regression_1d",
+            tier="0",
+            task_type="regression",
+            metrics={"test_r2": 0.9},
+            passed=True,
+            model_key="sklearn.ridge",
+        )
+        path = result.save(root=tmp_path)
+        assert ":" not in str(path)
+        assert path.exists()
+
+
 class TestDatagenWindowsGuard:
     def test_windows_bash_script_guard(self, monkeypatch):
         from surge.datagen import DataGenerator

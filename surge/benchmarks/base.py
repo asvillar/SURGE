@@ -8,6 +8,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Windows (NTFS) forbids ':' in path components. Use hyphens in the time portion
+# so benchmark_reports/<key>/<timestamp>/ is checkout-safe on every OS.
+BENCHMARK_TIMESTAMP_FMT = "%Y-%m-%dT%H-%M-%SZ"
+
+
+def benchmark_timestamp(dt: datetime | None = None) -> str:
+    """Return a filesystem-safe UTC timestamp for benchmark result directories."""
+    when = dt or datetime.now(timezone.utc)
+    return when.strftime(BENCHMARK_TIMESTAMP_FMT)
+
 
 @dataclass
 class BenchmarkResult:
@@ -37,7 +47,7 @@ class BenchmarkResult:
         from surge import __version__
 
         if not self.timestamp:
-            self.timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            self.timestamp = benchmark_timestamp()
         if not self.surge_version:
             self.surge_version = __version__
 
