@@ -345,6 +345,7 @@ def test_resnet20_registered():
 
 def test_resnet20_fit_predict(img_data):
     pytest.importorskip("torch")
+    pytest.importorskip("torchvision")
     X_tr, y_tr, X_te, _ = img_data
     adapter = MODEL_REGISTRY.create(
         "pytorch.resnet20", n_epochs=1, n_classes=10, batch_size=8,
@@ -363,6 +364,7 @@ def test_resnet56_registered():
 
 def test_resnet56_fit_predict(img_data):
     pytest.importorskip("torch")
+    pytest.importorskip("torchvision")
     X_tr, y_tr, X_te, _ = img_data
     adapter = MODEL_REGISTRY.create(
         "pytorch.resnet56", n_epochs=1, n_classes=10, batch_size=8,

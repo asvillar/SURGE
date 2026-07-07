@@ -320,6 +320,7 @@ def test_constellaration_multioutput_benchmark_metadata():
 
 
 def test_constellaration_multioutput_run():
+    pytest.importorskip("datasets")
     from surge.benchmarks.registry import run_benchmark
 
     result = run_benchmark(
@@ -327,19 +328,29 @@ def test_constellaration_multioutput_run():
         model_key="sklearn.ridge",
         seed=42,
     )
+    if result.extra.get("status") == "skipped":
+        pytest.skip(result.extra.get("skip_reason", "ConStellaration data unavailable"))
     assert result.metrics["test_r2"] > 0.3
 
 
 def test_constellaration_multioutput_hpo(tmp_path):
+    pytest.importorskip("datasets")
     from surge.benchmarks.hpo import run_benchmark_hpo
 
-    result, best_params = run_benchmark_hpo(
-        "plasma.constellaration_multioutput",
-        "pytorch.residual_mlp",
-        n_trials=2,
-        n_epochs_cap=3,
-        save_root=tmp_path,
-    )
+    try:
+        result, best_params = run_benchmark_hpo(
+            "plasma.constellaration_multioutput",
+            "pytorch.residual_mlp",
+            n_trials=2,
+            n_epochs_cap=3,
+            save_root=tmp_path,
+        )
+    except RuntimeError as exc:
+        if "Could not load dataset" in str(exc) or "pip install datasets" in str(exc):
+            pytest.skip(str(exc))
+        raise
+    if result.extra.get("status") == "skipped":
+        pytest.skip(result.extra.get("skip_reason", "ConStellaration data unavailable"))
     assert "test_r2" in result.metrics
     assert best_params
     assert result.extra.get("hpo_n_trials") == 2

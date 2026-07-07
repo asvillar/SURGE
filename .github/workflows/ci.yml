@@ -32,8 +32,8 @@ jobs:
           pip install pytest pytest-cov scikit-learn pandas numpy matplotlib joblib scipy pyyaml
           # Optional heavy deps (non-blocking: we want tests to skip, not fail).
           # onnxscript is required by torch>=2.11's torch.onnx.export path.
-          pip install torch onnx onnxruntime onnxscript || echo "torch/onnx optional; continuing"
-          pip install optuna scikit-optimize || echo "Optuna/skopt optional; continuing"
+          pip install torch torchvision onnx onnxruntime onnxscript || echo "torch/onnx optional; continuing"
+          pip install optuna scikit-optimize datasets || echo "Optuna/skopt/datasets optional; continuing"
 
       - name: Run unit tests
         run: |
