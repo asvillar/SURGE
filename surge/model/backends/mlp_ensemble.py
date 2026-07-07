@@ -151,7 +151,7 @@ class MLPEnsembleModel:
         optimizer = optim.Adam(net.parameters(), lr=self.learning_rate)
         criterion = nn.MSELoss()
         n = X_t.shape[0]
-        history: list[dict] = []
+        last_record: dict | None = None
         best_val_loss = float("inf")
         best_state: dict | None = None
         no_improve = 0
@@ -187,14 +187,17 @@ class MLPEnsembleModel:
                     no_improve += 1
                 if self.patience > 0 and no_improve >= self.patience:
                     _LOG.debug("Member %d early-stopped at epoch %d", member_idx, epoch)
-                    history.append(record)
+                    record["early_stop"] = True
+                    self.training_history.append(record)
+                    last_record = record
                     break
 
-            history.append(record)
+            self.training_history.append(record)
+            last_record = record
 
         if best_state is not None:
             net.load_state_dict(best_state)
-        return history
+        return last_record
 
     # ------------------------------------------------------------------
     # Public sklearn-like interface
@@ -236,22 +239,29 @@ class MLPEnsembleModel:
             ).to(self.device)
 
         self._members = []
-        self.training_history = []
+        from ._progress import ProgressList
+
+        # Stream per-epoch records to a tail-friendly JSONL log (and/or tqdm) so
+        # training can be monitored live via surge.viz.training.load_training_history.
+        self.training_history = ProgressList(
+            total_epochs=self.n_epochs * self.n_ensembles,
+            verbose=self.verbose,
+            log_file=self.log_file,
+            desc=f"{type(self).__name__}",
+        )
 
         for m in range(self.n_ensembles):
             torch.manual_seed(self.random_state + m)
             net = _MLP(
                 n_in, self.hidden_dim, self.n_layers, n_out, self.activation, self.dropout
             ).to(self.device)
-            h = self._train_member(net, Xt, yt, Xv, yv, member_idx=m)
+            last = self._train_member(net, Xt, yt, Xv, yv, member_idx=m)
             self._members.append(net)
-            self.training_history.extend(h)
-            if self.verbose:
-                last = h[-1]
+            if self.verbose and last is not None:
                 loss_val = last.get("val_loss", last["train_loss"])
                 _LOG.info("Member %d/%d done — loss=%.4f", m + 1, self.n_ensembles, loss_val)
-                print(f"  [ensemble] member {m+1}/{self.n_ensembles} loss={loss_val:.4f}")
 
+        self.training_history.close()
         self.is_fitted = True
         return self
 
