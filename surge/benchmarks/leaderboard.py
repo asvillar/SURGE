@@ -162,6 +162,22 @@ except Exception:
     pass
 
 _BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
+    # ConStellaration paper reproduction (arXiv:2506.19583 §A.4).
+    # Lead model is the paper-faithful 10×MLP ensemble (3×256, tanh); the
+    # remaining entries are strong baselines for comparison on the same split.
+    "plasma.constellaration_paper": [
+        "pytorch.mlp_ensemble",
+        "pytorch.residual_mlp",
+        "pytorch.mlp",
+        "lgbm.regressor",
+        "xgboost.xgbregressor",
+    ],
+    "plasma.constellaration_multioutput": [
+        "pytorch.mlp_ensemble",
+        "pytorch.residual_mlp",
+        "pytorch.mlp",
+        "sklearn.random_forest",
+    ],
     # Sequence / time-series benchmarks — include temporal models
     "sequence.lorenz63":         _SEQUENCE_MODELS,
     # Inline PDE benchmark (64-pt grid, no download) — operator models + generative
@@ -562,6 +578,12 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         X_train, X_val, y_train, y_val = train_test_split(
             X_tr, y_tr, test_size=0.1, random_state=seed, stratify=y_tr
         )
+    elif benchmark_key == "plasma.constellaration_multioutput":
+        # Canonical paper split (Appendix A.4) — identical indices to the
+        # per-metric constellaration_paper runner (same filtered cache order).
+        train_idx, test_idx = constellaration_canonical_split(len(X), seed=seed)
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
     else:
         stratify = y if task_type == "classification" else None
         X_train, X_test, y_train, y_test = train_test_split(
@@ -1470,6 +1492,36 @@ def _load_constellaration_paper(
     return X, Y, list(_CONSTELLARATION_METRICS)
 
 
+def constellaration_canonical_split(
+    n: int, *, seed: int = 42, test_size: float = 0.2
+) -> "tuple[np.ndarray, np.ndarray]":
+    """Deterministic, cached train/test index split for the ConStellaration
+    paper benchmark (arXiv:2506.19583 Appendix A.4 — a single 80/20 hold-out).
+
+    The *same* indices are reused by every model and by both the per-metric
+    (``plasma.constellaration_paper``) and joint
+    (``plasma.constellaration_multioutput``) runners, so all results are
+    directly comparable to each other and reproducible across sessions.
+
+    Indices are saved to ``data/datasets/benchmarks/plasma/constellaration/``
+    keyed by ``(n, seed, test_size)`` and regenerated only if that file is
+    missing (e.g. the filtered cache row-count changes).
+    """
+    cache_dir = _bench_data_root() / "plasma" / "constellaration"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache = cache_dir / f"split_n{n}_seed{seed}_test{test_size}.npz"
+    if cache.exists():
+        d = np.load(cache)
+        return d["train_idx"], d["test_idx"]
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(n)
+    n_test = int(round(n * test_size))
+    test_idx = np.sort(perm[:n_test])
+    train_idx = np.sort(perm[n_test:])
+    np.savez(cache, train_idx=train_idx, test_idx=test_idx)
+    return train_idx, test_idx
+
+
 def _load_constellaration_multioutput():
     """ConStellaration 90→12: single multi-output model on the paper-filtered cache."""
     X, Y, _ = _load_constellaration_paper()
@@ -1493,7 +1545,6 @@ def _run_constellaration_paper_benchmark(
     import time
 
     from sklearn.metrics import mean_squared_error, r2_score
-    from sklearn.model_selection import train_test_split
 
     from surge.model import create_model
 
@@ -1505,9 +1556,24 @@ def _run_constellaration_paper_benchmark(
         print(f"  [error] could not load constellaration paper data: {exc}", file=sys.stderr)
         return None
 
-    X_train, X_test, Y_train, Y_test = train_test_split(
-        X, Y, test_size=0.2, random_state=seed
-    )
+    # Canonical paper split (Appendix A.4): single fixed 80/20 hold-out, shared
+    # across all models and with the joint constellaration_multioutput runner.
+    train_idx, test_idx = constellaration_canonical_split(len(X), seed=seed)
+    X_train, X_test = X[train_idx], X[test_idx]
+    Y_train, Y_test = Y[train_idx], Y[test_idx]
+
+    # Carve a validation subset from *train* (test is never touched) so models
+    # that support it can early-stop — matches the paper's held-out tuning and
+    # avoids running the full epoch budget for every ensemble member.
+    import inspect as _inspect
+
+    rng_val = np.random.default_rng(seed)
+    _perm = rng_val.permutation(len(X_train))
+    _n_val = max(1, int(round(0.1 * len(X_train))))
+    _val_sel = _perm[:_n_val]
+    _fit_sel = _perm[_n_val:]
+    X_fit, X_val = X_train[_fit_sel], X_train[_val_sel]
+    Y_fit, Y_val = Y_train[_fit_sel], Y_train[_val_sel]
 
     per_r2: list[float] = []
     per_rmse: list[float] = []
@@ -1521,7 +1587,13 @@ def _run_constellaration_paper_benchmark(
     for j, metric in enumerate(metric_names):
         try:
             adapter = create_model(model_key, **kwargs)
-            adapter.fit(X_train, Y_train[:, j])
+            # Pass a validation set for early stopping when the adapter supports
+            # it; otherwise fit on the full train split (sklearn / tree models).
+            _supports_val = "X_val" in _inspect.signature(adapter.fit).parameters
+            if _supports_val:
+                adapter.fit(X_fit, Y_fit[:, j], X_val=X_val, y_val=Y_val[:, j])
+            else:
+                adapter.fit(X_train, Y_train[:, j])
             y_pred = np.asarray(adapter.predict(X_test)).ravel()
             y_true = Y_test[:, j]
 
