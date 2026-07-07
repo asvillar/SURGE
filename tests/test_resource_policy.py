@@ -164,3 +164,38 @@ def test_engine_emits_fit_banner_and_records_resources(caplog):
     assert used["effective"]["device"] == "cpu"
     assert used["concrete"]["n_jobs"] == 2
     assert used["banner"]["model"] == "sklearn.random_forest"
+
+
+def test_engine_strict_resource_policy_raises_for_unsupported_gpu():
+    from surge import EngineRunConfig, ModelSpec, SurrogateEngine
+    from surge.model import MODEL_REGISTRY  # noqa: F401 - side-effect import
+
+    rng = np.random.default_rng(0)
+    n = 64
+    df = pd.DataFrame(
+        {
+            "x1": rng.normal(size=n),
+            "x2": rng.normal(size=n),
+            "y1": rng.normal(size=n),
+            "y2": rng.normal(size=n),
+        }
+    )
+    engine = SurrogateEngine(
+        run_config=EngineRunConfig(
+            test_fraction=0.2,
+            val_fraction=0.1,
+            random_state=0,
+            resources=ResourceSpec(device="cuda", strict=True),
+        )
+    )
+    engine.configure_dataframe(df, input_columns=["x1", "x2"], output_columns=["y1", "y2"])
+
+    with pytest.raises(ResourcePolicyError, match="does not support GPU"):
+        engine.run(
+            [
+                ModelSpec(
+                    key="sklearn.random_forest",
+                    params={"n_estimators": 10, "random_state": 0},
+                ),
+            ]
+        )
