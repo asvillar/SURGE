@@ -197,6 +197,10 @@ data/**/models/
 *.joblib
 results.json
 
+# Benchmark / experiment result trees (timestamped subdirs; Windows-unsafe if ':')
+results/*/
+!results/.gitkeep
+
 # Internal / project-local trees (data-generation runbooks, per-experiment
 # configs, Slurm launchers, investigative notebooks, internal design docs).
 # Kept on local disks for reference; not shipped in the public v0.1.0 tree.
