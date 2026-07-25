@@ -47,7 +47,7 @@ Engine & Splits
 Model Registry & Adapters
 -------------------------
 
-Adapters register themselves in ``surge.registry.MODEL_REGISTRY``:
+Adapters register themselves in ``surge.model.MODEL_REGISTRY``:
 
 * ``sklearn.random_forest`` – scikit-learn RandomForestRegressor with tree-based UQ
 * ``torch.mlp`` – PyTorch FNN (flexible hidden layers, MC-Dropout UQ)
