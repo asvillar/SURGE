@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11']
+        python-version: ['3.10', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +36,10 @@ jobs:
           pip install optuna scikit-optimize datasets || echo "Optuna/skopt/datasets optional; continuing"
 
       - name: Run unit tests
+        env:
+          # adapter registration bugs are fatal in CI (missing optional
+          # dependencies still skip transparently)
+          SURGE_STRICT_REGISTRY: "1"
         run: |
           pytest -q tests/ --tb=short
 
@@ -65,6 +69,24 @@ jobs:
           # trains an sklearn model, trains a tiny PyTorch MLP, exports to ONNX,
           # re-loads with onnxruntime, and verifies outputs match within tolerance.
           pytest -q tests/test_e2e_release_smoke.py -v
+
+  no-torch:
+    name: Base install (no torch) — tests must skip, never fail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install base + test deps only (NO torch/onnx/optional models)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run unit tests (torch-dependent tests must SKIP)
+        env:
+          SURGE_STRICT_REGISTRY: "1"
+        run: |
+          pytest -q tests/ --tb=short
 
   lint:
     name: Lint (ruff)

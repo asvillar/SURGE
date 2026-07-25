@@ -158,6 +158,13 @@ def _load_tabpfn():
     register_model(TabPFNClassifierAdapter, key='tabpfn.classifier', aliases=['tabpfn_clf'])
 
 
+def _load_keras():
+    import tensorflow  # noqa: F401 - fail HERE with the real reason
+
+    from .adapters.keras import KerasMLPAdapter
+    register_model(KerasMLPAdapter, key='keras.mlp', aliases=['keras', 'tf.mlp'])
+
+
 def _torch_group(module, names_keys_aliases):
     def _loader():
         import importlib
@@ -172,6 +179,7 @@ _register_optional(('catboost.regressor', 'catboost.classifier'), ('catboost',),
 _register_optional(('xgboost.xgbregressor', 'xgboost.xgbclassifier'), ('xgboost',), _load_xgboost)
 _register_optional(('botorch.gp', 'botorch.sparse_gp'), ('torch', 'botorch'), _load_botorch)
 _register_optional(('tabpfn.regressor', 'tabpfn.classifier'), ('tabpfn',), _load_tabpfn)
+_register_optional(('keras.mlp',), ('tensorflow',), _load_keras)
 
 _TORCH_GROUPS = [
     ('.adapters.residual_mlp', [('ResidualMLPAdapter', 'pytorch.residual_mlp', ['residual_mlp'])]),

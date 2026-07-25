@@ -524,11 +524,14 @@ def characterization_figure(mode: str):
     jbest = int(np.argmax(np.abs(corr)))
     snr = np.abs(X.mean(0)) / (X.std(0) + 1e-12)
 
+    from surge.preprocessing import pca_summary
+    pca = pca_summary(X, feature_names=names)
+
     with surge_theme(mode) as p:
         fig = plt.figure(figsize=(9.8, 5.4))
-        gs = fig.add_gridspec(2, 3)
+        gs = fig.add_gridspec(2, 4)
 
-        ax = fig.add_subplot(gs[0, 0])          # (a) input distributions
+        ax = fig.add_subplot(gs[0, 0:2])        # (a) input distributions
         parts = ax.violinplot([Xs[:, j] for j in range(len(names))],
                               showmedians=True, widths=0.8)
         for i, body in enumerate(parts["bodies"]):
@@ -540,13 +543,13 @@ def characterization_figure(mode: str):
         ax.set_ylabel("standardized value")
         ax.set_title("(a) input distributions", fontsize=9)
 
-        ax = fig.add_subplot(gs[0, 1])          # (b) target distribution
+        ax = fig.add_subplot(gs[0, 2])          # (b) target distribution
         ax.hist(y, bins=60, color=p["series"][0], alpha=0.85)
         ax.set_yscale("log")
         ax.set_xlabel("efeITG [gB]"); ax.set_ylabel("count (log)")
         ax.set_title("(b) target distribution", fontsize=9)
 
-        ax = fig.add_subplot(gs[0, 2])          # (c) signal-to-noise
+        ax = fig.add_subplot(gs[0, 3])          # (c) signal-to-noise
         ax.bar(range(len(names)), snr, color=p["series"][2], alpha=0.9)
         for j, v in enumerate(snr):
             ax.text(j, v, f"{v:.1f}", ha="center", va="bottom", fontsize=6,
@@ -579,6 +582,24 @@ def characterization_figure(mode: str):
         ax.set_xlabel(names[jbest]); ax.set_ylabel("efeITG [gB]")
         ax.set_title(f"(e) strongest input · r = {corr[jbest]:.2f}", fontsize=9)
         ax.grid(alpha=0.5)
+
+        ax = fig.add_subplot(gs[1, 3])          # (f) PCA effective dimension
+        ncomp = len(pca["explained_variance_ratio"])
+        xs = np.arange(1, ncomp + 1)
+        ax.bar(xs, pca["explained_variance_ratio"], color=p["series"][0],
+               alpha=0.85, label="per PC")
+        ax.plot(xs, pca["cumulative_variance"], color=p["series"][1],
+                marker="o", markersize=3.5, lw=1.6, label="cumulative")
+        n90 = pca["n_components_90"]
+        ax.axhline(0.90, color=p["muted"], lw=0.8, ls=(0, (3, 3)))
+        ax.axvline(n90, color=p["muted"], lw=0.8, ls=(0, (3, 3)))
+        ax.annotate(f"{n90} PCs → 90%", (n90, 0.90),
+                    textcoords="offset points", xytext=(4, -12),
+                    fontsize=6.5, color=p["ink2"])
+        ax.set_xlabel("principal component"); ax.set_ylabel("variance share")
+        ax.set_ylim(0, 1.02)
+        ax.set_title("(f) PCA spectrum", fontsize=9)
+        ax.legend(fontsize=6, loc="center right")
 
         fig.suptitle("QLKNN transport — dataset characterization",
                      fontsize=11, fontweight="bold")

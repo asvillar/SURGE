@@ -12,6 +12,7 @@
 | Page | Role |
 |------|------|
 | [GETTING_STARTED.md](GETTING_STARTED.md) | **Start here** — install → first surrogate → reports, with troubleshooting |
+| [gallery.md](gallery.md) | Results gallery — what SURGE produces per problem type |
 | [index.rst](index.rst) | Landing page, status, pipeline overview |
 | [installation.rst](installation.rst) | `surge-ml`, extras, verify |
 | [quickstart.rst](quickstart.rst) | CLI + `examples/quickstart.py` |

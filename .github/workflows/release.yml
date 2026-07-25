@@ -1,0 +1,50 @@
+name: Release to PyPI
+
+# Publishes surge-ml when a version tag is pushed (v0.1.0rc1, v0.1.0, ...).
+# Uses PyPI Trusted Publishing (OIDC) — no long-lived token in secrets.
+# One-time setup on pypi.org: project surge-ml → Publishing → add GitHub
+# publisher (owner S-Villar, repo SURGE, workflow release.yml,
+# environment pypi). Until that is configured, publish manually per
+# docs/RELEASING.md.
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip uv
+          uv build
+      - name: Smoke-test the wheel in a clean venv
+        run: |
+          uv venv /tmp/relcheck
+          VIRTUAL_ENV=/tmp/relcheck uv pip install dist/*.whl
+          /tmp/relcheck/bin/surge version
+          /tmp/relcheck/bin/surge models --verbose
+          /tmp/relcheck/bin/surge bench -b synthetic.regression_1d \
+            -m sklearn.random_forest --no-save
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # OIDC for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

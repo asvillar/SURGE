@@ -80,6 +80,7 @@ Core Functionalities
    overview
    installation
    quickstart
+   gallery
    BUILD_YOUR_OWN_SURROGATE
    CUSTOM_DATASET_TUTORIAL
    citation

@@ -9,10 +9,10 @@ This module supersedes the legacy `surge.preprocessing` helpers and adds:
 
 from __future__ import annotations
 
-import math
 import re
 from collections import defaultdict
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -53,8 +53,8 @@ def _lower_name(column: str) -> str:
     return column.lower()
 
 
-def _group_repeating_columns(columns: Sequence[str]) -> Dict[str, List[str]]:
-    groups: Dict[str, List[str]] = defaultdict(list)
+def _group_repeating_columns(columns: Sequence[str]) -> dict[str, list[str]]:
+    groups: dict[str, list[str]] = defaultdict(list)
     for col in columns:
         for pattern in PATTERNS:
             match = pattern.match(col)
@@ -72,7 +72,7 @@ def _apply_prefix_hints(
     return any(lowered.startswith(prefix) for prefix in prefixes)
 
 
-def _metadata_list(metadata: Mapping[str, Any], key: str) -> List[str]:
+def _metadata_list(metadata: Mapping[str, Any], key: str) -> list[str]:
     value = metadata.get(key, [])
     if isinstance(value, (list, tuple)):
         return [str(item) for item in value]
@@ -82,10 +82,10 @@ def _metadata_list(metadata: Mapping[str, Any], key: str) -> List[str]:
 def analyze_dataset_structure(
     df: pd.DataFrame,
     *,
-    metadata: Optional[Mapping[str, Any]] = None,
-    hints: Optional[Mapping[str, Any]] = None,
-    sample_size_for_stats: Optional[int] = None,
-) -> Dict[str, Any]:
+    metadata: Mapping[str, Any] | None = None,
+    hints: Mapping[str, Any] | None = None,
+    sample_size_for_stats: int | None = None,
+) -> dict[str, Any]:
     """
     Analyze a tabular dataset to infer inputs, outputs, and multi-output groupings.
 
@@ -135,8 +135,8 @@ def analyze_dataset_structure(
 
     grouped = _group_repeating_columns(df.columns)
 
-    output_groups: Dict[str, List[str]] = {}
-    profile_groups: Dict[str, List[str]] = {}
+    output_groups: dict[str, list[str]] = {}
+    profile_groups: dict[str, list[str]] = {}
 
     # Apply metadata-defined groups first
     for group_name, cols in metadata.get("output_groups", {}).items():
@@ -254,8 +254,8 @@ def analyze_dataset_structure(
 def get_dataset_statistics(
     df: pd.DataFrame,
     *,
-    columns: Optional[Sequence[str]] = None,
-    sample_size: Optional[int] = None,
+    columns: Sequence[str] | None = None,
+    sample_size: int | None = None,
 ) -> pd.DataFrame:
     """Convenience wrapper around `DataFrame.describe()` with optional sampling."""
     if df.empty:
@@ -316,3 +316,92 @@ def print_dataset_analysis(analysis: Mapping[str, Any]) -> str:
 
     return "\n".join(lines)
 
+
+
+def pca_summary(
+    X: Any,
+    n_components: int | None = None,
+    feature_names: Sequence[str] | None = None,
+    standardize: bool = True,
+) -> dict[str, Any]:
+    """Principal-component analysis of the input matrix (diagnostic only).
+
+    Part of dataset characterization: reveals effective dimensionality and
+    dominant input directions before training. This does NOT transform the
+    training data (PCA-as-preprocessing is a separate, planned feature —
+    see docs/design/ARCHITECTURE_RECOMMENDATIONS.md).
+
+    Parameters
+    ----------
+    X : array-like or DataFrame, shape (n_samples, n_features)
+    n_components : int, optional
+        Components to keep (default: min(n_samples, n_features), capped
+        at 50 for the summary).
+    feature_names : sequence of str, optional
+        Names for the loading table; inferred from DataFrame columns.
+    standardize : bool, default True
+        Z-score features first (recommended: PCA is scale-sensitive).
+
+    Returns
+    -------
+    dict with keys:
+        explained_variance_ratio : (k,) per-component variance share
+        cumulative_variance      : (k,) running total
+        n_components_90 / n_components_99 : ints — components needed to
+            reach 90% / 99% of variance (effective dimensionality)
+        components               : (k, n_features) loadings
+        scores                   : (n_samples, min(k, 2)) projections of
+            the (standardized) data on the leading PCs, for plotting
+        feature_names            : list of str
+        top_features             : per leading PC (up to 3), the 3
+            strongest-loading feature names
+    """
+    if isinstance(X, pd.DataFrame):
+        if feature_names is None:
+            feature_names = [str(c) for c in X.columns]
+        X = X.to_numpy(dtype=float)
+    X = np.asarray(X, dtype=float)
+    if X.ndim != 2:
+        raise ValueError(f"pca_summary expects 2D X, got shape {X.shape}")
+    n_samples, n_features = X.shape
+    if feature_names is None:
+        feature_names = [f"x{j}" for j in range(n_features)]
+
+    finite = np.all(np.isfinite(X), axis=1)
+    X = X[finite]
+    if standardize:
+        std = X.std(axis=0)
+        std[std == 0] = 1.0
+        X = (X - X.mean(axis=0)) / std
+    else:
+        X = X - X.mean(axis=0)
+
+    k = min(n_samples, n_features) if n_components is None else int(n_components)
+    k = max(1, min(k, n_features, len(X), 50))
+
+    # SVD-based PCA (no sklearn dependency needed here)
+    _, s, vt = np.linalg.svd(X, full_matrices=False)
+    var = (s**2) / max(len(X) - 1, 1)
+    ratio = var / var.sum()
+    ratio_k = ratio[:k]
+    cumulative = np.cumsum(ratio)
+    scores = X @ vt[: min(k, 2)].T
+
+    def _n_for(threshold: float) -> int:
+        return int(np.searchsorted(cumulative, threshold) + 1)
+
+    top_features = {}
+    for i in range(min(k, 3)):
+        order = np.argsort(np.abs(vt[i]))[::-1][:3]
+        top_features[f"PC{i + 1}"] = [feature_names[j] for j in order]
+
+    return {
+        "explained_variance_ratio": ratio_k,
+        "cumulative_variance": cumulative[:k],
+        "n_components_90": _n_for(0.90),
+        "n_components_99": _n_for(0.99),
+        "components": vt[:k],
+        "scores": scores,
+        "feature_names": list(feature_names),
+        "top_features": top_features,
+    }
