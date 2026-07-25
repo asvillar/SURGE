@@ -222,13 +222,22 @@ examples/data/*
 runs/
 runs
 
-# Benchmark run outputs (timestamped result directories and CatBoost logs)
-# Only the .plots/ subdirectory and top-level result JSONs are tracked.
-# Timestamp dirs use a Windows-safe format (no ':' in folder names).
-benchmark_reports/*/
-!benchmark_reports/.plots/
-!benchmark_reports/.leaderboard_tables/
+# Benchmark run outputs are generated artifacts: never tracked.
+# Curated result snapshots belong in release assets or docs, not the tree.
+benchmark_reports/
 catboost_info/
+
+# MLflow tracking state (local experiment database + run store)
+mlflow.db
+mlruns/
+
+# Editor/agent tool configuration stays local
+.editor/
+
+# Backup and scratch files
+*.backup
+*.nohup.out
+nohup.out
 
 # Cached HuggingFace / processed plasma datasets (large, re-downloadable)
 data/datasets/constellaration/
