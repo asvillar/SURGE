@@ -231,8 +231,15 @@ catboost_info/
 mlflow.db
 mlruns/
 
-# Editor/agent tool configuration stays local
+# Editor tool configuration stays local (.tools/skills IS tracked:
+# shared maintainer playbooks)
 .editor/
+
+# Local scientific datasets live under data/datasets/ but are never
+# tracked: distribute via external storage, fetch on demand.
+data/datasets/a tokamak/
+data/datasets/device-2/
+data/datasets/example-data/
 
 # Backup and scratch files
 *.backup
