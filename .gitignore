@@ -338,3 +338,4 @@ docs/api_reference/generated/
 # commits 6f33d89 and ead0177 for the bug and fix).
 /surge/models/
 examples/viz_gallery_output/
+dist_test/
