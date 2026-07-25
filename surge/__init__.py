@@ -14,7 +14,8 @@ from .engine import (
     ModelSpec,
     SurrogateEngine,
 )
-from .registry import BaseModelAdapter, ModelRegistry, RegistryEntry, registry_summary
+from .model.base import BaseModelAdapter
+from .model.registry import ModelRegistry, registry_summary
 from .dataset import SurrogateDataset
 from .datasets import MHD-codeDataset, XGCDataset
 from .utils import get_data_path, setup_surge_path
@@ -67,7 +68,6 @@ __all__ = [
     "ModelRunResult",
     "BaseModelAdapter",
     "ModelRegistry",
-    "RegistryEntry",
     "registry_summary",
     "MODEL_REGISTRY",
     "run_surrogate_workflow",
@@ -96,12 +96,6 @@ if DATASET_UTILS_AVAILABLE:
 # MHD-code HDF5 loader functions are intentionally NOT exported: they are
 # application-specific and live under scripts/mhd_code/. Use `MHD-codeDataset`
 # from `surge.datasets.mhd_code` (exported below) which imports them lazily.
-
-# Backward compatibility aliases kept only so `import surge; surge.MLTrainer`
-# doesn't explode in downstream notebooks. The constructor/method signatures
-# differ from the pre-refactor trainer — use SurrogateEngine directly.
-MLTrainer = SurrogateEngine
-SurrogateTrainer = SurrogateEngine
 
 # Print availability status when package is imported
 def _print_availability():

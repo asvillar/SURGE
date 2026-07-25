@@ -19,9 +19,8 @@ Core Modules
 
    surge.dataset
    surge.engine
-   surge.models
+   surge.model
    surge.preprocessing
    surge.metrics
    surge.utils
-   surge.visualization
-   surge.registry
+   surge.viz

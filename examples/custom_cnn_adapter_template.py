@@ -15,7 +15,8 @@ from typing import Any, Dict, Mapping, Optional, Sequence
 
 import numpy as np
 
-from surge.registry import BaseModelAdapter, MODEL_REGISTRY
+from surge.model.base import BaseModelAdapter
+from surge.model.registry import MODEL_REGISTRY
 
 try:
     import torch
@@ -262,25 +263,13 @@ class CNNAdapter(BaseModelAdapter):
         return self
 
 
-# Register the adapter
+# Register the adapter in the live SURGE registry (the same one the
+# engine, workflow, and benchmarks resolve model keys against).
 if TORCH_AVAILABLE:
     MODEL_REGISTRY.register(
+        "torch.cnn",
         CNNAdapter,
-        key="torch.cnn",
-        name="PyTorch CNN",
-        backend="torch",
-        description="1D Convolutional Neural Network for tabular data",
-        tags=["cnn", "torch", "deep_learning"],
         aliases=["cnn", "conv1d", "torch_cnn"],
-        default_params={
-            "conv_channels": (64, 128, 256),
-            "kernel_sizes": (3, 3, 3),
-            "dropout": 0.2,
-            "fc_layers": (128,),
-            "batch_size": 256,
-            "learning_rate": 1e-3,
-            "epochs": 200,
-        },
     )
 
 

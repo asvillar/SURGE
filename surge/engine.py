@@ -19,8 +19,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 from .hpc import ResourcePolicyError, ResourceSpec
-from .registry import BaseModelAdapter, ModelRegistry
-from .model.registry import MODEL_REGISTRY
+from .model.base import BaseModelAdapter
+from .model.registry import MODEL_REGISTRY, ModelRegistry
 
 LOGGER = logging.getLogger(__name__)
 

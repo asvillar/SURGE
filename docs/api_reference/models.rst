@@ -1,30 +1,46 @@
 Models Module
 =============
 
-.. automodule:: surge.models
+.. automodule:: surge.model
    :members:
    :undoc-members:
    :show-inheritance:
 
-RandomForest Models
--------------------
+Adapter base class
+------------------
 
-.. autoclass:: surge.models.RandomForestModel
+.. autoclass:: surge.model.base.BaseModelAdapter
    :members:
    :special-members: __init__
 
-GPflow Models
--------------
+Model registry
+--------------
 
-.. automodule:: surge.gpflow_models
+.. automodule:: surge.model.registry
    :members:
    :undoc-members:
    :show-inheritance:
 
-PyTorch Models
---------------
+Scikit-learn adapters
+---------------------
 
-.. automodule:: surge.pytorch_models
+.. automodule:: surge.model.sklearn
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+PyTorch adapters
+----------------
+
+.. automodule:: surge.model.pytorch
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+GPflow adapters
+---------------
+
+.. automodule:: surge.model.gpflow
    :members:
    :undoc-members:
    :show-inheritance:

@@ -40,7 +40,7 @@ from ..io.artifacts import (
 )
 from ..io.run_logging import TeeText
 from ..io.load_compat import load_model_compat
-from ..registry import registry_summary
+from ..model.registry import registry_summary
 from ..utils import posix_str
 from .spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
@@ -54,12 +54,7 @@ def _safe_model_artifact_tag(name: str) -> str:
 
 
 def _registry_backend(registry: Any, model_key: str) -> str:
-    """Return backend name across legacy/new registry APIs."""
-    # New registry API (surge.registry.ModelRegistry)
-    if hasattr(registry, "get_entry"):
-        entry = registry.get_entry(model_key)
-        return str(getattr(entry, "backend", "") or "")
-    # Legacy registry API (surge.model.registry.ModelRegistry)
+    """Return the backend name declared by the registered adapter class."""
     if hasattr(registry, "get"):
         entry = registry.get(model_key)
         return str(getattr(getattr(entry, "adapter_cls", None), "backend", "") or "")

@@ -6,7 +6,7 @@ Tests the extensibility and functionality of the model registry system.
 
 import pytest
 
-from surge.models import (
+from surge.model import (
     MODEL_REGISTRY,
     BaseModelAdapter,
     RandomForestModel,

@@ -22,7 +22,7 @@ try:  # pragma: no cover - optional dependency
 except ImportError:  # pragma: no cover
     YAML_AVAILABLE = False
 
-from ..registry import BaseModelAdapter
+from ..model.base import BaseModelAdapter
 
 
 @dataclass

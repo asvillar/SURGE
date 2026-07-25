@@ -82,3 +82,14 @@ def create_model(name: str, **kwargs) -> BaseModelAdapter:
 
 def list_models() -> Dict[str, str]:
     return MODEL_REGISTRY.list_models()
+
+
+def registry_summary(registry: ModelRegistry = MODEL_REGISTRY) -> str:
+    """Human-readable summary of every registered adapter (incl. aliases)."""
+    lines = ["Registered Models:"]
+    for key, registered in sorted(registry._registry.items()):
+        alias_str = (
+            f" (aliases: {', '.join(registered.aliases)})" if registered.aliases else ""
+        )
+        lines.append(f"- {key}: {registered.adapter_cls.__name__}{alias_str}")
+    return "\n".join(lines)
