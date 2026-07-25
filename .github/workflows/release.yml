@@ -37,7 +37,11 @@ jobs:
           path: dist/
 
   publish:
+    # Requires one-time PyPI Trusted Publishing setup (see header note);
+    # non-blocking until then so tag builds stay green and publishing is
+    # done manually per docs/RELEASING.md.
     needs: build
+    continue-on-error: true
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
