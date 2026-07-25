@@ -235,7 +235,12 @@ def test_cli_leaderboard_saves_results(tmp_path):
     ])
     assert code == 0
     saved = list(tmp_path.rglob("result.json"))
-    assert len(saved) >= 2  # one per model
+    # one result per *available* model: torch-backed entries in the
+    # default leaderboard list are transparently skipped without torch
+    import importlib.util
+
+    expected = 2 if importlib.util.find_spec("torch") is not None else 1
+    assert len(saved) >= expected
 
 
 # ---------------------------------------------------------------------------
