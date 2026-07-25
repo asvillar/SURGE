@@ -41,6 +41,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 __all__ = [
     "PALETTES",
+    "diverging_cmap",
     "fmt_metric",
     "rc_params",
     "save_figure",
@@ -161,6 +162,18 @@ def sequential_cmap(mode: str = "light") -> LinearSegmentedColormap:
     """One-hue sequential colormap (light -> dark blue) for magnitude."""
     return LinearSegmentedColormap.from_list(
         f"surge_seq_{mode}", PALETTES[mode]["seq"])
+
+
+def diverging_cmap(mode: str = "light") -> LinearSegmentedColormap:
+    """Blue <-> red diverging colormap with a neutral midpoint (signed data).
+
+    Use ONLY for polarity (error fields, deltas); midpoint must map to zero
+    (pass ``norm=matplotlib.colors.CenteredNorm()`` or TwoSlopeNorm).
+    """
+    mid = "#f0efec" if mode == "light" else "#383835"
+    blue, red = PALETTES[mode]["series"][0], PALETTES[mode]["series"][7]
+    return LinearSegmentedColormap.from_list(
+        f"surge_div_{mode}", ["#0d366b", blue, mid, red, "#7a1f1f"])
 
 
 def save_figure(fig, out_stem: Path | str,
