@@ -66,7 +66,11 @@ benchmarks = ["h5py>=3.0", "optuna>=3.0"]
 tabpfn = ["tabpfn>=2.0"]
 thewell = ["the-well"]
 dev = ["pytest>=6.0", "pytest-cov", "ruff>=0.1.0", "h5py>=3.0"]
-docs = ["sphinx>=5.0", "furo", "myst-parser"]
+# Mirrors docs/requirements.txt (the ReadTheDocs build input); conf.py
+# uses the RTD theme, not furo.
+docs = ["sphinx>=7.0", "sphinx-rtd-theme>=2.0", "myst-parser>=3.0",
+        "sphinx-autodoc-typehints>=2.0", "sphinxcontrib-bibtex>=2.0",
+        "numpydoc>=1.5"]
 
 [project.scripts]
 surge-benchmark = "surge.benchmarks.run:main"
