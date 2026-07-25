@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
+from surge.report.dataset_previews import preview_svg
 from surge.viz.theme import PALETTES, fmt_metric, surge_theme
 
 # Metrics where lower is better (everything else: higher is better).
@@ -240,6 +241,14 @@ h2.cat {{ font-size: 17px; margin: 42px 0 4px; }}
 .pill {{ font-size: 10.5px; padding: 1.5px 8px; border-radius: 99px;
   border: 1px solid var(--line); color: var(--ink2); }}
 .pill.tier {{ color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }}
+.bench-top {{ display: flex; gap: 22px; align-items: flex-start;
+  flex-wrap: wrap; }}
+.bench-info {{ flex: 1 1 320px; }}
+figure.preview {{ margin: 4px 0 8px; flex: 0 1 330px; }}
+figure.preview svg {{ max-width: 330px; height: auto; border: 1px solid
+  var(--line); border-radius: 8px; background: var(--surface); }}
+figure.preview figcaption {{ color: var(--muted); font-size: 10.5px;
+  text-align: center; margin-top: 2px; }}
 .desc {{ color: var(--ink2); font-size: 13px; margin: 8px 0 4px; max-width: 72ch; }}
 .meta {{ color: var(--muted); font-size: 12px; margin-bottom: 10px; }}
 .meta a {{ color: var(--accent); text-decoration: none; }}
@@ -314,7 +323,7 @@ def _fmt_cell(metric: str, agg: dict | None) -> str:
 
 
 def _bench_card(key: str, meta: dict[str, dict],
-                bench_results: dict[str, dict]) -> str:
+                bench_results: dict[str, dict], preview: str = "") -> str:
     info = meta.get(key, {})
     pm = primary_metric_key(bench_results)
     ranked = rank_models(bench_results, pm) if pm else sorted(bench_results)
@@ -373,8 +382,13 @@ def _bench_card(key: str, meta: dict[str, dict],
       {f"<span class='pill'>{html.escape(info.get('threshold', ''))}</span>" if info.get('threshold') else ""}
     </span>
   </h3>
-  <p class="desc">{html.escape(info.get('description', ''))}</p>
-  <p class="meta"><code>{html.escape(key)}</code>{cite}</p>
+  <div class="bench-top">
+    <div class="bench-info">
+      <p class="desc">{html.escape(info.get('description', ''))}</p>
+      <p class="meta"><code>{html.escape(key)}</code>{cite}</p>
+    </div>
+    {f'<figure class="preview">{preview}<figcaption>sample of the data</figcaption></figure>' if preview else ''}
+  </div>
   <table class="sortable">
     <thead><tr><th>model</th>{header}<th>gate</th><th>runs</th></tr></thead>
     <tbody>{''.join(rows)}</tbody>
@@ -410,7 +424,9 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark") -> Path:
     for cap in sorted(categories):
         keys = categories[cap]
         svg = spider_svg(cap, keys, results, meta, mode=mode)
-        cards = "\n".join(_bench_card(k, meta, results[k]) for k in keys)
+        cards = "\n".join(
+            _bench_card(k, meta, results[k], preview=preview_svg(k, mode))
+            for k in keys)
         sections.append(f"""
 <h2 class="cat">{html.escape(cap)}</h2>
 <p class="cat-sub">{len(keys)} benchmark{'s' if len(keys) != 1 else ''}</p>

@@ -41,6 +41,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 __all__ = [
     "PALETTES",
+    "density_cmap",
     "diverging_cmap",
     "fmt_metric",
     "rc_params",
@@ -162,6 +163,22 @@ def sequential_cmap(mode: str = "light") -> LinearSegmentedColormap:
     """One-hue sequential colormap (light -> dark blue) for magnitude."""
     return LinearSegmentedColormap.from_list(
         f"surge_seq_{mode}", PALETTES[mode]["seq"])
+
+
+def density_cmap(mode: str = "light"):
+    """SURGE signature parity-density colormap: reversed plasma.
+
+    Perceptually uniform (matplotlib ``plasma_r``) with the empty-bin
+    "under" color set to a whitened orange on light surfaces — the style
+    used in past SURGE publications — and to the dark surface in dark
+    mode so empty bins recede. Use with ``LogNorm(vmin=1)`` and
+    ``cmin=1``-style masking so zero-count bins fall to the under color.
+    """
+    import matplotlib.pyplot as plt
+
+    cmap = plt.get_cmap("plasma_r").copy()
+    cmap.set_under("#f5e6d3" if mode == "light" else PALETTES["dark"]["surface"])
+    return cmap
 
 
 def diverging_cmap(mode: str = "light") -> LinearSegmentedColormap:

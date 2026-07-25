@@ -43,12 +43,18 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import CenteredNorm, LogNorm
 
 from surge.viz.theme import (
+    density_cmap,
     diverging_cmap,
     fmt_metric,
     save_figure,
     sequential_cmap,
     surge_theme,
 )
+
+
+def _is_loss_like(metric: str) -> bool:
+    return any(tag in metric.lower()
+               for tag in ("loss", "mse", "rmse", "nrmse", "mae", "error"))
 
 
 def _stat_chip(ax, text, p, loc=(0.03, 0.95)):
@@ -61,57 +67,96 @@ def _stat_chip(ax, text, p, loc=(0.03, 0.95)):
 
 # ------------------------------------------------------------------ parity
 
-def parity_figure(run_dir: Path, mode: str):
+def _load_split(run_dir: Path, model_key: str, split: str):
     import pandas as pd
+    df = pd.read_parquet(run_dir / "predictions" / f"{model_key}_{split}.parquet")
+    y_true = df[next(c for c in df.columns if c.startswith("y_true"))].to_numpy()
+    y_pred = df[next(c for c in df.columns if c.startswith("y_pred"))].to_numpy()
+    return y_true, y_pred
+
+
+def parity_figure(run_dir: Path, mode: str, units: str = "a.u."):
+    """Publication parity: 2D histogram density, reversed plasma colormap,
+    log-scaled counts — the SURGE signature style (Sánchez-Villar et al.,
+    Nucl. Fusion): (a) training / (b) test panels, dashed identity, R² box,
+    plus (c) test residual distribution.
+    """
     from scipy.stats import gaussian_kde
+    from sklearn.metrics import r2_score
 
     metrics = json.loads((run_dir / "metrics.json").read_text())
     model_key = next(iter(metrics))
-    df = pd.read_parquet(run_dir / "predictions" / f"{model_key}_test.parquet")
-    y_true = df[next(c for c in df.columns if c.startswith("y_true"))].to_numpy()
-    y_pred = df[next(c for c in df.columns if c.startswith("y_pred"))].to_numpy()
-    m = metrics[model_key]["test"]
+    splits = {}
+    for split in ("train", "test"):
+        try:
+            splits[split] = _load_split(run_dir, model_key, split)
+        except FileNotFoundError:
+            pass
+    if "test" not in splits:
+        return None
+
+    all_vals = np.concatenate([v for pair in splits.values() for v in pair])
+    lo, hi = float(all_vals.min()), float(all_vals.max())
+    pad = 0.05 * (hi - lo)
+    lims = (lo - pad, hi + pad)
+    bins = np.linspace(*lims, 56)
+    peak = max(
+        np.histogram2d(t, q, bins=[bins, bins])[0].max()
+        for t, q in splits.values())
 
     with surge_theme(mode) as p:
-        fig, (ax, axr) = plt.subplots(
-            1, 2, figsize=(7.0, 3.2), width_ratios=[1.0, 0.8])
+        cmap = density_cmap(mode)
+        under = cmap.get_under()
+        fig, axes = plt.subplots(
+            1, len(splits) + 1, figsize=(3.35 * (len(splits) + 1) + 0.7, 3.5),
+            width_ratios=[1.0] * len(splits) + [0.78])
 
-        lo = float(min(y_true.min(), y_pred.min()))
-        hi = float(max(y_true.max(), y_pred.max()))
-        pad = 0.06 * (hi - lo)
-        lims = (lo - pad, hi + pad)
-
-        # point density via KDE -> sequential ramp (magnitude = crowding)
-        xy = np.vstack([y_true, y_pred])
-        dens = gaussian_kde(xy)(xy)
-        order = dens.argsort()  # draw densest points on top
-        ax.plot(lims, lims, color=p["axis"], lw=0.9, zorder=1)
-        sc = ax.scatter(y_true[order], y_pred[order], c=dens[order],
-                        cmap=sequential_cmap(mode), s=22, alpha=0.9,
-                        linewidths=0, zorder=2)
-        cb = fig.colorbar(sc, ax=ax, fraction=0.045, pad=0.02)
-        cb.set_ticks([]); cb.set_label("density", fontsize=7, color=p["muted"])
+        letters = "abc"
+        norm = LogNorm(vmin=1, vmax=peak)
+        im = None
+        for k, (split, (y_t, y_q)) in enumerate(splits.items()):
+            ax = axes[k]
+            ax.set_facecolor(under)
+            im = ax.hist2d(y_t, y_q, bins=[bins, bins], cmap=cmap,
+                           norm=norm, cmin=1)[3]
+            ax.plot(lims, lims, color=p["ink2"], lw=1.2, ls=(0, (5, 3)),
+                    zorder=3)
+            ax.set_xlim(lims); ax.set_ylim(lims); ax.set_aspect("equal")
+            ax.grid(color=p["grid"], linewidth=0.5, alpha=0.6)
+            ax.set_axisbelow(True)
+            ax.set_xlabel(f"Ground truth [{units}]")
+            if k == 0:
+                ax.set_ylabel(f"Prediction [{units}]")
+            ax.set_title(f"({letters[k]}) {model_key} — {split}", fontsize=9.5)
+            r2 = r2_score(y_t, y_q)
+            ax.text(0.05, 0.94, f"R² = {r2:.3f}", transform=ax.transAxes,
+                    fontsize=9, va="top", color=p["ink"],
+                    bbox={"boxstyle": "round,pad=0.35",
+                          "facecolor": p["surface"],
+                          "edgecolor": p["ink2"], "linewidth": 0.8})
+        cb = fig.colorbar(im, ax=list(axes[:len(splits)]), fraction=0.04,
+                          pad=0.015)
+        cb.set_label("counts (log)", fontsize=8, color=p["ink2"])
+        cb.ax.tick_params(labelsize=7)
         cb.outline.set_visible(False)
-        ax.set_xlim(lims); ax.set_ylim(lims); ax.set_aspect("equal")
-        ax.set_xlabel("observed"); ax.set_ylabel("predicted")
-        ax.set_title(f"Parity — {model_key} (test)")
-        _stat_chip(ax, f"R² {fmt_metric(m['r2'])}    "
-                       f"RMSE {fmt_metric(m['rmse'], 'rmse')}    "
-                       f"MAE {fmt_metric(m['mae'], 'rmse')}", p)
 
-        resid = y_pred - y_true
-        axr.hist(resid, bins=21, color=p["series"][0], alpha=0.55,
+        # (c) residual distribution — test split
+        y_t, y_q = splits["test"]
+        resid = y_q - y_t
+        axr = axes[-1]
+        axr.hist(resid, bins=41, color=p["series"][0], alpha=0.55,
                  density=True, label="residuals")
-        kde_x = np.linspace(resid.min(), resid.max(), 200)
+        kde_x = np.linspace(resid.min(), resid.max(), 240)
         axr.plot(kde_x, gaussian_kde(resid)(kde_x), color=p["series"][0],
                  lw=1.8, label="KDE")
         axr.axvline(0.0, color=p["axis"], lw=0.9)
         axr.axvline(float(resid.mean()), color=p["series"][1], lw=1.2,
                     ls=(0, (4, 3)), label="mean")
-        axr.set_xlabel("residual (pred − obs)"); axr.set_ylabel("density")
-        axr.set_title("Residual distribution")
-        _stat_chip(axr, f"mean {resid.mean():+.2f}    σ {resid.std():.2f}", p)
-        axr.legend(loc="upper right", fontsize=7)
+        axr.set_xlabel(f"Residual [{units}]"); axr.set_ylabel("density")
+        axr.set_title(f"({letters[len(splits)]}) residuals — test",
+                      fontsize=9.5)
+        _stat_chip(axr, f"mean {resid.mean():+.3g}   σ {resid.std():.3g}", p)
+        axr.legend(loc="upper right", fontsize=6.5)
         return fig
 
 
@@ -154,48 +199,65 @@ def training_figure(hpo_run: Path, mode: str):
 
 # --------------------------------------------------------- HPO convergence
 
-def hpo_figure(hpo_run: Path, mode: str):
+def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
+    """HPO history, publication style (Sánchez-Villar et al.): one series
+    per optimizer/model — thin solid per-trial trace, dashed running best,
+    gold-edged star at the best trial with a labelled score box, and an
+    optional dashed black reference line.
+    """
     files = sorted((hpo_run / "hpo").glob("*_hpo.json"))
-    if not files:
+    series = []
+    for f in files[:4]:
+        d = json.loads(f.read_text())
+        trials = d.get("trials", [])
+        if not trials:
+            continue
+        values = np.array([t["value"] for t in trials], dtype=float)
+        maximize = d.get("direction", "maximize") == "maximize"
+        running = (np.maximum if maximize else np.minimum).accumulate(values)
+        series.append({
+            "name": f.stem.replace("_hpo", ""),
+            "numbers": np.array([t["number"] for t in trials]),
+            "values": values,
+            "running": running,
+            "metric": d.get("metric", "objective"),
+            "best": d.get("best_trial", {}),
+        })
+    if not series:
         return None
-    d = json.loads(files[0].read_text())
-    trials = d.get("trials", [])
-    if not trials:
-        return None
-    numbers = np.array([t["number"] for t in trials])
-    values = np.array([t["value"] for t in trials], dtype=float)
-    lrs = np.array([t.get("params", {}).get("learning_rate", np.nan)
-                    for t in trials], dtype=float)
-    maximize = d.get("direction", "maximize") == "maximize"
-    running = np.maximum.accumulate(values) if maximize \
-        else np.minimum.accumulate(values)
-    metric = d.get("metric", "objective")
-    best = d.get("best_trial", {})
+    metric = series[0]["metric"]
+    star_face = "#FFD700"  # gold star fill, edge in series color
 
     with surge_theme(mode) as p:
-        fig, ax = plt.subplots(figsize=(5.2, 3.2))
-        ax.plot(numbers, running, color=p["ink2"], lw=1.4,
-                drawstyle="steps-post", label="best so far", zorder=2)
-        if np.isfinite(lrs).all() and (lrs > 0).all():
-            sc = ax.scatter(numbers, values, c=lrs, norm=LogNorm(),
-                            cmap=sequential_cmap(mode), s=48, zorder=3,
-                            edgecolor=p["surface"], linewidth=0.8,
-                            label="trial")
-            cb = fig.colorbar(sc, ax=ax, fraction=0.05, pad=0.02)
-            cb.set_label("learning rate", fontsize=7.5, color=p["muted"])
-            cb.ax.tick_params(labelsize=7)
-            cb.outline.set_visible(False)
-        else:
-            ax.scatter(numbers, values, color=p["series"][0], s=42,
-                       zorder=3, label="trial")
-        if best:
-            ax.annotate(f"best {fmt_metric(best.get('value'))} (trial {best.get('number')})",
-                        (best.get("number"), best.get("value")),
-                        textcoords="offset points", xytext=(-8, -16),
-                        ha="right", fontsize=7.5, color=p["ink2"])
-        ax.set_xlabel("trial"); ax.set_ylabel(metric)
-        ax.set_title(f"HPO — {files[0].stem.replace('_hpo', '')}")
-        ax.legend(loc="lower right", fontsize=7.5)
+        fig, ax = plt.subplots(figsize=(6.0, 3.5))
+        for i, s in enumerate(series):
+            c = p["series"][i]
+            ax.plot(s["numbers"], s["values"], color=c, lw=1.1, alpha=0.85,
+                    label=s["name"], zorder=2)
+            ax.plot(s["numbers"], s["running"], color=c, lw=1.9,
+                    ls=(0, (5, 2)), drawstyle="steps-post", zorder=3)
+            best = s["best"]
+            if best:
+                bi, bv = best.get("number"), best.get("value")
+                ax.scatter([bi], [bv], marker="*", s=430, zorder=5,
+                           facecolor=star_face, edgecolor=c, linewidth=1.6)
+                ax.annotate(f"{metric} = {fmt_metric(bv)}",
+                            (bi, bv), textcoords="offset points",
+                            xytext=(-8, 12), ha="right", fontsize=7.5,
+                            color=p["ink"],
+                            bbox={"boxstyle": "round,pad=0.3",
+                                  "facecolor": p["surface"],
+                                  "edgecolor": c, "linewidth": 1.0})
+        if reference is not None:
+            ax.axhline(reference, color=p["ink"], lw=1.4, ls=(0, (6, 3)),
+                       zorder=1, label=f"reference ({reference})")
+        ax.plot([], [], color=p["ink2"], lw=1.9, ls=(0, (5, 2)),
+                label="best so far")
+        if _is_loss_like(metric) and all((s["values"] > 0).all() for s in series):
+            ax.set_yscale("log")
+        ax.set_xlabel("iteration"); ax.set_ylabel(metric)
+        ax.set_title("Hyperparameter optimization")
+        ax.legend(loc="lower right", fontsize=7)
         return fig
 
 
@@ -440,6 +502,89 @@ def field_operator_figure(mode: str, seed: int = 0):
         return fig
 
 
+# ------------------------------------------ dataset characterization (EDA)
+
+_QLKNN_FEATURES = ["Ati", "Ate", "Ane", "Ani", "q", "smag", "x",
+                   "Ti/Te", "logNuStar", "normni"]
+
+
+def characterization_figure(mode: str):
+    """Pre-training dataset characterization (style of the RF-heating
+    input–output analysis): input violins, target distribution, SNR bars,
+    input–target correlations, strongest relationship.
+    """
+    npz = _REPO / "data" / "datasets" / "benchmarks" / "plasma" / "qlknn_transport.npz"
+    if not npz.exists():
+        return None
+    d = np.load(npz)
+    X, y = d["X"].astype(float), d["y"].astype(float).ravel()
+    names = _QLKNN_FEATURES[: X.shape[1]]
+    Xs = (X - X.mean(0)) / (X.std(0) + 1e-12)
+    corr = np.array([np.corrcoef(X[:, j], y)[0, 1] for j in range(X.shape[1])])
+    jbest = int(np.argmax(np.abs(corr)))
+    snr = np.abs(X.mean(0)) / (X.std(0) + 1e-12)
+
+    with surge_theme(mode) as p:
+        fig = plt.figure(figsize=(9.8, 5.4))
+        gs = fig.add_gridspec(2, 3)
+
+        ax = fig.add_subplot(gs[0, 0])          # (a) input distributions
+        parts = ax.violinplot([Xs[:, j] for j in range(len(names))],
+                              showmedians=True, widths=0.8)
+        for i, body in enumerate(parts["bodies"]):
+            body.set_facecolor(p["series"][i % 8]); body.set_alpha(0.55)
+        for part in ("cmedians", "cbars", "cmins", "cmaxes"):
+            parts[part].set_color(p["ink2"]); parts[part].set_linewidth(0.8)
+        ax.set_xticks(range(1, len(names) + 1))
+        ax.set_xticklabels(names, rotation=45, ha="right", fontsize=6.5)
+        ax.set_ylabel("standardized value")
+        ax.set_title("(a) input distributions", fontsize=9)
+
+        ax = fig.add_subplot(gs[0, 1])          # (b) target distribution
+        ax.hist(y, bins=60, color=p["series"][0], alpha=0.85)
+        ax.set_yscale("log")
+        ax.set_xlabel("efeITG [gB]"); ax.set_ylabel("count (log)")
+        ax.set_title("(b) target distribution", fontsize=9)
+
+        ax = fig.add_subplot(gs[0, 2])          # (c) signal-to-noise
+        ax.bar(range(len(names)), snr, color=p["series"][2], alpha=0.9)
+        for j, v in enumerate(snr):
+            ax.text(j, v, f"{v:.1f}", ha="center", va="bottom", fontsize=6,
+                    color=p["ink2"])
+        ax.set_xticks(range(len(names)))
+        ax.set_xticklabels(names, rotation=45, ha="right", fontsize=6.5)
+        ax.set_ylabel("|μ|/σ")
+        ax.set_title("(c) input signal-to-noise", fontsize=9)
+
+        ax = fig.add_subplot(gs[1, 0:2])        # (d) input–target correlation
+        order = np.argsort(corr)
+        colors = [p["series"][0] if c < 0 else p["series"][7]
+                  for c in corr[order]]
+        ax.barh(range(len(names)), corr[order], color=colors, alpha=0.9,
+                height=0.62)
+        ax.axvline(0, color=p["axis"], lw=0.9)
+        ax.set_yticks(range(len(names)))
+        ax.set_yticklabels([names[j] for j in order], fontsize=7)
+        ax.set_xlabel("Pearson r with target")
+        ax.set_title("(d) input–target correlations", fontsize=9)
+
+        ax = fig.add_subplot(gs[1, 2])          # (e) strongest relationship
+        cmap = density_cmap(mode)
+        ax.set_facecolor(cmap.get_under())
+        ax.hist2d(X[:, jbest], y, bins=48, cmap=cmap,
+                  norm=LogNorm(vmin=1), cmin=1)
+        z = np.polyfit(X[:, jbest], y, 1)
+        xs = np.linspace(X[:, jbest].min(), X[:, jbest].max(), 50)
+        ax.plot(xs, np.polyval(z, xs), color=p["series"][7], lw=1.6)
+        ax.set_xlabel(names[jbest]); ax.set_ylabel("efeITG [gB]")
+        ax.set_title(f"(e) strongest input · r = {corr[jbest]:.2f}", fontsize=9)
+        ax.grid(alpha=0.5)
+
+        fig.suptitle("QLKNN transport — dataset characterization",
+                     fontsize=11, fontweight="bold")
+        return fig
+
+
 # ------------------------------------------------------------- uncertainty
 
 def uncertainty_figure(mode: str, seed: int = 7):
@@ -493,7 +638,7 @@ def uncertainty_figure(mode: str, seed: int = 7):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run", default=str(_REPO / "runs" / "diabetes_rf"))
+    ap.add_argument("--run", default=str(_REPO / "runs" / "qlknn_multi_hpo"))
     ap.add_argument("--hpo-run", default=str(_REPO / "runs" / "qlknn_multi_hpo"))
     ap.add_argument("--benchmark", default="tabular.california_housing")
     ap.add_argument("--reports", default=str(_REPO / "benchmark_reports"))
@@ -513,6 +658,7 @@ def main():
         "classification": classification_figure,
         "field_operator": field_operator_figure,
         "uncertainty": uncertainty_figure,
+        "characterization": characterization_figure,
     }
     if args.only:
         builders = {k: v for k, v in builders.items() if k in args.only}
