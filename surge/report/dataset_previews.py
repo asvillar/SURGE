@@ -49,7 +49,8 @@ def _fig_to_svg(fig) -> str:
                 bbox_inches="tight")
     plt.close(fig)
     svg = buf.getvalue()
-    return svg[svg.index("<svg"):]
+    start = svg.find("<svg")
+    return svg[start:] if start >= 0 else ""
 
 
 # ------------------------------------------------------------- renderers

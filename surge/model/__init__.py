@@ -23,7 +23,7 @@ from .plot_training import (
     plot_training_history,
 )
 from .pytorch import PYTORCH_AVAILABLE, PyTorchMLPAdapter
-from .registry import (  # noqa: F401 - re-exported
+from .registry import (
     MODEL_REGISTRY,
     REGISTRATION_LOG,
     RegistrationRecord,
@@ -239,4 +239,6 @@ __all__ = [
     "load_training_history",
     "plot_training_history",
     "register_model",
+    "registration_report",
+    "registration_table",
 ]

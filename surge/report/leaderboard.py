@@ -199,7 +199,8 @@ def spider_svg(category: str, benches: list[str], results: dict[str, dict[str, d
                     bbox_inches="tight")
         plt.close(fig)
     svg = buf.getvalue()
-    return svg[svg.index("<svg"):]
+    start = svg.find("<svg")
+    return svg[start:] if start >= 0 else ""
 
 
 # --------------------------------------------------------------------- html
@@ -423,7 +424,10 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark") -> Path:
     sections = []
     for cap in sorted(categories):
         keys = categories[cap]
-        svg = spider_svg(cap, keys, results, meta, mode=mode)
+        try:
+            svg = spider_svg(cap, keys, results, meta, mode=mode)
+        except Exception:  # noqa: BLE001 - a chart bug must not kill the report
+            svg = ""
         cards = "\n".join(
             _bench_card(k, meta, results[k], preview=preview_svg(k, mode))
             for k in keys)
