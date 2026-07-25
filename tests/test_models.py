@@ -18,6 +18,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from tests.conftest import optional_backend
+
 from surge.model.registry import MODEL_REGISTRY
 
 
@@ -69,12 +71,12 @@ def test_ridge_fit_predict(reg_data):
 
 
 def test_lgbm_regressor_registered():
-    pytest.importorskip("lightgbm")
+    optional_backend("lightgbm")
     assert "lgbm.regressor" in MODEL_REGISTRY
 
 
 def test_lgbm_regressor_fit_predict(reg_data):
-    pytest.importorskip("lightgbm")
+    optional_backend("lightgbm")
     X_tr, y_tr, X_te, _ = reg_data
     adapter = MODEL_REGISTRY.create("lgbm.regressor", n_estimators=20)
     adapter.fit(X_tr, y_tr)
@@ -83,12 +85,12 @@ def test_lgbm_regressor_fit_predict(reg_data):
 
 
 def test_lgbm_classifier_registered():
-    pytest.importorskip("lightgbm")
+    optional_backend("lightgbm")
     assert "lgbm.classifier" in MODEL_REGISTRY
 
 
 def test_lgbm_classifier_fit_predict_proba(clf_data):
-    pytest.importorskip("lightgbm")
+    optional_backend("lightgbm")
     X_tr, y_tr, X_te, _ = clf_data
     adapter = MODEL_REGISTRY.create("lgbm.classifier", n_estimators=20)
     adapter.fit(X_tr, y_tr)
@@ -572,7 +574,7 @@ def test_ridge_benchmark_smoke():
 
 
 def test_lgbm_classifier_benchmark_smoke():
-    pytest.importorskip("lightgbm")
+    optional_backend("lightgbm")
     from surge.benchmarks.registry import run_benchmark
 
     result = run_benchmark("tabular.iris", model_key="lgbm.classifier", seed=0)

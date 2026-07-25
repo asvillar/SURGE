@@ -1,11 +1,37 @@
 """SURGE model package."""
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# Adapter registration
+# ---------------------------------------------------------------------------
+# Core (always-available) adapters register directly; optional groups go
+# through _register_optional, which records WHY a group is unavailable
+# instead of hiding it. Inspect the outcome with
+# `surge.model.registration_report()` / `registration_table()`, or
+# `surge models --verbose` on the CLI. Set SURGE_STRICT_REGISTRY=1 (as CI
+# does) to turn adapter *bugs* (anything other than a missing optional
+# dependency) into hard import errors.
+import os as _os
+import warnings as _warnings
+
 from .base import BaseModelAdapter, SklearnRegressorAdapter
+from .ensembles import EnsemblePrediction, FNNEnsemble
+from .gpflow import GPflowGPRAdapter, GPflowMultiKernelAdapter
 from .plot_training import (
     compare_training_histories,
     load_training_history,
     plot_training_history,
+)
+from .pytorch import PYTORCH_AVAILABLE, PyTorchMLPAdapter
+from .registry import (  # noqa: F401 - re-exported
+    MODEL_REGISTRY,
+    REGISTRATION_LOG,
+    RegistrationRecord,
+    create_model,
+    list_models,
+    register_model,
+    registration_report,
+    registration_table,
 )
 from .sklearn import (
     GPRModel,
@@ -18,247 +44,166 @@ from .sklearn import (
     RidgeRegressorAdapter,
     SklearnClassifierAdapter,
 )
-from .pytorch import PYTORCH_AVAILABLE, PyTorchMLPAdapter
-from .gpflow import GPflowGPRAdapter, GPflowMultiKernelAdapter
-from .ensembles import EnsemblePrediction, FNNEnsemble
-from .registry import MODEL_REGISTRY, create_model, list_models, register_model
 
-# Register default models
-register_model(RandomForestModel, key='sklearn.random_forest', aliases=['random_forest', 'rfr'])
-register_model(MLPModel, key='sklearn.mlp', aliases=['mlp'])
-register_model(GPRModel, key='sklearn.gpr', aliases=['gpr'])
-register_model(
-    PyTorchMLPAdapter,
-    key='pytorch.mlp',
-    aliases=['torch_mlp', 'torch.mlp'],
-)
-register_model(GPflowGPRAdapter, key='gpflow.gpr', aliases=['gp_gpr'])
-register_model(GPflowMultiKernelAdapter, key='gpflow.multi_kernel', aliases=['gpflow_mk'])
-register_model(RandomForestClassifierAdapter, key='sklearn.random_forest_classifier', aliases=['rf_classifier', 'rfc'])
-register_model(GradientBoostingClassifierAdapter, key='sklearn.gradient_boosting_classifier', aliases=['gbc', 'gradient_boosting'])
-register_model(GradientBoostingRegressorModel, key='sklearn.gradient_boosting_regressor', aliases=['gbr'])
-register_model(LogisticRegressionAdapter, key='sklearn.logistic_regression', aliases=['logistic_regression', 'lr'])
-register_model(RidgeRegressorAdapter, key='sklearn.ridge', aliases=['ridge'])
+_STRICT = _os.environ.get("SURGE_STRICT_REGISTRY", "").lower() in ("1", "true", "yes")
 
-# LightGBM (optional dependency)
-try:
-    from .sklearn import LGBMRegressorAdapter, LGBMClassifierAdapter
+
+def _record(keys, status, reason="", requires=()):
+    reason = " ".join(str(reason).split())          # single line
+    if len(reason) > 220:
+        reason = reason[:217] + "..."
+    for key in keys:
+        REGISTRATION_LOG.append(
+            RegistrationRecord(key=key, status=status, reason=reason,
+                               requires=tuple(requires)))
+
+
+def _register_core(adapter_cls, key, aliases=()):
+    register_model(adapter_cls, key=key, aliases=list(aliases))
+    _record([key], "registered")
+
+
+def _register_optional(keys, requires, loader, *, needs_torch=False):
+    """Attempt one optional adapter group.
+
+    ImportError/OSError => the optional dependency is missing or its native
+    library is broken: record "skipped" with the real reason. Any other
+    exception is a SURGE bug: record "error", warn loudly, and re-raise
+    under SURGE_STRICT_REGISTRY.
+    """
+    if needs_torch and not PYTORCH_AVAILABLE:
+        _record(keys, "skipped", "torch not installed", requires)
+        return
+    try:
+        loader()
+    except (ImportError, OSError) as exc:
+        _record(keys, "skipped", f"{'/'.join(requires) or 'dependency'} unavailable: {exc}",
+                requires)
+    except Exception as exc:
+        # An exception class defined inside the optional dependency itself
+        # (e.g. xgboost.core.XGBoostError on a broken libomp) is still a
+        # dependency problem, not a SURGE bug.
+        exc_root = type(exc).__module__.split(".")[0]
+        if exc_root in {r.replace("-", "_") for r in requires}:
+            _record(keys, "skipped",
+                    f"{exc_root} broken: {type(exc).__name__}: {exc}", requires)
+            return
+        _record(keys, "error", f"{type(exc).__name__}: {exc}", requires)
+        _warnings.warn(
+            f"SURGE adapter group {list(keys)} failed to register with an "
+            f"internal error (not a missing dependency): {exc!r}. "
+            "Set SURGE_STRICT_REGISTRY=1 to raise.",
+            RuntimeWarning, stacklevel=3)
+        if _STRICT:
+            raise
+    else:
+        _record(keys, "registered", requires=requires)
+
+
+# -- core adapters (base install) -------------------------------------------
+_register_core(RandomForestModel, 'sklearn.random_forest', ['random_forest', 'rfr'])
+_register_core(MLPModel, 'sklearn.mlp', ['mlp'])
+_register_core(GPRModel, 'sklearn.gpr', ['gpr'])
+_register_core(GPflowGPRAdapter, 'gpflow.gpr', ['gp_gpr'])
+_register_core(GPflowMultiKernelAdapter, 'gpflow.multi_kernel', ['gpflow_mk'])
+_register_core(RandomForestClassifierAdapter, 'sklearn.random_forest_classifier', ['rf_classifier', 'rfc'])
+_register_core(GradientBoostingClassifierAdapter, 'sklearn.gradient_boosting_classifier', ['gbc', 'gradient_boosting'])
+_register_core(GradientBoostingRegressorModel, 'sklearn.gradient_boosting_regressor', ['gbr'])
+_register_core(LogisticRegressionAdapter, 'sklearn.logistic_regression', ['logistic_regression', 'lr'])
+_register_core(RidgeRegressorAdapter, 'sklearn.ridge', ['ridge'])
+
+if PYTORCH_AVAILABLE:
+    _register_core(PyTorchMLPAdapter, 'pytorch.mlp', ['torch_mlp', 'torch.mlp'])
+else:
+    _record(['pytorch.mlp'], "skipped", "torch not installed", ("torch",))
+
+
+# -- optional adapter groups -------------------------------------------------
+
+def _load_lgbm():
+    import lightgbm  # noqa: F401 - fail HERE, not at fit() time
+
+    from .sklearn import LGBMClassifierAdapter, LGBMRegressorAdapter
     register_model(LGBMRegressorAdapter, key='lgbm.regressor', aliases=['lgbm', 'lightgbm'])
     register_model(LGBMClassifierAdapter, key='lgbm.classifier', aliases=['lgbm_clf'])
-except Exception:
-    pass
 
-# CatBoost (optional dependency)
-try:
-    from .sklearn import CatBoostRegressorAdapter, CatBoostClassifierAdapter
+
+def _load_catboost():
+    import catboost  # noqa: F401
+
+    from .sklearn import CatBoostClassifierAdapter, CatBoostRegressorAdapter
     register_model(CatBoostRegressorAdapter, key='catboost.regressor', aliases=['catboost'])
     register_model(CatBoostClassifierAdapter, key='catboost.classifier', aliases=['catboost_clf'])
-except Exception:
-    pass
 
-# New model adapters from surge/model/adapters/
-try:
-    from .adapters.residual_mlp import ResidualMLPAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA
 
-    if _PTA:
-        register_model(ResidualMLPAdapter, key='pytorch.residual_mlp', aliases=['residual_mlp'])
-        from .adapters.geometric_residual_mlp import GeometricResidualMLPAdapter
-        register_model(
-            GeometricResidualMLPAdapter,
-            key='pytorch.geom_residual_mlp',
-            aliases=['geom_residual_mlp', 'geometric_residual_mlp'],
-        )
-except Exception:
-    pass
+def _load_xgboost():
+    import xgboost  # noqa: F401
 
-try:
-    from .adapters.mlp_classifier import MLPClassifierAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA2
-
-    if _PTA2:
-        register_model(MLPClassifierAdapter, key='pytorch.mlp_classifier', aliases=['mlp_classifier'])
-except Exception:
-    pass
-
-try:
-    from .adapters.mlp_ensemble import MLPEnsembleAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA_ENS
-
-    if _PTA_ENS:
-        register_model(
-            MLPEnsembleAdapter,
-            key='pytorch.mlp_ensemble',
-            aliases=['mlp_ensemble', 'ensemble_mlp'],
-        )
-except Exception:
-    pass
-
-try:
     from .adapters.xgboost import XGBClassifierAdapter, XGBRegressorAdapter
-    from .backends.xgboost import XGBOOST_AVAILABLE as _XGBA
+    register_model(XGBRegressorAdapter, key='xgboost.xgbregressor', aliases=['xgbr', 'xgboost'])
+    register_model(XGBClassifierAdapter, key='xgboost.xgbclassifier', aliases=['xgbc'])
 
-    if _XGBA:
-        register_model(XGBRegressorAdapter, key='xgboost.xgbregressor', aliases=['xgbr', 'xgboost'])
-        register_model(XGBClassifierAdapter, key='xgboost.xgbclassifier', aliases=['xgbc'])
-except Exception:
-    pass
 
-try:
-    from .adapters.cnn import CNN1DAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA3
-
-    if _PTA3:
-        register_model(CNN1DAdapter, key='pytorch.cnn1d', aliases=['cnn1d'])
-except Exception:
-    pass
-
-try:
-    from .adapters.rnn import GRUAdapter, LSTMAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA4
-
-    if _PTA4:
-        register_model(LSTMAdapter, key='pytorch.lstm', aliases=['lstm'])
-        register_model(GRUAdapter, key='pytorch.gru', aliases=['gru'])
-except Exception:
-    pass
-
-try:
-    from .adapters.fno import FNO1dAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA5
-
-    if _PTA5:
-        register_model(FNO1dAdapter, key='pytorch.fno1d', aliases=['fno1d', 'fno'])
-except Exception:
-    pass
-
-try:
-    from .adapters.deeponet import DeepONetAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA6
-
-    if _PTA6:
-        register_model(DeepONetAdapter, key='pytorch.deeponet', aliases=['deeponet'])
-except Exception:
-    pass
-
-try:
-    from .adapters.lenet import LeNet5Adapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA7
-
-    if _PTA7:
-        register_model(LeNet5Adapter, key='pytorch.lenet5', aliases=['lenet5', 'lenet'])
-except Exception:
-    pass
-
-try:
-    from .adapters.resnet import ResNet20Adapter, ResNet56Adapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA8
-
-    if _PTA8:
-        register_model(ResNet20Adapter, key='pytorch.resnet20', aliases=['resnet20'])
-        register_model(ResNet56Adapter, key='pytorch.resnet56', aliases=['resnet56'])
-except Exception:
-    pass
-
-try:
+def _load_botorch():
     from .adapters.botorch_gp import BoTorchGPAdapter, BoTorchSparseGPAdapter
     register_model(BoTorchGPAdapter, key='botorch.gp', aliases=['botorch_gp', 'bgp'])
     register_model(BoTorchSparseGPAdapter, key='botorch.sparse_gp', aliases=['botorch_sgp', 'sparse_gp'])
-except Exception:
-    pass
 
-try:
-    from .adapters.kan import KANRegressorAdapter, KANClassifierAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA9
 
-    if _PTA9:
-        register_model(KANRegressorAdapter, key='pytorch.kan', aliases=['kan'])
-        register_model(KANClassifierAdapter, key='pytorch.kan_classifier', aliases=['kan_classifier'])
-except Exception:
-    pass
+def _load_tabpfn():
+    import tabpfn  # noqa: F401
 
-try:
-    from .adapters.ft_transformer import FTTransformerAdapter, FTTransformerClassifierAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA10
-
-    if _PTA10:
-        register_model(FTTransformerAdapter, key='pytorch.ft_transformer', aliases=['ft_transformer', 'ftt'])
-        register_model(FTTransformerClassifierAdapter, key='pytorch.ft_transformer_classifier', aliases=['ft_transformer_classifier'])
-except Exception:
-    pass
-
-try:
-    from .adapters.vit import ViTAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA11
-
-    if _PTA11:
-        register_model(ViTAdapter, key='pytorch.vit', aliases=['vit'])
-except Exception:
-    pass
-
-try:
-    from .adapters.alexnet import AlexNetAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA12
-
-    if _PTA12:
-        register_model(AlexNetAdapter, key='pytorch.alexnet', aliases=['alexnet'])
-except Exception:
-    pass
-
-try:
-    from .adapters.fno2d import FNO2dAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA13
-
-    if _PTA13:
-        register_model(FNO2dAdapter, key='pytorch.fno2d', aliases=['fno2d'])
-except Exception:
-    pass
-
-try:
-    from .adapters.unet import UNetAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA14
-
-    if _PTA14:
-        register_model(UNetAdapter, key='pytorch.unet', aliases=['unet'])
-except Exception:
-    pass
-
-try:
-    from .adapters.vae import VAEAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA15
-
-    if _PTA15:
-        register_model(VAEAdapter, key='pytorch.vae', aliases=['vae'])
-except Exception:
-    pass
-
-try:
-    from .adapters.ddpm import DDPMAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA16
-
-    if _PTA16:
-        register_model(DDPMAdapter, key='pytorch.ddpm', aliases=['ddpm'])
-except Exception:
-    pass
-
-try:
-    from .adapters.cgan import CGANAdapter
-    from .pytorch import PYTORCH_AVAILABLE as _PTA17
-
-    if _PTA17:
-        register_model(CGANAdapter, key='pytorch.cgan', aliases=['cgan'])
-except Exception:
-    pass
-
-try:
-    import importlib.util as _importlib_util
     from .adapters.tabpfn import TabPFNClassifierAdapter, TabPFNRegressorAdapter
+    register_model(TabPFNRegressorAdapter, key='tabpfn.regressor', aliases=['tabpfn'])
+    register_model(TabPFNClassifierAdapter, key='tabpfn.classifier', aliases=['tabpfn_clf'])
 
-    if _importlib_util.find_spec("tabpfn") is not None:
-        register_model(TabPFNRegressorAdapter, key='tabpfn.regressor', aliases=['tabpfn'])
-        register_model(TabPFNClassifierAdapter, key='tabpfn.classifier', aliases=['tabpfn_clf'])
-except Exception:
-    pass
+
+def _torch_group(module, names_keys_aliases):
+    def _loader():
+        import importlib
+        mod = importlib.import_module(module, package=__name__)
+        for cls_name, key, aliases in names_keys_aliases:
+            register_model(getattr(mod, cls_name), key=key, aliases=list(aliases))
+    return _loader
+
+
+_register_optional(('lgbm.regressor', 'lgbm.classifier'), ('lightgbm',), _load_lgbm)
+_register_optional(('catboost.regressor', 'catboost.classifier'), ('catboost',), _load_catboost)
+_register_optional(('xgboost.xgbregressor', 'xgboost.xgbclassifier'), ('xgboost',), _load_xgboost)
+_register_optional(('botorch.gp', 'botorch.sparse_gp'), ('torch', 'botorch'), _load_botorch)
+_register_optional(('tabpfn.regressor', 'tabpfn.classifier'), ('tabpfn',), _load_tabpfn)
+
+_TORCH_GROUPS = [
+    ('.adapters.residual_mlp', [('ResidualMLPAdapter', 'pytorch.residual_mlp', ['residual_mlp'])]),
+    ('.adapters.geometric_residual_mlp', [('GeometricResidualMLPAdapter', 'pytorch.geom_residual_mlp',
+                                           ['geom_residual_mlp', 'geometric_residual_mlp'])]),
+    ('.adapters.mlp_classifier', [('MLPClassifierAdapter', 'pytorch.mlp_classifier', ['mlp_classifier'])]),
+    ('.adapters.mlp_ensemble', [('MLPEnsembleAdapter', 'pytorch.mlp_ensemble', ['mlp_ensemble', 'ensemble_mlp'])]),
+    ('.adapters.cnn', [('CNN1DAdapter', 'pytorch.cnn1d', ['cnn1d'])]),
+    ('.adapters.rnn', [('LSTMAdapter', 'pytorch.lstm', ['lstm']),
+                       ('GRUAdapter', 'pytorch.gru', ['gru'])]),
+    ('.adapters.fno', [('FNO1dAdapter', 'pytorch.fno1d', ['fno1d', 'fno'])]),
+    ('.adapters.deeponet', [('DeepONetAdapter', 'pytorch.deeponet', ['deeponet'])]),
+    ('.adapters.lenet', [('LeNet5Adapter', 'pytorch.lenet5', ['lenet5', 'lenet'])]),
+    ('.adapters.resnet', [('ResNet20Adapter', 'pytorch.resnet20', ['resnet20']),
+                          ('ResNet56Adapter', 'pytorch.resnet56', ['resnet56'])]),
+    ('.adapters.kan', [('KANRegressorAdapter', 'pytorch.kan', ['kan']),
+                       ('KANClassifierAdapter', 'pytorch.kan_classifier', ['kan_classifier'])]),
+    ('.adapters.ft_transformer', [('FTTransformerAdapter', 'pytorch.ft_transformer', ['ft_transformer', 'ftt']),
+                                  ('FTTransformerClassifierAdapter', 'pytorch.ft_transformer_classifier',
+                                   ['ft_transformer_classifier'])]),
+    ('.adapters.vit', [('ViTAdapter', 'pytorch.vit', ['vit'])]),
+    ('.adapters.alexnet', [('AlexNetAdapter', 'pytorch.alexnet', ['alexnet'])]),
+    ('.adapters.fno2d', [('FNO2dAdapter', 'pytorch.fno2d', ['fno2d'])]),
+    ('.adapters.unet', [('UNetAdapter', 'pytorch.unet', ['unet'])]),
+    ('.adapters.vae', [('VAEAdapter', 'pytorch.vae', ['vae'])]),
+    ('.adapters.ddpm', [('DDPMAdapter', 'pytorch.ddpm', ['ddpm'])]),
+    ('.adapters.cgan', [('CGANAdapter', 'pytorch.cgan', ['cgan'])]),
+]
+
+for _module, _entries in _TORCH_GROUPS:
+    _register_optional(tuple(key for _, key, _a in _entries), ('torch',),
+                       _torch_group(_module, _entries), needs_torch=True)
 
 
 def __getattr__(name: str):  # PEP 562: avoid importing TensorFlow/GPflow at import time
@@ -270,28 +215,28 @@ def __getattr__(name: str):  # PEP 562: avoid importing TensorFlow/GPflow at imp
 
 
 __all__ = [
+    "GPFLOW_AVAILABLE",
+    "MODEL_REGISTRY",
+    "PYTORCH_AVAILABLE",
     "BaseModelAdapter",
-    "SklearnRegressorAdapter",
-    "SklearnClassifierAdapter",
-    "RandomForestModel",
-    "MLPModel",
+    "EnsemblePrediction",
+    "FNNEnsemble",
     "GPRModel",
-    "RandomForestClassifierAdapter",
+    "GPflowGPRAdapter",
+    "GPflowMultiKernelAdapter",
     "GradientBoostingClassifierAdapter",
     "GradientBoostingRegressorModel",
     "LogisticRegressionAdapter",
+    "MLPModel",
     "PyTorchMLPAdapter",
-    "GPflowGPRAdapter",
-    "GPflowMultiKernelAdapter",
-    "FNNEnsemble",
-    "EnsemblePrediction",
-    "PYTORCH_AVAILABLE",
-    "GPFLOW_AVAILABLE",
-    "MODEL_REGISTRY",
+    "RandomForestClassifierAdapter",
+    "RandomForestModel",
+    "SklearnClassifierAdapter",
+    "SklearnRegressorAdapter",
+    "compare_training_histories",
     "create_model",
     "list_models",
-    "register_model",
-    "compare_training_histories",
     "load_training_history",
     "plot_training_history",
+    "register_model",
 ]

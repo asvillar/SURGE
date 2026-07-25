@@ -1,8 +1,9 @@
 """Model registry helpers."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Tuple, Type
+from collections.abc import Iterable
+from dataclasses import dataclass, field
+from typing import Dict, List, Tuple, Type
 
 from .base import BaseModelAdapter
 
@@ -12,6 +13,49 @@ class RegisteredModel:
     key: str
     adapter_cls: Type[BaseModelAdapter]
     aliases: Tuple[str, ...] = ()
+
+
+@dataclass
+class RegistrationRecord:
+    """Outcome of one adapter registration attempt.
+
+    status is one of:
+      registered — adapter is available in MODEL_REGISTRY
+      skipped    — an optional dependency is missing/broken; reason says why
+      error      — the adapter itself raised (a SURGE bug, never silent)
+    """
+
+    key: str
+    status: str
+    reason: str = ""
+    requires: Tuple[str, ...] = field(default_factory=tuple)
+
+
+REGISTRATION_LOG: List[RegistrationRecord] = []
+
+
+def registration_report() -> List[RegistrationRecord]:
+    """All registration attempts (registered / skipped / error) in order."""
+    return list(REGISTRATION_LOG)
+
+
+def registration_table() -> str:
+    """Human-readable registration report for CLI/debug output."""
+    if not REGISTRATION_LOG:
+        return "No registration records."
+    width = max(len(r.key) for r in REGISTRATION_LOG) + 2
+    lines = []
+    for rec in REGISTRATION_LOG:
+        line = f"  {rec.key:<{width}}{rec.status}"
+        if rec.reason:
+            line += f"  — {rec.reason}"
+        lines.append(line)
+    n_reg = sum(1 for r in REGISTRATION_LOG if r.status == "registered")
+    n_skip = sum(1 for r in REGISTRATION_LOG if r.status == "skipped")
+    n_err = sum(1 for r in REGISTRATION_LOG if r.status == "error")
+    header = (f"Adapter registration: {n_reg} registered, "
+              f"{n_skip} skipped, {n_err} errors\n")
+    return header + "\n".join(lines)
 
 
 class ModelRegistry:
