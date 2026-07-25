@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml/badge.svg)](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue.svg)](./pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](./pyproject.toml)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
 [![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
@@ -76,20 +76,24 @@ exclusively from `benchmark_reports/**/result.json` artifacts.
 
 ## Install
 
-**Requirements:** Python **3.10 or 3.11** (recommended: 3.11).
+**Requirements:** Python **3.10 – 3.12**. Package name: **`surge-ml`** ·
+import name: **`surge`**.
 
-PyPI package name: **`surge-ml`** · import name: **`surge`**
+With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git
-cd SURGE
-python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[torch,dev]"
-python -c "import surge; print('surge', surge.__version__)"
+git clone https://github.com/S-Villar/SURGE.git && cd SURGE
+uv venv && source .venv/bin/activate
+uv pip install -e ".[torch,dev]"
+surge version && surge models
 ```
 
-Or from PyPI: `pip install "surge-ml[torch,dev]"` (clone the repo for the
-`examples/` used below).
+With plain pip: `python3.11 -m venv .venv && source .venv/bin/activate &&
+pip install -e ".[torch,dev]"`.
+
+> PyPI release of `surge-ml` is prepared (`uv build` produces clean
+> artifacts — see [`docs/RELEASING.md`](docs/RELEASING.md)); until it is
+> published, install from the repository as above.
 
 | Extra | Adds | Install |
 |-------|------|---------|
@@ -205,6 +209,7 @@ Gallery of every figure type: `python examples/viz_theme_gallery.py`.
 
 | Topic | Link |
 |-------|------|
+| **Getting started (one page)** | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
 | Build your own surrogate | [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md) |
 | First-run walkthrough (HPC) | [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md) |
 | Install reference | [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) |
