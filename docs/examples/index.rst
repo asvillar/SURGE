@@ -16,7 +16,7 @@ Hyperparameter Optimization Examples
 Basic Random Forest Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. literalinclude:: ../../examples/simple_optuna_demo_ruff_preview.py
+.. literalinclude:: ../../examples/simple_optuna_demo.py
    :language: python
    :caption: Simple hyperparameter optimization with Optuna
 
