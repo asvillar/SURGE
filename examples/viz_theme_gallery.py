@@ -85,7 +85,10 @@ def parity_figure(run_dir: Path, mode: str, units: str = "a.u."):
     from sklearn.metrics import r2_score
 
     metrics = json.loads((run_dir / "metrics.json").read_text())
-    model_key = next(iter(metrics))
+    # showcase the strongest model in the run (highest test R²)
+    model_key = max(
+        metrics,
+        key=lambda k: (metrics[k].get("test") or {}).get("r2", float("-inf")))
     splits = {}
     for split in ("train", "test"):
         try:
