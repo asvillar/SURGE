@@ -66,9 +66,14 @@ class KerasMLPAdapter(BaseModelAdapter):
             early_stopping_patience=early_stopping_patience,
             verbose=verbose, random_state=random_state, **params)
         self._build_fn = build_fn
-        self._model = None
         self._n_outputs = 1
         self._y_was_1d = True
+
+    def _build_model(self, **kwargs: Any) -> Any:
+        # Keras layer sizes need the input dimension, which is only known
+        # at fit() time — construction is deferred (base contract allows
+        # a None model until fit populates it).
+        return None
 
     # ------------------------------------------------------------------
     def _default_build(self, n_inputs: int, n_outputs: int):
@@ -119,7 +124,8 @@ class KerasMLPAdapter(BaseModelAdapter):
         return self
 
     def predict(self, X):
-        self.ensure_fitted()
+        if self._model is None:
+            raise ValueError("Model must be fitted before predicting")
         pred = np.asarray(self._model.predict(
             np.asarray(X, dtype=np.float32),
             verbose=self.params["verbose"]))
@@ -127,7 +133,8 @@ class KerasMLPAdapter(BaseModelAdapter):
 
     # ------------------------------------------------------------------
     def save(self, path: Path) -> None:
-        self.ensure_fitted()
+        if self._model is None:
+            raise ValueError("Model must be fitted before saving")
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.suffix != ".keras":

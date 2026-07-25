@@ -98,5 +98,6 @@ pytest -q                                    # full suite
 | `lgbm.*` / `xgboost.*` missing on macOS | The OpenMP runtime is absent: `brew install libomp`, then reinstall/re-import. |
 | First benchmark run is slow / downloads | Network-backed benchmarks (OpenML, MNIST/CIFAR, ConStellaration) cache under `data/datasets/benchmarks/` on first use; later runs are offline. |
 | `pytorch.*` models absent | Install the extra: `uv pip install -e ".[torch]"`. |
-| GPflow models error on Apple Silicon | See the arm64 notes in `requirements.txt` (mainline `tensorflow`, `gpflow --no-deps`). |
+| GPflow models (any platform) | `uv pip install -e ".[gpflow]"` then `uv pip install gpflow --no-deps`. gpflow's published metadata pins `numpy<2` (and the dead `tensorflow-macos` on Apple Silicon), which no modern resolver can satisfy next to TF ≥ 2.21 — but gpflow 2.11 runs fine on NumPy 2.x. The `[gpflow]` extra provides the full TF stack **and** gpflow's pure-Python deps (check_shapes, tabulate, …), so `--no-deps` is safe. Verified: TF 2.21 + GPflow 2.11.1 + NumPy 2.5. |
+| Keras/TensorFlow models absent | Install `.[tensorflow]` (or `.[gpflow]`); `keras.mlp` then appears in `surge models`. |
 | Grouped samples (shots, trajectories) | Splits are random-only today — leakage risk. Track the split-strategy roadmap in `docs/design/ARCHITECTURE_RECOMMENDATIONS.md` (R4). |

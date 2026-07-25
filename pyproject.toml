@@ -45,10 +45,19 @@ torch = ["torch>=1.9.0"]
 onnx = ["onnx>=1.14", "onnxscript>=0.1", "onnxruntime>=1.17"]
 # TensorFlow/GPflow model families. Floors are the NumPy-2-compatible set
 # documented in requirements.txt (mainline TF >= 2.21 everywhere,
-# including Apple Silicon — tensorflow-macos is dead and pins numpy<2).
-gpflow = ["tensorflow>=2.21", "tf-keras>=2.21",
-          "tensorflow-probability>=0.25", "gpflow>=2.10"]
-tensorflow = ["tensorflow>=2.21"]
+# including Apple Silicon — tensorflow-macos is dead).
+# gpflow itself is NOT listed: its published metadata pins numpy<2 (and
+# tensorflow-macos on arm64), which is unresolvable next to TF >= 2.21,
+# even though gpflow 2.11 runs fine on NumPy 2.x. This extra provides
+# the full runtime stack including gpflow's pure-Python deps; finish with
+#   pip install gpflow --no-deps
+# (verified: TF 2.21 + GPflow 2.11.1 + NumPy 2.5). See GETTING_STARTED.
+gpflow = [
+  "tensorflow>=2.21", "tf-keras>=2.21", "tensorflow-probability>=0.25",
+  "check_shapes>=1.0", "multipledispatch>=0.6", "deprecated>=1.2",
+  "tabulate>=0.9",
+]
+tensorflow = ["tensorflow>=2.21", "tf-keras>=2.21"]
 # SHAP feature importance; >=0.46 is the first NumPy-2-compatible release.
 shap = ["shap>=0.46"]
 # h5py is included so MHD-code batch-mode tests run without an extra install.
