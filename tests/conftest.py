@@ -34,3 +34,21 @@ warnings.filterwarnings(
     module="sklearn|pandas",
 )
 
+
+
+def optional_backend(name: str):
+    """Import an optional backend or SKIP the test.
+
+    Unlike pytest.importorskip (ImportError only), this also skips when a
+    native library fails to load (OSError / the package's own error type,
+    e.g. lightgbm without libomp) — a broken optional dependency must never
+    read as a SURGE test failure.
+    """
+    import importlib
+
+    import pytest as _pytest
+
+    try:
+        return importlib.import_module(name)
+    except Exception as exc:  # noqa: BLE001 - any import failure => skip
+        _pytest.skip(f"{name} unavailable: {type(exc).__name__}: {exc}")

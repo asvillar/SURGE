@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Surrogate modeling framework for scientific workflows: SciML, AutoML, UQ, and MLOps-style provenance in a declarative pipeline"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "Álvaro Sánchez Villar" }]
 keywords = ["surrogate", "machine learning", "scientific computing", "MLOps"]
 classifiers = [
@@ -16,7 +16,6 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: BSD License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -68,6 +67,11 @@ Issues = "https://github.com/S-Villar/SURGE/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["surge*"]
+
+# Non-Python files that must ship in wheels: the benchmark metadata
+# (names, citations, tiers, thresholds) that reports read at runtime.
+[tool.setuptools.package-data]
+surge = ["benchmarks/metadata.yaml"]
 
 # Scope `pytest` to the actual test suite. Without this, `pytest -q` from the
 # repo root walks into scripts/ and examples/ and trips over legacy tutorial

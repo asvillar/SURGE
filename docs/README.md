@@ -11,6 +11,7 @@
 
 | Page | Role |
 |------|------|
+| [GETTING_STARTED.md](GETTING_STARTED.md) | **Start here** — install → first surrogate → reports, with troubleshooting |
 | [index.rst](index.rst) | Landing page, status, pipeline overview |
 | [installation.rst](installation.rst) | `surge-ml`, extras, verify |
 | [quickstart.rst](quickstart.rst) | CLI + `examples/quickstart.py` |
@@ -19,6 +20,8 @@
 | [citation.rst](citation.rst) | OSTI / MLA and DOE Code |
 | [SURGE_OVERVIEW.md](SURGE_OVERVIEW.md) | Deeper tour of the codebase |
 | [setup/INSTALLATION.md](setup/INSTALLATION.md) | Long-form install and tips |
+| [BENCHMARK_VERIFICATION_BRIEF.md](BENCHMARK_VERIFICATION_BRIEF.md) | Benchmark definitions, citations, verification status |
+| [design/](design/) | Architecture roadmap and benchmark-restructure design (maintainers) |
 
 ## Build locally
 
