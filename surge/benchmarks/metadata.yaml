@@ -1,0 +1,360 @@
+# SURGE benchmark metadata — single source of truth for leaderboard
+# reports (names, citations, tiers, thresholds, IO descriptions).
+# Extracted 2026-07 from the retired canvas leaderboard and the
+# benchmark verification brief by scripts/extract_benchmark_metadata.py.
+# Edit THIS file to change benchmark descriptions; result numbers
+# always come from benchmark_reports/**/result.json at render time.
+benchmarks:
+- key: tabular.california_housing
+  name: California Housing
+  capability: Scalar Regression
+  tier: 1
+  citation: Pace & Barry (1997) Statistics & Probability Letters
+  url: https://doi.org/10.1016/S0167-7160(97)00010-0
+  shape: 8 → 1
+  n: 20,640
+  primary_metric: R²
+  threshold: R² ≥ 0.75
+  description: Predict median house value in California census block groups from socioeconomic
+    and geographic features (1990 US Census aggregates).
+- key: tabular.concrete_strength
+  name: Concrete Compressive Strength
+  capability: Scalar Regression
+  tier: 1
+  citation: Yeh (1998) Cement and Concrete Research
+  url: https://doi.org/10.1016/S0008-8846(98)00165-3
+  shape: 8 → 1
+  n: 1,030
+  primary_metric: R²
+  threshold: R² ≥ 0.80
+  description: Predict concrete compressive strength (MPa) from mixture composition and age.
+- key: tabular.energy_efficiency
+  name: Building Energy Efficiency
+  capability: Scalar Regression
+  tier: 1
+  citation: Tsanas & Xifara (2012) Energy & Buildings
+  url: https://doi.org/10.1016/j.enbuild.2012.03.003
+  shape: 8 → 1
+  n: '768'
+  primary_metric: R²
+  threshold: R² ≥ 0.90
+  description: Predict building heating load from envelope, geometry, and HVAC features.
+- key: tabular.airfoil_noise
+  name: NASA Airfoil Self-Noise
+  capability: Scalar Regression
+  tier: 1
+  citation: Brooks, Pope & Marcolini (1989) NASA TM 100514
+  url: https://archive.ics.uci.edu/dataset/291/airfoil+self+noise
+  shape: 5 → 1
+  n: 1,503
+  primary_metric: R²
+  threshold: R² ≥ 0.85
+  description: Predict scaled sound pressure level of airfoil self-noise from aerodynamic
+    and geometry parameters.
+- key: tabular.yacht_dynamics
+  name: Yacht Hydrodynamics
+  capability: Scalar Regression
+  tier: 1
+  citation: Gerritsma, Onnink & Versluis (1981) CFD — SHIP DESIGN
+  url: https://archive.ics.uci.edu/dataset/243/yacht+hydrodynamics
+  shape: 6 → 1
+  n: '308'
+  primary_metric: R²
+  threshold: R² ≥ 0.95
+  description: Predict residuary resistance per unit weight of sailing yachts from hull geometry
+    ratios.
+- key: tabular.superconductor
+  name: Superconductor Critical Temperature
+  capability: Scalar Regression
+  tier: 1
+  citation: Hamidieh (2018) Computational Materials Science
+  url: https://doi.org/10.1016/j.commatsci.2018.07.052
+  shape: 81 → 1
+  n: 21,263
+  primary_metric: R²
+  threshold: R² ≥ 0.90
+  threshold_note: Key materials-science surrogate benchmark
+  description: Predict superconducting critical temperature Tc from chemical/formula-derived
+    features.
+- key: tabular.diabetes
+  name: Diabetes Progression
+  capability: Scalar Regression
+  tier: 1
+  citation: Efron, Hastie, Johnstone & Tibshirani (2004) Annals of Statistics
+  url: https://doi.org/10.1214/009053604000000067
+  shape: 10 → 1
+  n: '442'
+  primary_metric: R²
+  threshold: R² ≥ 0.40
+  threshold_note: Inherently noisy; low R² expected
+  description: Predict diabetes disease progression one year after baseline from 10 physiological
+    variables.
+- key: multioutput.scm20d
+  name: SCM20d Supply Chain (20 targets)
+  capability: Multi-output Regression
+  tier: 1
+  citation: Spyromitros-Xioufis et al. (2016) Machine Learning
+  url: https://doi.org/10.1007/s10994-016-5546-z
+  shape: 61 → 20
+  n: 8,966
+  primary_metric: R²
+  threshold: avg R² ≥ 0.60
+  description: Joint prediction of 20 supply-chain management target variables from 61 input
+    features.
+- key: tabular.breast_cancer
+  name: Wisconsin Breast Cancer (WDBC)
+  capability: Tabular Classification
+  tier: 1
+  citation: Mangasarian & Wolberg (1990) University of Wisconsin
+  url: https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic
+  shape: 30 → 2
+  n: '569'
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.95
+  description: 'Binary classification: malignant vs benign from cytology features.'
+- key: tabular.digits
+  name: Optical Recognition of Handwritten Digits
+  capability: Tabular Classification
+  tier: 1
+  citation: Alpaydin & Kaynak (1998) UCI
+  url: https://archive.ics.uci.edu/dataset/80/optical+recognition+of+handwritten+digits
+  shape: 64 → 10
+  n: 1,797
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.97
+  description: Classify 8×8 grayscale digit images (flattened to 64 features).
+- key: tabular.iris
+  name: Iris (3-class)
+  capability: Tabular Classification
+  tier: 1
+  citation: Fisher (1936) Annals of Eugenics
+  url: https://doi.org/10.1111/j.1469-1809.1936.tb02137.x
+  shape: 4 → 3
+  n: '150'
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.95
+  description: Classify iris species from sepal and petal measurements.
+- key: tabular.wine
+  name: UCI Wine (3-class)
+  capability: Tabular Classification
+  tier: 1
+  citation: Aeberhard, Coomans & De Vel (1992) UCI
+  url: https://archive.ics.uci.edu/dataset/109/wine
+  shape: 13 → 3
+  n: '178'
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.90
+  description: Classify wine cultivar from chemical analysis.
+- key: classification.covertype
+  name: Forest Covertype (7-class)
+  capability: Scientific Classification
+  tier: 1
+  citation: Blackard & Dean (1999) Computers & Electronics in Agriculture
+  url: https://archive.ics.uci.edu/dataset/31/covertype
+  shape: 54 → 7
+  n: 20k (subsample of 581k)
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.85
+  threshold_note: Threshold achievable with full 581k; 20k subsample harder
+  description: Classify forest cover type from cartographic and terrain variables.
+- key: classification.plasma_stability
+  name: Electrical Grid Stability (plasma proxy)
+  capability: Scientific Classification
+  tier: 2
+  citation: Arzamasov, Bohm & Jochem (2018) IEEE PMAPS
+  url: https://archive.ics.uci.edu/dataset/471/electrical+grid+stability+simulated+data
+  shape: 12 → 2
+  n: 10,000
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.92
+  description: Binary classification of power-grid stability from simulated operating points.
+- key: classification.flow_regime
+  name: CFD Flow Regime (4-class)
+  capability: Scientific Classification
+  tier: 0
+  citation: SURGE inline fixture — Mach / Re / AoA regime labeling
+  url: ''
+  shape: 3 → 4
+  n: '800'
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.85
+  description: Classify CFD-like flow regime from Mach number, log₁₀(Reynolds), angle of attack.
+- key: sequence.lorenz63
+  name: Lorenz-63 Chaotic Forecasting
+  capability: Time Series / Forecasting
+  tier: 0
+  citation: Lorenz (1963) J. Atmospheric Sciences
+  url: https://doi.org/10.1175/1520-0469(1963)020<0130:DNF>2.0.CO;2
+  shape: 3×20 → 3×20 (rollout)
+  n: 1,200 trajectories
+  primary_metric: NRMSE
+  threshold: NRMSE ≤ 0.10
+  description: Short-horizon prediction on the Lorenz-63 chaotic attractor (σ=10, ρ=28, β=8/3).
+- key: pde.burgers_1d
+  name: Viscous Burgers 1D (Inline FD Solver)
+  capability: 1D PDE Operator
+  tier: 1
+  citation: 'Li et al. (2021) ICLR — FNO paper; solver: Burgers (1948)'
+  url: https://arxiv.org/abs/2010.08895
+  shape: 64 → 64 (field)
+  n: 1,024 simulations
+  primary_metric: NRMSE
+  threshold: NRMSE ≤ 0.10
+  description: 'Learn operator u(x,0) → u(x,T) for 1D viscous Burgers: ∂u/∂t + u∂u/∂x = ν∂²u/∂x².'
+- key: vision.mnist
+  name: MNIST Handwritten Digits
+  capability: Vision
+  tier: 2
+  citation: LeCun, Bottou, Bengio & Haffner (1998) Proc. IEEE
+  url: http://yann.lecun.com/exdb/mnist/
+  shape: 28×28 → 10
+  n: 70,000
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.99
+  threshold_note: 'Published LeNet-5: 99.05%; 98.9% with default epochs'
+  description: Classify 28×28 handwritten digits.
+- key: vision.cifar10
+  name: CIFAR-10 Image Classification
+  capability: Vision
+  tier: 2
+  citation: Krizhevsky (2009) — Learning Multiple Layers of Features from Tiny Images
+  url: https://www.cs.toronto.edu/~kriz/cifar.html
+  shape: 32×32×3 → 10
+  n: 60,000
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.91
+  threshold_note: Prior ResNet-20 run (28% acc) was invalid — train/predict normalization
+    mismatch + no val split. Fixed; re-run needed for official metrics.
+  description: Classify 32×32×3 natural images into 10 object categories.
+- key: fusion.mhd_sample
+  name: MHD-code Tokamak Equilibrium Surrogate
+  capability: Scientific Domain
+  tier: 2
+  citation: MHD-code Group — a tokamak experimental data, PPPL
+  url: https://mhd_code.pppl.gov
+  shape: 13 → 1
+  n: ~500
+  primary_metric: R²
+  threshold: R² ≥ 0.85
+  description: 'Tokamak MHD equilibrium surrogate: map equilibrium parameters to a stability/growth-rate
+    metric.'
+- key: plasma.cmod_density_limit
+  name: C-Mod Greenwald Density Limit
+  capability: Scientific Domain
+  tier: 2
+  citation: Greenwald et al. (2002) Plasma Phys. Control. Fusion
+  url: https://doi.org/10.1088/0741-3335/44/8/325
+  shape: ~10 → 2
+  n: ~5,000
+  primary_metric: Accuracy
+  threshold: Acc ≥ 0.90
+  description: Predict density-limit disruption precursor (Greenwald limit) from Alcator C-Mod
+    plasma signals.
+- key: plasma.constellaration
+  name: ConStellaration Stellarator Surrogate
+  capability: Scientific Domain
+  tier: 2
+  citation: Goodman et al. (2025) arXiv:2506.19583 — ConStellaration dataset
+  url: https://arxiv.org/abs/2506.19583
+  shape: 90 → 1
+  n: 10k / 26,897
+  primary_metric: R²
+  threshold: R² ≥ 0.85
+  threshold_note: log₁₀(qi) only; random 10k subsample from the paper-filtered NPZ when cached.
+  description: 'Stellarator surrogate: VMEC/DESC boundary shape → log₁₀(qi) quasi-isodynamic
+    quality.'
+- key: plasma.constellaration_paper
+  name: ConStellaration Multi-output (Paper Benchmark)
+  capability: Scientific Domain
+  tier: 2
+  citation: Goodman et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol
+  url: https://arxiv.org/abs/2506.19583
+  shape: 90 → 12
+  n: 26,897
+  primary_metric: R² (mean)
+  threshold: mean R² ≥ 0.85
+  threshold_note: 12 models (one per metric); score = mean test R². Paper pass ≥ 0.97.
+  description: 'Paper protocol: 12 independent 90→1 models, one per stellarator metric.'
+- key: plasma.constellaration_multioutput
+  name: ConStellaration Joint Multi-output
+  capability: Scientific Domain
+  tier: 2
+  citation: Goodman et al. (2025) arXiv:2506.19583 — single 90→12 surrogate
+  url: https://arxiv.org/abs/2506.19583
+  shape: 90 → 12
+  n: 26,897
+  primary_metric: R²
+  threshold: R² ≥ 0.85
+  threshold_note: 'One model, all 12 metrics. Also logged: RMSE, min/max per-metric R², NRMSE.
+    HPO: surge run -b constellaration_multi -m pytorch.residual_mlp --hpo'
+  description: Single joint surrogate predicting all 12 stellarator metrics from boundary
+    shape (alternative to the paper’s 12-model protocol).
+  io_note: 'Joint multi-output benchmark (not the paper’s 12-model protocol). Workflow: examples/constellaration_multioutput_workflow.py'
+  inputs:
+  - name: r_cos[0:44]
+    desc: 45 R Fourier cos coefficients (VMEC boundary)
+  - name: z_sin[0:44]
+    desc: 45 Z Fourier sin coefficients (VMEC boundary)
+  outputs:
+  - name: aspect_ratio
+    desc: Plasma aspect ratio
+  - name: aspect_ratio_over_edge_rotational_transform
+    desc: Aspect ratio / edge ι
+  - name: max_elongation
+    desc: Maximum elongation
+  - name: axis_rotational_transform_over_n_field_periods
+    desc: Axis ι / n_fp
+  - name: edge_rotational_transform_over_n_field_periods
+    desc: Edge ι / n_fp
+  - name: axis_magnetic_mirror_ratio
+    desc: Axis magnetic mirror ratio
+  - name: edge_magnetic_mirror_ratio
+    desc: Edge magnetic mirror ratio
+  - name: average_triangularity
+    desc: Average triangularity
+  - name: vacuum_well
+    desc: Vacuum magnetic well
+  - name: minimum_normalized_magnetic_gradient_scale_length
+    desc: Min normalised |∇B| scale length
+  - name: flux_compression_in_regions_of_bad_curvature
+    desc: Flux compression in bad-curvature regions
+  - name: log_10_qi
+    desc: log₁₀ quasi-isodynamic quality (lower = better QI)
+- key: plasma.qlknn_transport
+  name: QLKNN Turbulent Transport Coefficient
+  capability: Scientific Domain
+  tier: 2
+  citation: van de Plassche et al. (2020) Phys. Plasmas — QuaLiKiz surrogate
+  url: https://doi.org/10.1063/1.5134126
+  shape: 10 → 1
+  n: 7,475
+  primary_metric: R²
+  threshold: R² ≥ 0.90
+  description: 'Emulate QLKNN/QuaLiKiz turbulent transport: predict electron ITG heat flux
+    from normalised gyrokinetic parameters.'
+  io_note: Ground truth is the QLKNN_7_11 surrogate (fusion_surrogates); SURGE models emulate
+    that mapping. Only samples with active ITG transport (efeITG > 0) are kept.
+  inputs:
+  - name: Ati
+    desc: Normalised ion temperature gradient
+  - name: Ate
+    desc: Normalised electron temperature gradient
+  - name: Ane
+    desc: Normalised electron density gradient
+  - name: Ani
+    desc: Normalised ion density gradient
+  - name: q
+    desc: Safety factor
+  - name: smag
+    desc: Magnetic shear
+  - name: x
+    desc: Normalised minor radius
+  - name: Ti_Te
+    desc: Ion-to-electron temperature ratio
+  - name: LogNuStar
+    desc: Log collisionality
+  - name: normni
+    desc: Normalised ion density
+  outputs:
+  - name: efeITG
+    desc: Electron heat flux from the ITG mode (gyroBohm-normalised units)
