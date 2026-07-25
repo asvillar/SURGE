@@ -28,8 +28,9 @@ gold star at each model's optimum with its score.
 
 ## Neural-network training
 
-Per-epoch train/validation loss from the JSONL training logs, with the
-generalisation gap shaded and the best epoch marked.
+Per-epoch train/validation loss from the JSONL training logs: shaded
+generalisation gap, starred best epoch, power-law convergence fit, and
+the last-10-epoch mean level.
 
 ![Training curves](assets/gallery/training_curves.png)
 
@@ -47,6 +48,30 @@ worst test samples, the signed-error field over the whole test set
 (sorted by per-sample rel-L2), and the error distribution.
 
 ![Field operator diagnostics](assets/gallery/field_operator.png)
+
+## 2D operator learning
+
+FNO-2D learns the periodic Poisson solver (source → solution) at median
+rel-L2 0.006 on 32×32 fields generated on the fly — U-Net covers the
+same task shape.
+
+![2D operator learning triptych](assets/gallery/field2d.png)
+
+## Multi-backend comparison
+
+Random forest, PyTorch MLP, and an exact Gaussian process trained on
+identical QLKNN splits through the one registry — the small-data regime
+is where the GP earns its keep.
+
+![Three backends compared](assets/gallery/trio.png)
+
+## Deep-ensemble uncertainty
+
+`pytorch.mlp_ensemble` mean ± 2σ with honest calibration: raw ensemble
+spread is overconfident; σ-rescaling on a held-out split recovers
+near-Gaussian coverage.
+
+![Deep ensemble UQ](assets/gallery/ensemble.png)
 
 ## Uncertainty quantification
 

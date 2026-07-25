@@ -4,6 +4,7 @@
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](./pyproject.toml)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![MLflow](https://img.shields.io/badge/MLflow-integrated-0194E2?logo=mlflow&logoColor=white)](docs/GETTING_STARTED.md)
 [![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
 [![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
 
@@ -89,10 +90,10 @@ sortable tables — generated exclusively from
 |:---:|:---:|
 | <img src="docs/assets/readme/parity.png" width="400" alt="Train/test parity density plots with reversed-plasma colormap and R² boxes"/> | <img src="docs/assets/readme/hpo_convergence.png" width="400" alt="HPO history with running best and starred best trials"/> |
 | *Plasma-transport surrogate (QLKNN ITG heat flux): HPO-tuned residual MLP, R² **0.98 train / 0.96 test**, log-density parity in the style of the ICRF surrogate papers.* | *Optuna HPO across models: per-trial traces, running best, gold star at each optimum.* |
-| <img src="docs/assets/readme/field_operator.png" width="400" alt="Burgers operator learning: sample fits, signed-error field, error distribution"/> | <img src="docs/assets/readme/uncertainty.png" width="400" alt="GP surrogate with 68/95% credible bands"/> |
-| *Operator learning on viscous Burgers' equation: best/median/worst test samples, signed-error field, per-sample rel-L2 distribution.* | *Gaussian-process surrogate with 68/95% credible bands — the band widens where training data is absent (96% truth coverage).* |
-| <img src="docs/assets/gallery/training_curves.png" width="400" alt="Training monitoring: train/val loss with generalisation gap and best epoch"/> | <img src="docs/assets/readme/characterization.png" width="400" alt="Dataset characterization panel with PCA spectrum"/> |
-| *Live training monitoring from per-epoch JSONL logs: generalisation gap shaded, best epoch starred; opt-in MLflow tracking mirrors every run (`mlflow_tracking: true` in the spec, or `surge bench --mlflow`).* | *Pre-training dataset characterization: distributions, signal-to-noise, input–target correlations, PCA effective dimensionality.* |
+| <img src="docs/assets/readme/field2d.png" width="400" alt="2D operator learning: FNO-2D solves the periodic Poisson problem, median rel-L2 0.006"/> | <img src="docs/assets/readme/uncertainty.png" width="400" alt="GP surrogate with 68/95% credible bands"/> |
+| *2D operator learning: FNO-2D learns the periodic Poisson solver source→solution at median rel-L2 **0.006** (32×32 fields; U-Net available for the same task shape).* | *Gaussian-process surrogate with 68/95% credible bands — the band widens where training data is absent (96% truth coverage).* |
+| <img src="docs/assets/readme/ensemble.png" width="400" alt="Deep-ensemble uncertainty: mean ± 2 sigma parity, spread vs error, raw vs calibrated coverage"/> | <img src="docs/assets/gallery/training_curves.png" width="400" alt="Training monitoring: train/val loss, generalisation gap, power-law fit, last-10-epoch mean"/> |
+| *Deep-ensemble UQ (`pytorch.mlp_ensemble`): mean ± 2σ predictions, and honest calibration — raw spread is overconfident; σ-rescaling on a held-out split recovers near-Gaussian coverage.* | *Training monitoring from per-epoch JSONL logs: generalisation gap shaded, best epoch starred, power-law convergence fit, last-10-epoch mean level.* |
 
 Regenerate everything above from your own runs — full gallery per
 problem type in [`docs/gallery.md`](docs/gallery.md):
@@ -191,7 +192,14 @@ surge run multi_backend.yaml
 same data — and any compiled `tf.keras` architecture of your own plugs
 in through the `build_fn` parameter of `keras.mlp` (see
 `surge/model/adapters/keras.py`), just as custom PyTorch models plug in
-via `examples/custom_cnn_adapter_template.py`.
+via `examples/custom_cnn_adapter_template.py`. Live example on the
+QLKNN transport task — three backends through one registry, and the
+small-data regime is exactly where the Gaussian process earns its keep:
+
+<p align="center">
+  <img src="docs/assets/readme/trio.png" width="760"
+       alt="Random forest, PyTorch MLP, and Gaussian process trained on identical QLKNN splits: R² 0.66 / 0.86 / 0.94"/>
+</p>
 
 ### 5 · Your own CSV / Parquet / PKL / HDF5 / NetCDF file
 
@@ -263,6 +271,31 @@ Per-run figures: `from surge.viz import viz_run; viz_run(Path("runs/<tag>"))`.
 Gallery of every figure type: `python examples/viz_theme_gallery.py`.
 
 ---
+
+## Experiment tracking (MLflow)
+
+Every run's parameters, per-model metrics, and artifacts can be mirrored
+to [MLflow](https://mlflow.org) — opt-in, no server required for local
+file/sqlite backends:
+
+```yaml
+# in any workflow spec
+mlflow_tracking: true
+mlflow_experiment: my-campaign
+```
+
+```bash
+surge bench -b tabular.california_housing -m all --mlflow   # benchmarks too
+python -c "from surge.integrations.mlflow_logger import log_surge_run; \
+from pathlib import Path; log_surge_run(Path('runs/qlknn_multi_hpo'))"
+```
+
+<p align="center">
+  <img src="docs/assets/readme/mlflow_tracking.png" width="820"
+       alt="A SURGE QLKNN run in the MLflow UI: 24 per-model train/val/test metrics, parameters, and artifacts logged"/>
+</p>
+<p align="center"><sub><em>A real SURGE run in the MLflow UI — per-model
+train/val/test metrics, parameters, and run artifacts.</em></sub></p>
 
 ## Documentation
 
