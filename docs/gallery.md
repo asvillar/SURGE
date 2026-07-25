@@ -29,8 +29,9 @@ gold star at each model's optimum with its score.
 ## Neural-network training
 
 Per-epoch train/validation loss from the JSONL training logs: shaded
-generalisation gap, starred best epoch, and a power-law convergence
-fit tracking the saturation.
+generalisation gap, best epoch marked, power-law convergence fit, and
+smoothed early stopping (patience on the rolling-mean validation loss)
+terminating training at true saturation.
 
 ![Training curves](assets/gallery/training_curves.png)
 

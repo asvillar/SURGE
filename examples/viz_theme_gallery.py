@@ -204,6 +204,16 @@ def training_figure(hpo_run: Path, mode: str):
                 ax.plot(epochs[ok], np.exp(a) * epochs[ok]**b,
                         color=p["muted"], lw=1.2, ls=(0, (1, 2)),
                         label=f"power-law fit (slope {b:.2f})")
+        if rows and rows[-1].get("early_stop"):
+            ax.axvline(epochs[-1], color=p["critical"], lw=1.0,
+                       ls=(0, (2, 2)))
+            mid_y = float(np.exp((np.log(np.nanmax(val))
+                                  + np.log(np.nanmin(train))) / 2))
+            ax.annotate("early stop (smoothed patience)",
+                        (epochs[-1], mid_y),
+                        textcoords="offset points", xytext=(-7, 0),
+                        rotation=90, ha="right", va="center",
+                        fontsize=7.5, color=p["critical"])
         ax.set_yscale("log")
         ax.set_xlabel("epoch"); ax.set_ylabel("loss")
         ax.set_title(f"Training — {name}")
