@@ -33,23 +33,56 @@ from run artifacts, never hand-assembled.</em></sub></p>
 - **One workflow, many sciences.** Tabular scalars, multi-output targets,
   1D/2D fields, sequences, and images move through the same pipeline —
   models plug in through a registry, not through per-project scripts.
-- **40 registered model adapters**: scikit-learn baselines and GBMs
-  (XGBoost / LightGBM / CatBoost), PyTorch MLP families, FNO / DeepONet /
-  U-Net operator learners, LSTM/GRU, CNN/ResNet/ViT vision models,
-  KAN and FT-Transformer, Gaussian processes (sklearn, BoTorch) with
-  predictive uncertainty.
+- **40+ registered model adapters across four ML backends** —
+  **scikit-learn** (RF, GBM, ridge, logistic, GPR), boosted trees
+  (**XGBoost / LightGBM / CatBoost**), **PyTorch** (MLP families,
+  FNO / DeepONet / U-Net operator learners, LSTM/GRU,
+  CNN/ResNet/ViT vision, KAN, FT-Transformer, VAE/DDPM/CGAN),
+  **TensorFlow/Keras** (`keras.mlp`, or **bring your own compiled
+  `tf.keras` model** via `build_fn`), and Gaussian processes with
+  predictive uncertainty (sklearn GPR, BoTorch exact/sparse, GPflow).
+- **Mix backends in one workflow**: a single YAML spec can train a
+  random forest, a PyTorch residual MLP, and a Keras network side by
+  side on the same splits — same metrics, same artifacts, directly
+  comparable.
 - **Automated HPO** (Optuna TPE / BoTorch) with per-epoch training logs
   and starred-best convergence plots.
-- **Benchmarks with receipts**: 30+ curated benchmarks from UCI/OpenML to
-  PDEBench, TheWell, MNIST/CIFAR-10, and fusion datasets (QLKNN transport,
-  ConStellaration stellarator design), each with citation, threshold, and
-  machine-readable results.
+- **Deployment path**: trained PyTorch surrogates export to **ONNX**
+  with `onnxruntime` numeric-parity tests in CI — the route used for
+  real-time inference in the ICRF surrogate publications; Keras models
+  serialize to the portable `.keras` format, sklearn to joblib.
+- **Benchmarks with receipts** (the *model-bench* suite): 30+ curated
+  benchmarks from UCI/OpenML to PDEBench, TheWell, MNIST/CIFAR-10, and
+  fusion datasets (QLKNN transport, ConStellaration stellarator design),
+  each with citation, threshold, and machine-readable results.
 - **Provenance by default**: every run stores its spec, git revision,
   environment snapshot, scalers, per-split parquet predictions, and a
   model card.
 - **Publication-grade output**: a single visual system produces
   deterministic PNG/SVG/PDF figures (light + dark) and a self-contained
   HTML leaderboard — no server, works on HPC over `scp`.
+
+## Model benchmarking
+
+Every registered model can be scored against the curated benchmark
+suite — repeated seeds, mean ± std, runtime, and published pass
+thresholds with citations:
+
+<p align="center">
+  <img src="docs/assets/gallery/leaderboard.png" width="760"
+       alt="Benchmark leaderboard: test R² mean ± std per model against the published threshold, with runtime panel"/>
+</p>
+
+```bash
+surge bench -b tabular.california_housing -m all --seeds 5   # leaderboard row
+surge report --out leaderboard.html                          # full dashboard
+```
+
+The HTML dashboard adds spider charts per capability domain,
+per-benchmark **dataset previews** (sample MNIST digits, Lorenz
+attractor trajectories, Burgers field pairs), citations, tiers, and
+sortable tables — generated exclusively from
+`benchmark_reports/**/result.json` artifacts, never hand-entered.
 
 ## Scientific results at a glance
 
@@ -60,17 +93,13 @@ from run artifacts, never hand-assembled.</em></sub></p>
 | <img src="docs/assets/readme/uncertainty.png" width="400" alt="GP surrogate with 68/95% credible bands"/> | <img src="docs/assets/readme/characterization.png" width="400" alt="Dataset characterization panel"/> |
 | *Gaussian-process surrogate with 68/95% credible bands — the band widens where training data is absent (96% truth coverage).* | *Pre-training dataset characterization: distributions, signal-to-noise, input–target correlations.* |
 
-Regenerate everything above from your own runs:
+Regenerate everything above from your own runs — full gallery per
+problem type in [`docs/gallery.md`](docs/gallery.md):
 
 ```bash
 python examples/viz_theme_gallery.py                      # figures, light+dark
-python -m surge.report.leaderboard --out leaderboard.html # interactive dashboard
+surge report --out leaderboard.html                       # interactive dashboard
 ```
-
-The leaderboard dashboard embeds per-benchmark **dataset previews**
-(sample MNIST digits, Lorenz attractor trajectories, Burgers field pairs),
-citations, tiers, pass/fail gates, and sortable model tables — generated
-exclusively from `benchmark_reports/**/result.json` artifacts.
 
 ---
 
@@ -101,6 +130,9 @@ pip install -e ".[torch,dev]"`.
 | `torch` | PyTorch model families | `pip install -e ".[torch]"` |
 | `onnx` | ONNX export + runtime parity tests | `pip install -e ".[onnx]"` |
 | `benchmarks` | h5py, Optuna for the benchmark suite | `pip install -e ".[benchmarks]"` |
+| `tensorflow` | TF ≥ 2.21 + tf-keras → `keras.mlp` adapter | `pip install -e ".[tensorflow]"` |
+| `gpflow` | TF stack for GPflow GPs (then `pip install gpflow --no-deps`) | `pip install -e ".[gpflow]"` |
+| `shap` | SHAP feature importance (NumPy-2 compatible) | `pip install -e ".[shap]"` |
 | `dev` | pytest, ruff, h5py | `pip install -e ".[dev]"` |
 
 ---
@@ -134,7 +166,33 @@ pip install fusion_surrogates
 python examples/qlknn_multi_hpo_workflow.py --hpo-trials 10 --overwrite
 ```
 
-### 4 · Your own CSV / Parquet / PKL / HDF5 / NetCDF file
+### 4 · Mix backends in one spec — sklearn vs PyTorch vs Keras
+
+One YAML, three frameworks, identical splits and metrics:
+
+```yaml
+# multi_backend.yaml
+dataset_path: my_data.csv
+models:
+  - key: sklearn.random_forest
+  - key: pytorch.residual_mlp
+    hpo: {n_trials: 20, metric: val_rmse}
+  - key: keras.mlp                      # needs the [tensorflow] extra
+    params: {hidden_layers: [64, 64], epochs: 200}
+run_tag: backend_shootout
+```
+
+```bash
+surge run multi_backend.yaml
+```
+
+`metrics.json` then holds train/val/test scores for all three on the
+same data — and any compiled `tf.keras` architecture of your own plugs
+in through the `build_fn` parameter of `keras.mlp` (see
+`surge/model/adapters/keras.py`), just as custom PyTorch models plug in
+via `examples/custom_cnn_adapter_template.py`.
+
+### 5 · Your own CSV / Parquet / PKL / HDF5 / NetCDF file
 
 ```bash
 python examples/custom_dataset_tutorial.py
@@ -143,7 +201,7 @@ python examples/run_workflow.py --spec examples/configs/custom_dataset_tutorial.
 
 Full guide: [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md)
 
-### 5 · Benchmarks
+### 6 · Benchmarks
 
 ```bash
 surge-benchmark --list                                        # 30+ curated benchmarks

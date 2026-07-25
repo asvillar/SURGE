@@ -14,7 +14,8 @@ All notable changes to SURGE (`surge-ml`). Follows
   (LeNet-5, ResNet-20/56, AlexNet, ViT), tabular deep learning (KAN,
   FT-Transformer), generative baselines (VAE, DDPM, CGAN), Gaussian
   processes with uncertainty (sklearn GPR, BoTorch exact/sparse, GPflow),
-  and TabPFN.
+  TabPFN, and TensorFlow/Keras (`keras.mlp`, with a `build_fn` hook for
+  arbitrary user-compiled tf.keras architectures).
 - **Transparent registration**: every adapter attempt is recorded as
   registered / skipped (with the true reason) / error; `surge models
   --verbose` shows the table; `SURGE_STRICT_REGISTRY=1` makes internal
