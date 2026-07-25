@@ -204,15 +204,6 @@ def training_figure(hpo_run: Path, mode: str):
                 ax.plot(epochs[ok], np.exp(a) * epochs[ok]**b,
                         color=p["muted"], lw=1.2, ls=(0, (1, 2)),
                         label=f"power-law fit (slope {b:.2f})")
-            # converged level: mean of the last 10 epochs
-            tail = val[np.isfinite(val)][-10:]
-            if len(tail):
-                lvl = float(tail.mean())
-                ax.axhline(lvl, color=p["series"][2], lw=1.2, ls=(0, (6, 3)))
-                ax.annotate(f"last-10 mean {fmt_metric(lvl, 'loss')}",
-                            (epochs[np.isfinite(val)][max(0, len(epochs)//8)], lvl),
-                            textcoords="offset points", xytext=(0, 6),
-                            fontsize=7.5, color=p["series"][2])
         ax.set_yscale("log")
         ax.set_xlabel("epoch"); ax.set_ylabel("loss")
         ax.set_title(f"Training — {name}")
