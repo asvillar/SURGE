@@ -276,6 +276,7 @@ pscratch/
 *.png
 !data/logos/*.png
 !docs/assets/readme/*.png
+!docs/assets/readme/dark/*.png
 !docs/assets/gallery/*.png
 
 # MHD-code interface/visualization outputs (explicitly excluded)

@@ -74,6 +74,26 @@ python examples/thewell_grayscott_study.py
 
 ![TheWell Gray-Scott surrogate study](assets/gallery/thewell_grayscott.png)
 
+## Stellarator design — ConStellaration
+
+One residual MLP maps stellarator plasma-boundary Fourier coefficients
+(R_mn, Z_mn; n_fp = 3) to 12 equilibrium figures of merit across 26,897
+QI-like configurations (Goodman et al. 2025, arXiv:2506.19583): real
+rotating boundary cross-sections, log₁₀(QI) parity at R² 0.93, and
+per-metric learnability.
+
+![ConStellaration stellarator surrogate](assets/gallery/constellaration.png)
+
+## HPO mission control
+
+The per-trial artifacts of an HPO campaign rendered as a one-look
+dashboard: all validation-loss curves with the winning trial highlighted,
+search convergence with the starred best, run-summary card, best-trial
+train/val detail, parameter sensitivity, and the tuned model's test
+parity.
+
+![HPO mission control dashboard](assets/gallery/mission_control.png)
+
 ## Multi-backend comparison
 
 Random forest, PyTorch MLP, and an exact Gaussian process trained on
