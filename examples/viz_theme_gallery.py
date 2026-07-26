@@ -19,7 +19,11 @@ Figures (per mode, deterministic PNG/SVG/PDF):
     leaderboard       score ± std vs published threshold + runtime panel
     classification    ROC / PR / confusion / reliability (with ECE)
     field_operator    Burgers' operator learning: truth · prediction · error
+    field2d           FNO-2D on the periodic Poisson problem (2D fields)
     uncertainty       GP surrogate with 95% credible band and coverage
+    ensemble          deep-ensemble UQ with raw vs calibrated coverage
+    trio              RF + PyTorch MLP + GP on identical splits
+    characterization  dataset EDA panel (distributions, SNR, PCA)
 """
 from __future__ import annotations
 
@@ -85,7 +89,10 @@ def parity_figure(run_dir: Path, mode: str, units: str = "a.u."):
     from sklearn.metrics import r2_score
 
     metrics = json.loads((run_dir / "metrics.json").read_text())
-    model_key = next(iter(metrics))
+    # showcase the strongest model in the run (highest test R²)
+    model_key = max(
+        metrics,
+        key=lambda k: (metrics[k].get("test") or {}).get("r2", float("-inf")))
     splits = {}
     for split in ("train", "test"):
         try:
@@ -190,6 +197,23 @@ def training_figure(hpo_run: Path, mode: str):
                         (epochs[best], val[best]),
                         textcoords="offset points", xytext=(-10, -22),
                         ha="right", fontsize=7.5, color=p["ink2"])
+            # power-law convergence fit on the log-log val curve
+            ok = np.isfinite(val) & (val > 0) & (epochs > 0)
+            if ok.sum() > 5:
+                b, a = np.polyfit(np.log(epochs[ok]), np.log(val[ok]), 1)
+                ax.plot(epochs[ok], np.exp(a) * epochs[ok]**b,
+                        color=p["muted"], lw=1.2, ls=(0, (1, 2)),
+                        label=f"power-law fit (slope {b:.2f})")
+        if rows and rows[-1].get("early_stop"):
+            ax.axvline(epochs[-1], color=p["critical"], lw=1.0,
+                       ls=(0, (2, 2)))
+            mid_y = float(np.exp((np.log(np.nanmax(val))
+                                  + np.log(np.nanmin(train))) / 2))
+            ax.annotate("early stop (smoothed patience)",
+                        (epochs[-1], mid_y),
+                        textcoords="offset points", xytext=(-7, 0),
+                        rotation=90, ha="right", va="center",
+                        fontsize=7.5, color=p["critical"])
         ax.set_yscale("log")
         ax.set_xlabel("epoch"); ax.set_ylabel("loss")
         ax.set_title(f"Training — {name}")
@@ -655,6 +679,227 @@ def uncertainty_figure(mode: str, seed: int = 7):
         return fig
 
 
+# ---------------------------------------------------------------- ensemble
+
+def ensemble_figure(mode: str, seed: int = 0):
+    """Deep-ensemble UQ (pytorch.mlp_ensemble): mean parity, uncertainty
+    vs error, and empirical coverage — ensemble spread as error bars.
+    """
+    npz = _REPO / "data" / "datasets" / "benchmarks" / "plasma" / "qlknn_transport.npz"
+    if not npz.exists():
+        return None
+    from surge.model import MODEL_REGISTRY
+    try:
+        adapter = MODEL_REGISTRY.create(
+            "pytorch.mlp_ensemble", n_ensembles=6, hidden_dim=128,
+            n_layers=2, n_epochs=80, patience=15)
+    except KeyError:
+        return None
+
+    d = np.load(npz)
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(len(d["X"]))[:3000]
+    X, y = d["X"][idx].astype(np.float32), d["y"][idx].astype(np.float32)
+    n_te = 700
+    Xtr, ytr, Xte, yte = X[n_te:], y[n_te:], X[:n_te], y[:n_te]
+    mu_x, sd_x = Xtr.mean(0), Xtr.std(0) + 1e-9
+    adapter.fit((Xtr - mu_x) / sd_x, ytr)
+    mean, std = adapter.predict_with_uncertainty((Xte - mu_x) / sd_x)
+    mean, std = np.asarray(mean).ravel(), np.asarray(std).ravel()
+    err = np.abs(mean - yte)
+
+    from sklearn.metrics import r2_score
+    r2 = r2_score(yte, mean)
+    # raw deep-ensemble spread is typically overconfident; rescale sigma on
+    # a held-out calibration half so that 1-sigma coverage matches 68.3%
+    n_cal = len(yte) // 2
+    lam = float(np.quantile(err[:n_cal] / np.maximum(std[:n_cal], 1e-9),
+                            0.6827))
+    err_t, std_t = err[n_cal:], std[n_cal:]
+    ks = np.linspace(0.2, 3.0, 15)
+    coverage = [(err_t <= k * std_t).mean() for k in ks]
+    coverage_cal = [(err_t <= k * lam * std_t).mean() for k in ks]
+    from scipy.stats import norm
+    expected = [norm.cdf(k) - norm.cdf(-k) for k in ks]
+
+    with surge_theme(mode) as p:
+        fig, axes = plt.subplots(1, 3, figsize=(9.8, 3.1))
+        ax = axes[0]
+        sel = rng.choice(len(yte), 220, replace=False)
+        ax.errorbar(yte[sel], mean[sel], yerr=2 * std[sel], fmt="o",
+                    ms=3.2, color=p["series"][0], ecolor=p["series"][0],
+                    elinewidth=0.7, alpha=0.55, capsize=0)
+        lims = (min(yte.min(), mean.min()), max(yte.max(), mean.max()))
+        ax.plot(lims, lims, color=p["axis"], lw=0.9)
+        ax.set_xlabel("ground truth [gB]"); ax.set_ylabel("ensemble mean ± 2σ")
+        ax.set_title(f"(a) 6-member deep ensemble · R² {r2:.3f}", fontsize=9)
+
+        ax = axes[1]
+        cmap = density_cmap(mode)
+        ax.set_facecolor(cmap.get_under())
+        ax.hist2d(std, err, bins=40, cmap=cmap, norm=LogNorm(vmin=1), cmin=1)
+        hi = max(np.quantile(std, 0.99), np.quantile(err, 0.99))
+        ax.plot([0, hi], [0, hi], color=p["ink2"], lw=1.0, ls=(0, (4, 3)))
+        ax.set_xlim(0, hi); ax.set_ylim(0, hi)
+        ax.set_xlabel("predicted σ"); ax.set_ylabel("|error|")
+        ax.set_title("(b) raw spread is overconfident", fontsize=9)
+        ax.grid(alpha=0.5)
+
+        ax = axes[2]
+        ax.plot(ks, expected, color=p["axis"], lw=1.2, ls=(0, (4, 3)),
+                label="Gaussian ideal")
+        ax.plot(ks, coverage, color=p["series"][0], lw=1.6, marker="o",
+                ms=3.2, label="raw σ")
+        ax.plot(ks, coverage_cal, color=p["series"][2], lw=1.8, marker="s",
+                ms=3.2, label=f"calibrated σ (×{lam:.1f})")
+        ax.set_xlabel("k (σ multiples)"); ax.set_ylabel("coverage")
+        ax.set_title("(c) coverage: raw vs calibrated", fontsize=9)
+        ax.legend(fontsize=7, loc="lower right")
+        return fig
+
+
+# --------------------------------------------------- three-backend success
+
+def trio_figure(mode: str, seed: int = 0):
+    """RF + PyTorch MLP + Gaussian process succeeding side by side on the
+    QLKNN transport task (2,400-sample subsample so exact GP is exact).
+    """
+    npz = _REPO / "data" / "datasets" / "benchmarks" / "plasma" / "qlknn_transport.npz"
+    if not npz.exists():
+        return None
+    import time
+
+    from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
+    from sklearn.metrics import r2_score
+
+    from surge.model import MODEL_REGISTRY
+
+    d = np.load(npz)
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(len(d["X"]))[:2400]
+    X, y = d["X"][idx].astype(np.float64), d["y"][idx].astype(np.float64)
+    n_te = 600
+    Xtr, ytr, Xte, yte = X[n_te:], y[n_te:], X[:n_te], y[:n_te]
+    mu_x, sd_x = Xtr.mean(0), Xtr.std(0) + 1e-9
+    Xtr_s, Xte_s = (Xtr - mu_x) / sd_x, (Xte - mu_x) / sd_x
+
+    models = [
+        ("sklearn.random_forest", "Random forest", {}),
+        ("pytorch.mlp", "PyTorch MLP", {}),
+        ("sklearn.gpr", "Gaussian process",
+         {"kernel": ConstantKernel(1.0) * RBF(np.ones(X.shape[1]))
+                    + WhiteKernel(1e-2, (1e-6, 1e1)),
+          "normalize_y": True, "n_restarts_optimizer": 1}),
+    ]
+    results = []
+    for key, label, params in models:
+        try:
+            adapter = MODEL_REGISTRY.create(key, **params)
+        except KeyError:
+            continue
+        t0 = time.perf_counter()
+        adapter.fit(Xtr_s, ytr)
+        dt = time.perf_counter() - t0
+        pred = np.asarray(adapter.predict(Xte_s)).ravel()
+        results.append((label, pred, r2_score(yte, pred), dt))
+    if len(results) < 2:
+        return None
+
+    with surge_theme(mode) as p:
+        cmap = density_cmap(mode)
+        fig, axes = plt.subplots(1, len(results), figsize=(3.3 * len(results), 3.3))
+        lims = (float(yte.min()) - 1, float(yte.max()) + 1)
+        letters = "abc"
+        for k, (ax, (label, pred, r2, dt)) in enumerate(zip(axes, results)):
+            ax.set_facecolor(cmap.get_under())
+            ax.hist2d(yte, pred, bins=44, range=[lims, lims], cmap=cmap,
+                      norm=LogNorm(vmin=1), cmin=1)
+            ax.plot(lims, lims, color=p["ink2"], lw=1.1, ls=(0, (5, 3)))
+            ax.set_xlim(lims); ax.set_ylim(lims); ax.set_aspect("equal")
+            ax.set_title(f"({letters[k]}) {label}", fontsize=9.5)
+            ax.set_xlabel("ground truth [gB]")
+            if k == 0:
+                ax.set_ylabel("prediction [gB]")
+            _stat_chip(ax, f"R² {r2:.3f} · {fmt_metric(dt, 'runtime')}", p)
+            ax.grid(alpha=0.5)
+        fig.suptitle("Three backends, one registry — QLKNN ITG heat flux "
+                     f"({len(Xtr):,} train / {len(Xte):,} test)",
+                     fontsize=11, fontweight="bold")
+        return fig
+
+
+# ------------------------------------------------------ 2D operator (FNO)
+
+def field2d_figure(mode: str, seed: int = 0, n: int = 600, side: int = 32):
+    """2D operator learning: solve the periodic Poisson problem
+    ∇²u = −f with an FNO-2D surrogate trained source→solution.
+    Dataset generated on the fly (FFT spectral solve = exact reference).
+    """
+    from surge.model import MODEL_REGISTRY
+    try:
+        model = MODEL_REGISTRY.create("pytorch.fno2d", n_modes=10, n_epochs=60)
+    except KeyError:
+        return None
+
+    rng = np.random.default_rng(seed)
+    k = np.fft.fftfreq(side) * side
+    KX, KY = np.meshgrid(k, k, indexing="ij")
+    K2 = KX**2 + KY**2
+    # smooth Gaussian-random-field sources (low-pass filtered white noise)
+    noise = rng.standard_normal((n, side, side))
+    filt = np.exp(-(K2) / (2 * 6.0**2))
+    f_hat = np.fft.fft2(noise) * filt
+    f = np.real(np.fft.ifft2(f_hat))
+    f -= f.mean(axis=(1, 2), keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        u_hat = np.where(K2 > 0, np.fft.fft2(f) / K2, 0.0)
+    u = np.real(np.fft.ifft2(u_hat))
+    scale = u.std()
+    u /= scale
+    f_in = f / f.std()
+
+    n_te = n // 5
+    Xtr = f_in[n_te:].reshape(n - n_te, -1).astype(np.float32)
+    ytr = u[n_te:].reshape(n - n_te, -1).astype(np.float32)
+    Xte = f_in[:n_te].reshape(n_te, -1).astype(np.float32)
+    yte = u[:n_te].reshape(n_te, -1).astype(np.float32)
+    model.fit(Xtr, ytr)
+    pred = np.asarray(model.predict(Xte)).reshape(n_te, side, side)
+    truth = yte.reshape(n_te, side, side)
+    rel = (np.linalg.norm((pred - truth).reshape(n_te, -1), axis=1)
+           / np.linalg.norm(truth.reshape(n_te, -1), axis=1))
+    i = int(np.argsort(rel)[len(rel) // 2])  # median sample
+
+    with surge_theme(mode) as p:
+        fig, axes = plt.subplots(1, 5, figsize=(11.8, 2.75),
+                                 width_ratios=[1, 1, 1, 1, 0.9])
+        panels = [
+            (f_in[i], "source  f(x, y)", sequential_cmap(mode), None),
+            (truth[i], "truth  u(x, y)", sequential_cmap(mode), None),
+            (pred[i], "FNO-2D prediction", sequential_cmap(mode), None),
+            (pred[i] - truth[i], "error", diverging_cmap(mode),
+             CenteredNorm(halfrange=float(np.abs(truth[i]).max()) * 0.1)),
+        ]
+        for ax, (img, title, cmap, nrm) in zip(axes[:4], panels):
+            im = ax.imshow(img, cmap=cmap, norm=nrm, interpolation="nearest")
+            ax.set_title(title, fontsize=9)
+            ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+            cb.ax.tick_params(labelsize=6)
+            cb.outline.set_visible(False)
+        axh = axes[4]
+        axh.hist(rel, bins=24, color=p["series"][0], alpha=0.9)
+        axh.axvline(float(np.median(rel)), color=p["series"][1], lw=1.3,
+                    ls=(0, (4, 3)))
+        axh.set_xlabel("rel-L2"); axh.set_ylabel("count")
+        axh.set_title(f"median {np.median(rel):.3f}", fontsize=9)
+        fig.suptitle(
+            f"2D operator learning — periodic Poisson ∇²u = −f · FNO-2D · "
+            f"{n - n_te} train / {n_te} test fields ({side}×{side})",
+            fontsize=10.5, fontweight="bold")
+        return fig
+
+
 # -------------------------------------------------------------------- main
 
 def main():
@@ -680,6 +925,9 @@ def main():
         "field_operator": field_operator_figure,
         "uncertainty": uncertainty_figure,
         "characterization": characterization_figure,
+        "ensemble": ensemble_figure,
+        "trio": trio_figure,
+        "field2d": field2d_figure,
     }
     if args.only:
         builders = {k: v for k, v in builders.items() if k in args.only}
@@ -700,3 +948,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

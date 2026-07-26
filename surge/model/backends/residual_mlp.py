@@ -110,7 +110,17 @@ class ResidualMLPModel:
     dropout_rate:
         Dropout applied inside each residual block.  Default 0.1.
     patience:
-        Early-stopping patience (epochs without val-loss improvement).
+        Early-stopping patience (epochs without improvement of the
+        early-stopping signal).
+    patience_window:
+        Rolling-mean window (epochs) for the early-stopping signal.
+        1 (default) compares raw per-epoch validation loss — the
+        historical behavior; larger windows compare the smoothed loss,
+        which is robust to noisy validation curves and stops on true
+        saturation rather than on a lucky epoch.
+    min_delta:
+        Minimum decrease of the (smoothed) validation loss that counts
+        as an improvement for the patience counter.
         Default 20.  Set to 0 to disable.
     device:
         ``"cpu"``, ``"cuda"``, or ``None`` (auto-detect).
@@ -130,6 +140,8 @@ class ResidualMLPModel:
         batch_size: int = 64,
         dropout_rate: float = 0.1,
         patience: int = 20,
+        patience_window: int = 1,
+        min_delta: float = 0.0,
         device: str | None = None,
         random_state: int = 42,
         verbose: bool = False,
@@ -149,6 +161,8 @@ class ResidualMLPModel:
         self.batch_size = batch_size
         self.dropout_rate = dropout_rate
         self.patience = patience
+        self.patience_window = max(1, int(patience_window))
+        self.min_delta = float(min_delta)
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.random_state = random_state
         self.verbose = verbose
@@ -260,6 +274,9 @@ class ResidualMLPModel:
         best_val_loss = float("inf")
         best_state: dict | None = None
         no_improve = 0
+        from collections import deque
+        recent_val: deque = deque(maxlen=self.patience_window)
+        best_smoothed = float("inf")
         from ._progress import ProgressList
         self.training_history = ProgressList(
             self.n_epochs, verbose=self.verbose,
@@ -284,9 +301,16 @@ class ResidualMLPModel:
                 with torch.no_grad():
                     val_loss = criterion(self._net(Xv), yv).item()
                 record["val_loss"] = val_loss
+                # best-weight restoration always tracks the raw minimum
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     best_state = {k: v.clone() for k, v in self._net.state_dict().items()}
+                # early-stopping signal: rolling mean over patience_window
+                recent_val.append(val_loss)
+                smoothed = sum(recent_val) / len(recent_val)
+                record["val_loss_smoothed"] = smoothed
+                if smoothed < best_smoothed - self.min_delta:
+                    best_smoothed = smoothed
                     no_improve = 0
                 else:
                     no_improve += 1

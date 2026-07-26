@@ -65,7 +65,12 @@ def test_dependency_own_error_type_counts_as_skip():
     assert "fakedep broken" in rec.reason
 
 
-def test_internal_bug_is_error_and_warns_never_silent():
+def test_internal_bug_is_error_and_warns_never_silent(monkeypatch):
+    import surge.model as m
+
+    # pin non-strict regardless of the environment (CI exports
+    # SURGE_STRICT_REGISTRY=1, where this same bug must raise instead)
+    monkeypatch.setattr(m, "_STRICT", False)
     before = len(REGISTRATION_LOG)
 
     def loader():
