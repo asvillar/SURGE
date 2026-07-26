@@ -69,13 +69,16 @@ suite — repeated seeds, mean ± std, runtime, and published pass
 thresholds with citations:
 
 <p align="center">
-  <img src="docs/assets/gallery/leaderboard.png" width="760"
-       alt="Benchmark leaderboard: test R² mean ± std per model against the published threshold, with runtime panel"/>
+  <img src="docs/assets/readme/leaderboard.png" width="820"
+       alt="QLKNN plasma-transport leaderboard: 10 models, test R² mean ± std over repeated seeds against the published 0.90 threshold, with runtime panel"/>
 </p>
+<p align="center"><sub><em>QLKNN ITG heat-flux transport: ten models over
+repeated seeds — the HPO-tuned residual MLP leads at R² 0.948 ± 0.003
+against the published 0.90 gate.</em></sub></p>
 
 ```bash
-surge bench -b tabular.california_housing -m all --seeds 5   # leaderboard row
-surge report --out leaderboard.html                          # full dashboard
+surge bench -b plasma.qlknn_transport -m all --seeds 3   # the row above
+surge report --out leaderboard.html                      # full dashboard
 ```
 
 The HTML dashboard adds spider charts per capability domain,
@@ -86,14 +89,36 @@ sortable tables — generated exclusively from
 
 ## Scientific results at a glance
 
-| | |
-|:---:|:---:|
-| <img src="docs/assets/readme/parity.png" width="400" alt="Train/test parity density plots with reversed-plasma colormap and R² boxes"/> | <img src="docs/assets/readme/hpo_convergence.png" width="400" alt="HPO history with running best and starred best trials"/> |
-| *Plasma-transport surrogate (QLKNN ITG heat flux): HPO-tuned residual MLP, R² **0.98 train / 0.96 test**, log-density parity in the style of the ICRF surrogate papers.* | *Optuna HPO across models: per-trial traces, running best, gold star at each optimum.* |
-| <img src="docs/assets/readme/field2d.png" width="400" alt="2D operator learning: FNO-2D solves the periodic Poisson problem, median rel-L2 0.006"/> | <img src="docs/assets/readme/uncertainty.png" width="400" alt="GP surrogate with 68/95% credible bands"/> |
-| *2D operator learning: FNO-2D learns the periodic Poisson solver source→solution at median rel-L2 **0.006** (32×32 fields; U-Net available for the same task shape).* | *Gaussian-process surrogate with 68/95% credible bands — the band widens where training data is absent (96% truth coverage).* |
-| <img src="docs/assets/readme/ensemble.png" width="400" alt="Deep-ensemble uncertainty: mean ± 2 sigma parity, spread vs error, raw vs calibrated coverage"/> | <img src="docs/assets/gallery/training_curves.png" width="400" alt="Training monitoring: train/val loss, generalisation gap, power-law fit, last-10-epoch mean"/> |
-| *Deep-ensemble UQ (`pytorch.mlp_ensemble`): mean ± 2σ predictions, and honest calibration — raw spread is overconfident; σ-rescaling on a held-out split recovers near-Gaussian coverage.* | *Training monitoring from per-epoch JSONL logs: generalisation gap shaded, best epoch marked, power-law convergence fit — and training stops itself via **smoothed early stopping** (patience on the rolling-mean validation loss), here at epoch 147 of 300 allowed.* |
+**2D operator learning** — FNO-2D learns the periodic Poisson solver
+source→solution at median rel-L2 **0.006** (32×32 fields; U-Net covers the
+same task shape):
+
+| | | |
+|:---:|:---:|:---:|
+| <img src="docs/assets/readme/field2d_truth.png" alt="Truth solution field u(x,y)"/> | <img src="docs/assets/readme/field2d_prediction.png" alt="FNO-2D predicted field"/> | <img src="docs/assets/readme/field2d_error.png" alt="Signed prediction error on a diverging colormap"/> |
+
+**Plasma-transport regression** (QLKNN ITG heat flux) — HPO-tuned residual
+MLP, log-density parity in the style of the ICRF surrogate papers:
+
+| | | |
+|:---:|:---:|:---:|
+| <img src="docs/assets/readme/parity_train.png" alt="Training parity density, R² 0.98"/> | <img src="docs/assets/readme/parity_test.png" alt="Test parity density, R² 0.96"/> | <img src="docs/assets/readme/parity_residuals.png" alt="Test residual distribution with KDE"/> |
+
+**Optimization, uncertainty, and monitoring**:
+
+| | | |
+|:---:|:---:|:---:|
+| <img src="docs/assets/readme/hpo_convergence.png" alt="HPO history with running best and starred optima"/> | <img src="docs/assets/readme/uncertainty.png" alt="GP surrogate with 68/95% credible bands, 96% truth coverage"/> | <img src="docs/assets/gallery/training_curves.png" alt="Training curves with generalisation gap, power-law fit, and smoothed early stopping"/> |
+| *Optuna HPO: per-trial traces, running best, gold-starred optima.* | *GP credible bands widen where data is absent (96% truth coverage).* | *Per-epoch monitoring with **smoothed early stopping** — training halts itself at true saturation (epoch 147/300).* |
+
+**Deep-ensemble uncertainty** (`pytorch.mlp_ensemble`) — mean ± 2σ
+predictions and honest calibration: raw spread is overconfident; σ-rescaling
+on a held-out split recovers near-Gaussian coverage:
+
+<p align="center">
+  <img src="docs/assets/readme/ensemble.png" width="820"
+       alt="Deep-ensemble UQ: mean ± 2 sigma parity, spread vs error, raw vs calibrated coverage"/>
+</p>
 
 Regenerate everything above from your own runs — full gallery per
 problem type in [`docs/gallery.md`](docs/gallery.md):
@@ -196,10 +221,9 @@ via `examples/custom_cnn_adapter_template.py`. Live example on the
 QLKNN transport task — three backends through one registry, and the
 small-data regime is exactly where the Gaussian process earns its keep:
 
-<p align="center">
-  <img src="docs/assets/readme/trio.png" width="760"
-       alt="Random forest, PyTorch MLP, and Gaussian process trained on identical QLKNN splits: R² 0.66 / 0.86 / 0.94"/>
-</p>
+| | | |
+|:---:|:---:|:---:|
+| <img src="docs/assets/readme/trio_random_forest.png" alt="Random forest parity, R² 0.66"/> | <img src="docs/assets/readme/trio_pytorch_mlp.png" alt="PyTorch MLP parity, R² 0.86"/> | <img src="docs/assets/readme/trio_gaussian_process.png" alt="Gaussian process parity, R² 0.94"/> |
 
 ### 5 · Your own CSV / Parquet / PKL / HDF5 / NetCDF file
 
