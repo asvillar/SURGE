@@ -425,6 +425,26 @@ def test_unet_fit_predict():
     assert np.isfinite(preds).all()
 
 
+def test_unet_flat_input():
+    """U-Net accepts flat (B, nx*ny) fields like FNO-2D — same 2D contract."""
+    pytest.importorskip("torch")
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((20, 16 * 16)).astype("float32")
+    y = X + 0.1 * rng.standard_normal((20, 16 * 16)).astype("float32")
+
+    adapter = MODEL_REGISTRY.create(
+        "pytorch.unet",
+        n_epochs=2, base_channels=8, depth=2, batch_size=4,
+    )
+    adapter.fit(X[:16], y[:16])
+    preds = adapter.predict(X[16:])
+    assert preds.shape[0] == 4
+    assert np.isfinite(preds).all()
+
+    with pytest.raises(ValueError, match="square"):
+        adapter.predict(rng.standard_normal((2, 15)).astype("float32"))
+
+
 # ── Generative / conditional models (Group H) ─────────────────────────────────
 
 

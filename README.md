@@ -97,6 +97,18 @@ same task shape):
 |:---:|:---:|:---:|
 | <img src="docs/assets/readme/field2d_truth.png" alt="Truth solution field u(x,y)"/> | <img src="docs/assets/readme/field2d_prediction.png" alt="FNO-2D predicted field"/> | <img src="docs/assets/readme/field2d_error.png" alt="Signed prediction error on a diverging colormap"/> |
 
+**External PDE benchmark — [TheWell](https://polymathic-ai.org/the_well/)
+Gray-Scott reaction–diffusion** (Ohana et al., NeurIPS 2024). Four registry
+models on the same next-step operator task, one script
+([`examples/thewell_grayscott_study.py`](examples/thewell_grayscott_study.py)):
+FNO-2D median rel-L2 **0.056**, U-Net **0.073** — both reproduce the Turing
+pattern; DeepONet and a ridge baseline can't:
+
+<p align="center">
+  <img src="docs/assets/readme/thewell_grayscott.png"
+       alt="TheWell Gray-Scott study: input, truth, FNO-2D / U-Net / Ridge / DeepONet predictions, FNO error map, and model comparison bars"/>
+</p>
+
 **Plasma-transport regression** (QLKNN ITG heat flux) — HPO-tuned residual
 MLP, log-density parity in the style of the ICRF surrogate papers:
 
