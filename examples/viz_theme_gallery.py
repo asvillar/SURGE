@@ -56,6 +56,16 @@ from surge.viz.theme import (
 )
 
 
+def _benchmark_threshold(key: str):
+    """Published pass threshold from the benchmark registry (or None)."""
+    try:
+        from surge.benchmarks.leaderboard import _THRESHOLDS
+        metric, value = _THRESHOLDS[key]
+        return value if metric.endswith("r2") or "accuracy" in metric else None
+    except Exception:  # noqa: BLE001 - decorative line only
+        return None
+
+
 def _is_loss_like(metric: str) -> bool:
     return any(tag in metric.lower()
                for tag in ("loss", "mse", "rmse", "nrmse", "mae", "error"))
@@ -79,7 +89,8 @@ def _load_split(run_dir: Path, model_key: str, split: str):
     return y_true, y_pred
 
 
-def parity_figure(run_dir: Path, mode: str, units: str = "a.u."):
+def parity_figure(run_dir: Path, mode: str, units: str = "a.u.",
+                  singles: bool = False):
     """Publication parity: 2D histogram density, reversed plasma colormap,
     log-scaled counts — the SURGE signature style (Sánchez-Villar et al.,
     Nucl. Fusion): (a) training / (b) test panels, dashed identity, R² box,
@@ -110,6 +121,64 @@ def parity_figure(run_dir: Path, mode: str, units: str = "a.u."):
     peak = max(
         np.histogram2d(t, q, bins=[bins, bins])[0].max()
         for t, q in splits.values())
+
+    from scipy.stats import gaussian_kde as _kde
+    from sklearn.metrics import r2_score as _r2
+
+    def _draw_parity(fig, ax, p, cmap, split, y_t, y_q, norm,
+                     show_cbar=False, letter=None):
+        ax.set_facecolor(cmap.get_under())
+        im = ax.hist2d(y_t, y_q, bins=[bins, bins], cmap=cmap,
+                       norm=norm, cmin=1)[3]
+        ax.plot(lims, lims, color=p["ink2"], lw=1.2, ls=(0, (5, 3)), zorder=3)
+        ax.set_xlim(lims); ax.set_ylim(lims); ax.set_aspect("equal")
+        ax.grid(color=p["grid"], linewidth=0.5, alpha=0.6)
+        ax.set_axisbelow(True)
+        ax.set_xlabel(f"Ground truth [{units}]")
+        ax.set_ylabel(f"Prediction [{units}]")
+        head = f"({letter}) " if letter else ""
+        ax.set_title(f"{head}{model_key} — {split}", fontsize=9.5)
+        ax.text(0.05, 0.94, f"R² = {_r2(y_t, y_q):.3f}", transform=ax.transAxes,
+                fontsize=9, va="top", color=p["ink"],
+                bbox={"boxstyle": "round,pad=0.35", "facecolor": p["surface"],
+                      "edgecolor": p["ink2"], "linewidth": 0.8})
+        if show_cbar:
+            cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+            cb.set_label("counts (log)", fontsize=8)
+            cb.ax.tick_params(labelsize=7)
+            cb.outline.set_visible(False)
+        return im
+
+    def _draw_resid(ax, p):
+        y_t, y_q = splits["test"]
+        resid = y_q - y_t
+        ax.hist(resid, bins=41, color=p["series"][0], alpha=0.55,
+                density=True, label="residuals")
+        kde_x = np.linspace(resid.min(), resid.max(), 240)
+        ax.plot(kde_x, _kde(resid)(kde_x), color=p["series"][0], lw=1.8,
+                label="KDE")
+        ax.axvline(0.0, color=p["axis"], lw=0.9)
+        ax.axvline(float(resid.mean()), color=p["series"][1], lw=1.2,
+                   ls=(0, (4, 3)), label="mean")
+        ax.set_xlabel(f"Residual [{units}]"); ax.set_ylabel("density")
+        ax.set_title("residuals — test", fontsize=9.5)
+        _stat_chip(ax, f"mean {resid.mean():+.3g}   σ {resid.std():.3g}", p)
+        ax.legend(loc="upper right", fontsize=6.5)
+
+    if singles:
+        out = {}
+        with surge_theme(mode) as p:
+            cmap = density_cmap(mode)
+            norm = LogNorm(vmin=1, vmax=peak)
+            for split, (y_t, y_q) in splits.items():
+                fig, ax = plt.subplots(figsize=(4.3, 3.9))
+                _draw_parity(fig, ax, p, cmap, split, y_t, y_q, norm,
+                             show_cbar=True)
+                out[f"parity_{split}"] = fig
+            fig, ax = plt.subplots(figsize=(4.3, 3.9))
+            _draw_resid(ax, p)
+            out["parity_residuals"] = fig
+        return out
 
     with surge_theme(mode) as p:
         cmap = density_cmap(mode)
@@ -760,7 +829,7 @@ def ensemble_figure(mode: str, seed: int = 0):
 
 # --------------------------------------------------- three-backend success
 
-def trio_figure(mode: str, seed: int = 0):
+def trio_figure(mode: str, seed: int = 0, singles: bool = False):
     """RF + PyTorch MLP + Gaussian process succeeding side by side on the
     QLKNN transport task (2,400-sample subsample so exact GP is exact).
     """
@@ -805,6 +874,31 @@ def trio_figure(mode: str, seed: int = 0):
     if len(results) < 2:
         return None
 
+    def _draw_model(ax, p, cmap, label, pred, r2, dt, lims, letter=None):
+        ax.set_facecolor(cmap.get_under())
+        ax.hist2d(yte, pred, bins=44, range=[lims, lims], cmap=cmap,
+                  norm=LogNorm(vmin=1), cmin=1)
+        ax.plot(lims, lims, color=p["ink2"], lw=1.1, ls=(0, (5, 3)))
+        ax.set_xlim(lims); ax.set_ylim(lims); ax.set_aspect("equal")
+        head = f"({letter}) " if letter else ""
+        ax.set_title(f"{head}{label}", fontsize=9.5)
+        ax.set_xlabel("ground truth [gB]")
+        ax.set_ylabel("prediction [gB]")
+        _stat_chip(ax, f"R² {r2:.3f} · {fmt_metric(dt, 'runtime')}", p)
+        ax.grid(alpha=0.5)
+
+    if singles:
+        out = {}
+        with surge_theme(mode) as p:
+            cmap = density_cmap(mode)
+            lims = (float(yte.min()) - 1, float(yte.max()) + 1)
+            for label, pred, r2, dt in results:
+                fig, ax = plt.subplots(figsize=(4.1, 3.9))
+                _draw_model(ax, p, cmap, label, pred, r2, dt, lims)
+                key = label.lower().replace(" ", "_")
+                out[f"trio_{key}"] = fig
+        return out
+
     with surge_theme(mode) as p:
         cmap = density_cmap(mode)
         fig, axes = plt.subplots(1, len(results), figsize=(3.3 * len(results), 3.3))
@@ -830,7 +924,8 @@ def trio_figure(mode: str, seed: int = 0):
 
 # ------------------------------------------------------ 2D operator (FNO)
 
-def field2d_figure(mode: str, seed: int = 0, n: int = 600, side: int = 32):
+def field2d_figure(mode: str, seed: int = 0, n: int = 600, side: int = 32,
+                   singles: bool = False):
     """2D operator learning: solve the periodic Poisson problem
     ∇²u = −f with an FNO-2D surrogate trained source→solution.
     Dataset generated on the fly (FFT spectral solve = exact reference).
@@ -869,6 +964,31 @@ def field2d_figure(mode: str, seed: int = 0, n: int = 600, side: int = 32):
     rel = (np.linalg.norm((pred - truth).reshape(n_te, -1), axis=1)
            / np.linalg.norm(truth.reshape(n_te, -1), axis=1))
     i = int(np.argsort(rel)[len(rel) // 2])  # median sample
+
+    if singles:
+        out = {}
+        with surge_theme(mode) as p:
+            single_panels = [
+                ("field2d_truth", truth[i], "truth  u(x, y)",
+                 sequential_cmap(mode), None),
+                ("field2d_prediction", pred[i],
+                 f"FNO-2D prediction · rel-L2 {rel[i]:.3f}",
+                 sequential_cmap(mode), None),
+                ("field2d_error", pred[i] - truth[i], "error (pred − truth)",
+                 diverging_cmap(mode),
+                 CenteredNorm(halfrange=float(np.abs(truth[i]).max()) * 0.1)),
+            ]
+            for key, img, title, cmap, nrm in single_panels:
+                fig, ax = plt.subplots(figsize=(4.1, 3.6))
+                im = ax.imshow(img, cmap=cmap, norm=nrm,
+                               interpolation="nearest")
+                ax.set_title(title, fontsize=10)
+                ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+                cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+                cb.ax.tick_params(labelsize=7)
+                cb.outline.set_visible(False)
+                out[key] = fig
+        return out
 
     with surge_theme(mode) as p:
         fig, axes = plt.subplots(1, 5, figsize=(11.8, 2.75),
@@ -920,7 +1040,8 @@ def main():
         "training_curves": lambda m: training_figure(Path(args.hpo_run), m),
         "hpo_convergence": lambda m: hpo_figure(Path(args.hpo_run), m),
         "leaderboard": lambda m: leaderboard_figure(
-            Path(args.reports), args.benchmark, m, threshold=0.75),
+            Path(args.reports), args.benchmark, m,
+            threshold=_benchmark_threshold(args.benchmark)),
         "classification": classification_figure,
         "field_operator": field_operator_figure,
         "uncertainty": uncertainty_figure,
@@ -928,6 +1049,9 @@ def main():
         "ensemble": ensemble_figure,
         "trio": trio_figure,
         "field2d": field2d_figure,
+        "parity_singles": lambda m: parity_figure(Path(args.run), m, singles=True),
+        "trio_singles": lambda m: trio_figure(m, singles=True),
+        "field2d_singles": lambda m: field2d_figure(m, singles=True),
     }
     if args.only:
         builders = {k: v for k, v in builders.items() if k in args.only}
@@ -941,9 +1065,11 @@ def main():
             if fig is None:
                 print(f"[skip] {name}_{mode}: no source data")
                 continue
-            for path in save_figure(fig, out / f"{name}_{mode}"):
-                print("wrote", path)
-            plt.close(fig)
+            figs = fig if isinstance(fig, dict) else {name: fig}
+            for fname, f in figs.items():
+                for path in save_figure(f, out / f"{fname}_{mode}"):
+                    print("wrote", path)
+                plt.close(f)
 
 
 if __name__ == "__main__":

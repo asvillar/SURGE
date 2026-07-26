@@ -130,11 +130,20 @@ class UNetModel:
 
     def _reshape(self, arr):
         arr = np.asarray(arr, dtype=np.float32)
+        if arr.ndim == 2:
+            # flat (B, nx*ny) fields: infer a square grid, matching the
+            # FNO-2D input contract so both 2D operators are interchangeable
+            n, total = arr.shape
+            side = int(round(total ** 0.5))
+            if side * side != total:
+                raise ValueError(
+                    f"Cannot infer square 2D grid from flat dim {total}")
+            return arr.reshape(n, 1, side, side)
         if arr.ndim == 3:
             return arr[:, None, :, :]
         elif arr.ndim == 4:
             return arr
-        raise ValueError(f"Expected 3D or 4D array, got shape {arr.shape}")
+        raise ValueError(f"Expected 2D-flat, 3D or 4D array, got shape {arr.shape}")
 
     def fit(self, X, y, **_: Any) -> "UNetModel":
         torch.manual_seed(self.random_state)

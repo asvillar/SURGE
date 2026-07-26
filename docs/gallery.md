@@ -58,6 +58,22 @@ same task shape.
 
 ![2D operator learning triptych](assets/gallery/field2d.png)
 
+## External PDE benchmark — TheWell Gray-Scott
+
+Next-step operator learning on the Gray-Scott reaction–diffusion system
+from [TheWell](https://polymathic-ai.org/the_well/) (Ohana et al.,
+NeurIPS 2024): four registry models on identical 64×64 species-B fields.
+FNO-2D (median rel-L2 0.056) and U-Net (0.073) reproduce the Turing
+pattern; DeepONet and a ridge baseline cannot. Reproduce with:
+
+```bash
+# note: the full Gray-Scott archive is ~132 GB (117 train + 15 valid)
+python -c "from surge.benchmarks.loaders.thewell import download_thewell; download_thewell('gray_scott')"
+python examples/thewell_grayscott_study.py
+```
+
+![TheWell Gray-Scott surrogate study](assets/gallery/thewell_grayscott.png)
+
 ## Multi-backend comparison
 
 Random forest, PyTorch MLP, and an exact Gaussian process trained on

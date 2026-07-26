@@ -90,7 +90,7 @@ except ImportError:
 _DATASETS: dict[str, dict[str, Any]] = {
     "gray_scott": {
         "well_name": "gray_scott_reaction_diffusion",
-        "description": "Gray-Scott reaction-diffusion 2D (~6.9 GB)",
+        "description": "Gray-Scott reaction-diffusion 2D (~132 GB: 117 train + 15 valid)",
         "shape_hint": "(T, Lx, Ly, 2 fields) → next timestep",
         "n_steps_input": 4,
         "n_steps_output": 1,
