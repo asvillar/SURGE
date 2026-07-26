@@ -367,6 +367,15 @@ from pathlib import Path; log_surge_run(Path('runs/qlknn_multi_hpo'))"
 <p align="center"><sub><em>A real SURGE run in the MLflow UI — per-model
 train/val/test metrics, parameters, and run artifacts.</em></sub></p>
 
+HPO campaigns are logged as **nested runs**: the parent run links its
+trials, and every trial streams its per-epoch `train_loss` / `val_loss`
+so the MLflow chart view plots live loss curves per trial:
+
+<p align="center">
+  <img src="docs/assets/readme/mlflow_hpo_trials.png" width="820"
+       alt="MLflow UI showing one HPO trial's per-epoch train and validation loss curves and its val_r2 score"/>
+</p>
+
 ## Documentation
 
 | Topic | Link |

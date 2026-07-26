@@ -265,7 +265,7 @@ def test_log_benchmark_result_mlflow(tmp_path: Path):
 
     import mlflow
 
-    tracking_uri = f"file://{tmp_path / 'mlruns'}"
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"  # file store is deprecated in mlflow>=3.14
     from surge.benchmarks.registry import run_benchmark
 
     result = run_benchmark("synthetic.regression_1d", seed=0)
@@ -303,7 +303,7 @@ def test_cli_mlflow_flag(tmp_path: Path):
 
     from surge.benchmarks.run import main
 
-    tracking_uri = f"file://{tmp_path / 'mlruns'}"
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"  # file store is deprecated in mlflow>=3.14
     code = main([
         "--benchmark", "synthetic.classification_binary",
         "--no-save",
@@ -321,3 +321,51 @@ def test_cli_mlflow_flag(tmp_path: Path):
     runs = client.search_runs(experiment_ids=[exp.experiment_id])
     assert len(runs) == 1
     assert "test_accuracy" in runs[0].data.metrics
+
+
+def test_log_surge_run_curves_and_nested_trials(tmp_path: Path):
+    """log_surge_run() logs per-epoch curves and one nested run per HPO trial."""
+    from surge.integrations.mlflow_logger import MLFLOW_AVAILABLE, log_surge_run
+
+    if not MLFLOW_AVAILABLE:
+        pytest.skip("mlflow not installed")
+
+    import json as _json
+
+    import mlflow
+
+    run_dir = tmp_path / "runs" / "toy"
+    run_dir.mkdir(parents=True)
+    (run_dir / "metrics.json").write_text(_json.dumps(
+        {"toy_mlp": {"test": {"r2": 0.9, "rmse": 1.0}}}))
+    (run_dir / "training_log_toy_mlp.jsonl").write_text("\n".join(
+        _json.dumps({"epoch": e, "train_loss": 1.0 / e, "val_loss": 1.2 / e})
+        for e in range(1, 6)))
+    (run_dir / "hpo_trials_manifest.jsonl").write_text("\n".join(
+        _json.dumps({"trial": t, "value": 0.8 + 0.05 * t, "metric": "val_r2",
+                     "params": {"learning_rate": 10 ** -(t + 1)}})
+        for t in range(2)))
+    for t in range(2):
+        (run_dir / f"hpo_trial_{t:04d}_training_history.json").write_text(
+            _json.dumps([{"epoch": e, "train_loss": 1.0 / e,
+                          "val_loss": 1.1 / e} for e in range(1, 4)]))
+
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"  # file store is deprecated in mlflow>=3.14
+    mlflow.set_tracking_uri(tracking_uri)
+    assert log_surge_run(run_dir, experiment_name="test_surge_run") is True
+
+    client = mlflow.MlflowClient()
+    exp = client.get_experiment_by_name("test_surge_run")
+    runs = client.search_runs(experiment_ids=[exp.experiment_id])
+    assert len(runs) == 3  # parent + 2 nested trials
+
+    parent = next(r for r in runs
+                  if "mlflow.parentRunId" not in r.data.tags)
+    hist = client.get_metric_history(parent.info.run_id,
+                                     "toy_mlp.val_loss")
+    assert [m.step for m in hist] == [1, 2, 3, 4, 5]
+
+    children = [r for r in runs if r is not parent]
+    for c in children:
+        assert "learning_rate" in c.data.params
+        assert "val_r2" in c.data.metrics
