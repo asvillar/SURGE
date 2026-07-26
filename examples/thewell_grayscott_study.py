@@ -158,7 +158,8 @@ def run_study(n_train: int, n_test: int, side: int, epochs: int, seed: int = 0,
     return (Xte, yte), results
 
 
-def study_figure(data, results, side: int, mode: str = "light"):
+def study_figure(data, results, side: int, mode: str = "light",
+                 horizon: int = 160):
     Xte, yte = data
     results = sorted(results, key=lambda r: r["rel_l2_median"])
     # median-difficulty sample judged by the best model
@@ -233,9 +234,12 @@ def study_figure(data, results, side: int, mode: str = "light"):
         ax.set_xlabel("median rel-L2 (lower is better)")
         ax.set_title("model comparison", fontsize=9.5)
 
+        task = ("next-step surrogates" if horizon == 1
+                else "forecast surrogates")
         fig.suptitle(
-            "TheWell · Gray-Scott reaction–diffusion — forecast surrogates"
-            r"  $B(t) \mapsto B(t+\Delta t)$, $\Delta t$ = 160 stored steps"
+            f"TheWell · Gray-Scott reaction–diffusion — {task}"
+            r"  $B(t) \mapsto B(t+\Delta t)$"
+            f", $\\Delta t$ = {horizon} stored step{'s' if horizon > 1 else ''}"
             f"  ({side}×{side}, species B)",
             fontsize=11.5, fontweight="bold")
         return fig
@@ -257,19 +261,23 @@ def main():
     if not results:
         raise SystemExit("no model produced results")
     out = Path(args.out)
+    # horizon 160 is the headline task and keeps unsuffixed filenames;
+    # other horizons (e.g. --horizon 1, the next-step task) get _h<N>
+    suffix = "" if args.horizon == 160 else f"_h{args.horizon}"
     for mode in ("light", "dark"):
-        fig = study_figure(data, results, args.side, mode)
-        for path in save_figure(fig, out / f"thewell_grayscott_{mode}"):
+        fig = study_figure(data, results, args.side, mode,
+                           horizon=args.horizon)
+        for path in save_figure(fig, out / f"thewell_grayscott{suffix}_{mode}"):
             print("wrote", path)
         plt.close(fig)
     (Xte, yte) = data
     np.savez_compressed(
-        out / "thewell_grayscott_preds.npz",
+        out / f"thewell_grayscott{suffix}_preds.npz",
         Xte=Xte, yte=yte,
         **{f"pred__{r['label']}": r["pred"] for r in results})
     summary = [{k: v for k, v in r.items() if k not in ("pred", "rel")}
                for r in results]
-    (out / "thewell_grayscott_summary.json").write_text(
+    (out / f"thewell_grayscott{suffix}_summary.json").write_text(
         json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
 
