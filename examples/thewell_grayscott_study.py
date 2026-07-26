@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """TheWell Gray-Scott surrogate study: FNO-2D vs U-Net vs DeepONet vs ridge.
 
-Task: next-step operator learning on the Gray-Scott reaction–diffusion
-system from TheWell (Ohana et al., NeurIPS 2024) — predict species-B
-concentration at the next stored timestep from the current field.
+Task: operator forecasting on the Gray-Scott reaction–diffusion system
+from TheWell (Ohana et al., NeurIPS 2024) — predict the species-B field
+160 stored timesteps ahead. A persistence baseline anchors the
+leaderboard: consecutive frames are so similar that the single-step task
+is trivial (persistence rel-L2 ~0.002), so the horizon is chosen where
+"predict no change" visibly fails (~0.28).
 
 Requires the dataset cache created by
 ``surge.benchmarks.loaders.thewell.download_thewell("gray_scott")``
@@ -115,8 +118,11 @@ def run_study(n_train: int, n_test: int, side: int, epochs: int, seed: int = 0,
     # represent "sharpen each filament in place", but the small residual
     # field is far easier to expand)
     candidates = [
-        ("pytorch.fno2d", "FNO-2D", {"n_modes": 12, "n_epochs": epochs}, False),
+        ("pytorch.fno2d", "FNO-2D", {"n_modes": 24, "n_epochs": epochs}, False),
+        ("pytorch.fno2d", "FNO-2D (residual)",
+         {"n_modes": 24, "n_epochs": epochs}, True),
         ("pytorch.unet", "U-Net", {"n_epochs": epochs}, False),
+        ("pytorch.unet", "U-Net (residual)", {"n_epochs": epochs}, True),
         ("pytorch.deeponet", "DeepONet", {"n_epochs": epochs}, False),
         ("pytorch.deeponet", "DeepONet (residual)", {"n_epochs": epochs}, True),
         ("sklearn.ridge", "Ridge (linear)", {}, False),
@@ -161,8 +167,9 @@ def study_figure(data, results, side: int, mode: str = "light"):
     truth_img = yte[i].reshape(side, side)
 
     # the persistence "prediction" is the input field itself — keep it in
-    # the comparison bars but don't show the same image twice
-    panels = [r for r in results if r["key"] != "baseline.persistence"]
+    # the comparison bars but don't show the same image twice; cap the image
+    # row at the four best models so the figure stays readable
+    panels = [r for r in results if r["key"] != "baseline.persistence"][:4]
 
     with surge_theme(mode) as p:
         n_models = len(panels)
@@ -227,8 +234,8 @@ def study_figure(data, results, side: int, mode: str = "light"):
         ax.set_title("model comparison", fontsize=9.5)
 
         fig.suptitle(
-            "TheWell · Gray-Scott reaction–diffusion — next-step surrogates"
-            r"  $B(t) \mapsto B(t+\Delta t)$"
+            "TheWell · Gray-Scott reaction–diffusion — forecast surrogates"
+            r"  $B(t) \mapsto B(t+\Delta t)$, $\Delta t$ = 160 stored steps"
             f"  ({side}×{side}, species B)",
             fontsize=11.5, fontweight="bold")
         return fig
@@ -255,6 +262,11 @@ def main():
         for path in save_figure(fig, out / f"thewell_grayscott_{mode}"):
             print("wrote", path)
         plt.close(fig)
+    (Xte, yte) = data
+    np.savez_compressed(
+        out / "thewell_grayscott_preds.npz",
+        Xte=Xte, yte=yte,
+        **{f"pred__{r['label']}": r["pred"] for r in results})
     summary = [{k: v for k, v in r.items() if k not in ("pred", "rel")}
                for r in results]
     (out / "thewell_grayscott_summary.json").write_text(

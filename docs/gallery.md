@@ -7,6 +7,7 @@ dark variants, deterministic PNG/SVG/PDF) with:
 
 ```bash
 python examples/viz_theme_gallery.py
+python scripts/sync_readme_assets.py                        # curate into docs/
 python -m surge.report.leaderboard --out leaderboard.html   # dashboard
 ```
 
@@ -60,11 +61,15 @@ same task shape.
 
 ## External PDE benchmark — TheWell Gray-Scott
 
-Next-step operator learning on the Gray-Scott reaction–diffusion system
-from [TheWell](https://polymathic-ai.org/the_well/) (Ohana et al.,
-NeurIPS 2024): four registry models on identical 64×64 species-B fields.
-FNO-2D (median rel-L2 0.056) and U-Net (0.073) reproduce the Turing
-pattern; DeepONet and a ridge baseline cannot. Reproduce with:
+Operator forecasting on the Gray-Scott reaction–diffusion system from
+[TheWell](https://polymathic-ai.org/the_well/) (Ohana et al., NeurIPS
+2024): predict the 64×64 species-B field 160 stored steps ahead. The
+horizon is set where the persistence baseline ("predict no change",
+green bar) visibly fails — at single-step the task is trivial
+(persistence rel-L2 0.002). U-Net with a residual target leads (median
+rel-L2 0.206) and is the only architecture beating persistence (0.265);
+FNO-2D blurs the sharp Turing interfaces at this horizon and DeepONet's
+global low-rank basis cannot localize. Reproduce with:
 
 ```bash
 # note: the full Gray-Scott archive is ~132 GB (117 train + 15 valid)

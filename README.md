@@ -98,11 +98,16 @@ same task shape):
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_truth.png"><img src="docs/assets/readme/field2d_truth.png" alt="Truth solution field u(x,y)"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_prediction.png"><img src="docs/assets/readme/field2d_prediction.png" alt="FNO-2D predicted field"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_error.png"><img src="docs/assets/readme/field2d_error.png" alt="Signed prediction error on a diverging colormap"/></picture> |
 
 **External PDE benchmark — [TheWell](https://polymathic-ai.org/the_well/)
-Gray-Scott reaction–diffusion** (Ohana et al., NeurIPS 2024). Four registry
-models on the same next-step operator task, one script
+Gray-Scott reaction–diffusion** (Ohana et al., NeurIPS 2024). Forecast the
+species-B field **160 stored steps ahead** — the horizon is chosen so that
+the *persistence* baseline ("predict no change", green bar) visibly fails,
+because at single-step the task is trivial (persistence rel-L2 0.002 beats
+every model). Seven registry surrogates, one script
 ([`examples/thewell_grayscott_study.py`](examples/thewell_grayscott_study.py)):
-FNO-2D median rel-L2 **0.056**, U-Net **0.073** — both reproduce the Turing
-pattern; DeepONet and a ridge baseline can't:
+**U-Net (residual target) leads at median rel-L2 0.206** and is the only
+architecture that beats persistence (0.265); FNO-2D blurs the sharp Turing
+interfaces at this horizon (0.428 even with 24 modes + residual target), and
+DeepONet's global low-rank basis can't localize (0.554):
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_grayscott.png"><img src="docs/assets/readme/thewell_grayscott.png"
