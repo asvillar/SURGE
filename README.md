@@ -114,8 +114,20 @@ DeepONet's global low-rank basis can't localize (0.554):
        alt="TheWell Gray-Scott study: input, truth, FNO-2D / U-Net / Ridge / DeepONet predictions, FNO error map, and model comparison bars"/></picture>
 </p>
 
+**A second Well system — turbulent radiative layer (2D)** shows the
+portfolio matters: on this fast-mixing task (non-square 64×192 grid,
+log-density, Δt = 8) **every neural operator beats persistence** — U-Net
+0.250, FNO-2D 0.256 vs persistence 0.355 — trained on the Apple GPU in
+~4 min each via `SURGE_DEVICE=auto`
+([`examples/thewell_turbulence_study.py`](examples/thewell_turbulence_study.py)):
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_turbulence.png"><img src="docs/assets/readme/thewell_turbulence.png"
+       alt="Turbulent radiative layer forecast: input, truth, U-Net / FNO-2D predictions of the mixing interface, and model comparison with persistence gate"/></picture>
+</p>
+
 <details>
-<summary><b>The single-step task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
+<summary><b>The single-step Gray-Scott task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_grayscott_h1.png"><img src="docs/assets/readme/thewell_grayscott_h1.png"
        alt="Next-step Gray-Scott task: persistence baseline beats all seven models; residual-target variants dominate the model ranking"/></picture>

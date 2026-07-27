@@ -86,6 +86,21 @@ nothing.
 
 ![Next-step Gray-Scott task with persistence winning](assets/gallery/thewell_grayscott_h1.png)
 
+## External PDE benchmark — TheWell turbulent radiative layer
+
+A second Well system, with the opposite verdict to Gray-Scott: on this
+fast-mixing task (64×192 non-square grid, log density, Δt = 8 stored
+steps) every neural operator beats persistence — U-Net 0.250 and FNO-2D
+0.256 vs 0.355 — each trained in ~4 min on the Apple GPU
+(`SURGE_DEVICE=auto`).
+
+```bash
+python -c "from surge.benchmarks.loaders.thewell import download_thewell; download_thewell('turbulence_2d')"  # ~6 GB
+SURGE_DEVICE=auto python examples/thewell_turbulence_study.py
+```
+
+![TheWell turbulent radiative layer study](assets/gallery/thewell_turbulence.png)
+
 ## Stellarator design — ConStellaration
 
 One residual MLP maps stellarator plasma-boundary Fourier coefficients
