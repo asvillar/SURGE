@@ -79,6 +79,13 @@ python examples/thewell_grayscott_study.py
 
 ![TheWell Gray-Scott surrogate study](assets/gallery/thewell_grayscott.png)
 
+The single-step task (`--horizon 1`) exists too and shows why the
+horizon matters: every model — even residual DeepONet at rel-L2 0.020 —
+loses to persistence at 0.002, so a leaderboard on it would measure
+nothing.
+
+![Next-step Gray-Scott task with persistence winning](assets/gallery/thewell_grayscott_h1.png)
+
 ## Stellarator design — ConStellaration
 
 One residual MLP maps stellarator plasma-boundary Fourier coefficients

@@ -47,7 +47,13 @@ def _workflow_main(argv: list[str]) -> int:
     from surge.workflow.run import run_surrogate_workflow
     from surge.workflow.spec import SurrogateWorkflowSpec
 
-    payload = yaml.safe_load(Path(args.spec).read_text())
+    spec_path = Path(args.spec)
+    if not spec_path.is_file():
+        print(f"error: spec file not found: {spec_path}\n"
+              f"       starter specs live in examples/configs/ "
+              f"(e.g. qlknn_multi_hpo.yaml)", file=sys.stderr)
+        return 2
+    payload = yaml.safe_load(spec_path.read_text())
     if args.tag:
         payload["run_tag"] = args.tag
     if args.overwrite:

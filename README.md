@@ -114,6 +114,14 @@ DeepONet's global low-rank basis can't localize (0.554):
        alt="TheWell Gray-Scott study: input, truth, FNO-2D / U-Net / Ridge / DeepONet predictions, FNO error map, and model comparison bars"/></picture>
 </p>
 
+<details>
+<summary><b>The single-step task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_grayscott_h1.png"><img src="docs/assets/readme/thewell_grayscott_h1.png"
+       alt="Next-step Gray-Scott task: persistence baseline beats all seven models; residual-target variants dominate the model ranking"/></picture>
+</p>
+</details>
+
 **Plasma-transport regression** (QLKNN ITG heat flux) — HPO-tuned residual
 MLP, log-density parity in the style of the ICRF surrogate papers:
 
