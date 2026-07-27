@@ -137,6 +137,15 @@ spectrum with effective dimensionality.
 
 ![Dataset characterization panel](assets/gallery/characterization.png)
 
+## Training at scale
+
+Measured on a stock Apple-Silicon workstation
+(`scripts/benchmark_scale.py` regenerates on your hardware): opt-in GPU
+via `SURGE_DEVICE=auto` (7–8× for the 2D operator models, identical R²)
+and the `surge bench --parallel N` subprocess fan-out against ideal 1/N.
+
+![Training at scale: device speedups and parallel fan-out](assets/gallery/scale.png)
+
 ## Benchmark leaderboards
 
 Score ± std across repeated runs against the published threshold, with

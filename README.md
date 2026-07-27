@@ -389,6 +389,47 @@ so the MLflow chart view plots live loss curves per trial:
        alt="MLflow UI showing one HPO trial's per-epoch train and validation loss curves and its val_r2 score"/>
 </p>
 
+## Training at scale
+
+Two levers, both measured on a stock Apple-Silicon workstation
+([`scripts/benchmark_scale.py`](scripts/benchmark_scale.py) regenerates
+the numbers on your hardware):
+
+```bash
+SURGE_DEVICE=auto surge run spec.yaml                    # cuda > mps > cpu
+surge bench -b plasma.qlknn_transport -m all --seeds 3 --parallel 4
+```
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/scale.png"><img src="docs/assets/readme/scale.png"
+       alt="Left: FNO-2D and U-Net fit times on cpu vs Apple-GPU (7.6x and 7.4x speedups). Right: benchmark wall time vs surge bench --parallel workers, measured against ideal 1/N"/></picture>
+</p>
+
+Device selection is deliberately conservative: the default stays
+cuda→cpu, and the Apple GPU is **opt-in** (`SURGE_DEVICE=auto`) because
+not every architecture is MPS-safe — convolutional and spectral models
+are (identical R² to CPU), recurrent models are not. The safety table
+lives in [`docs/design/RESOURCE_MANAGEMENT.md`](docs/design/RESOURCE_MANAGEMENT.md),
+with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
+
+## Agentic workflows (assistant skills)
+
+The repo ships seven skills under [`.tools/skills/`](.tools/skills) that
+teach an AI assistant to drive SURGE correctly — spec conventions, the
+figure system, benchmark protocols:
+
+| Skill | What it does |
+|---|---|
+| `surge-wizard` | Q&A → generates a commented `spec.yaml` from your data file and runs it — no YAML by hand |
+| `surge-scale` | device selection (MPS safety table), `--parallel` budgeting, long-run monitoring |
+| `surge-build-surrogate` | end-to-end playbook: characterize → pick models by task shape → HPO → report |
+| `surge-run` / `surge-benchmark` | run workflows / reproduce leaderboard numbers |
+| `surge-viz` / `surge-add-model` | figure-system rules / add a new model adapter end-to-end |
+
+Example: point assistant at this repo, type `/surge-wizard` with any
+CSV, answer three questions (target column, goal, time budget), and it
+writes the spec, trains, and reports test metrics against a baseline.
+
 ## Documentation
 
 | Topic | Link |
