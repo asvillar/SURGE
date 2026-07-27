@@ -269,6 +269,83 @@ def _model_is_all(model_arg: str | None) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
+    """Fan (benchmark, model) jobs out to subprocesses, then aggregate.
+
+    Each job is an independent ``python -m surge.benchmarks.run`` invocation
+    whose result lands in ``--save-dir`` as usual, so aggregation is just
+    re-reading result.json files written after the fan-out started. BLAS /
+    OpenMP threads are split evenly so workers do not oversubscribe cores.
+    """
+    import dataclasses
+    import json
+    import os
+    import subprocess
+    import time
+    from collections import defaultdict
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .base import BenchmarkResult
+    from .leaderboard import _default_models_for, print_leaderboard
+    from .registry import benchmark_info
+
+    jobs: list[tuple[str, str]] = []
+    for key in bm_keys:
+        models = custom_models or _default_models_for(
+            benchmark_info(key)["task_type"], key)
+        jobs.extend((key, m) for m in models)
+
+    n_workers = max(1, min(args.parallel, len(jobs)))
+    threads = max(1, (os.cpu_count() or 4) // n_workers)
+    env = {
+        **os.environ,
+        "OMP_NUM_THREADS": str(threads),
+        "MKL_NUM_THREADS": str(threads),
+        "OPENBLAS_NUM_THREADS": str(threads),
+        "VECLIB_MAXIMUM_THREADS": str(threads),
+    }
+    print(f"parallel: {len(jobs)} jobs, {n_workers} workers, "
+          f"{threads} BLAS threads each\n", file=sys.stderr)
+    t0 = time.time()
+
+    def _one(job: tuple[str, str]) -> int:
+        key, model = job
+        cmd = [sys.executable, "-m", "surge.benchmarks.run",
+               "--benchmark", key, "--compare-models", model,
+               "--seed", str(args.seed), "--seeds", str(args.seeds),
+               "--save-dir", str(args.save_dir)]
+        if args.use_hpo_cache:
+            cmd.append("--use-hpo-cache")
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        # exit 1 = ran but below the pass gate; still a completed job
+        if proc.returncode in (0, 1):
+            gate = "" if proc.returncode == 0 else "  (below gate)"
+            print(f"  [done] {key} / {model}{gate}")
+            return 0
+        print(f"  [FAIL exit {proc.returncode}] {key} / {model}",
+              file=sys.stderr)
+        tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-5:])
+        for ln in tail.splitlines():
+            print(f"      {ln}", file=sys.stderr)
+        return proc.returncode
+
+    with ThreadPoolExecutor(max_workers=n_workers) as ex:
+        codes = list(ex.map(_one, jobs))
+
+    # aggregate everything the workers just wrote
+    field_names = {f.name for f in dataclasses.fields(BenchmarkResult)}
+    collected: dict[str, list[BenchmarkResult]] = defaultdict(list)
+    for key in bm_keys:
+        for rj in sorted((args.save_dir / key).glob("*/result.json")):
+            if rj.stat().st_mtime >= t0 - 1:
+                d = json.loads(rj.read_text())
+                collected[key].append(BenchmarkResult(
+                    **{k: v for k, v in d.items() if k in field_names}))
+    if collected:
+        print_leaderboard(dict(collected))
+    return 1 if any(codes) else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     ap = argparse.ArgumentParser(
@@ -327,6 +404,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--plot", action="store_true",
                     help="Save PNG leaderboard charts to <save-dir>/.plots/. Requires matplotlib.")
+    ap.add_argument(
+        "--parallel", type=int, default=1, metavar="N",
+        help="Run up to N (benchmark, model) jobs as concurrent subprocesses. "
+             "BLAS/torch threads are split evenly across workers. Requires "
+             "saving (incompatible with --no-save). With SURGE_DEVICE=mps/cuda "
+             "workers share the one GPU.",
+    )
 
     # ── HPO ───────────────────────────────────────────────────────────────────
     ap.add_argument("--hpo", action="store_true",
@@ -492,6 +576,13 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         print(f"\nLeaderboard: {len(bm_keys)} benchmark(s) — seed={args.seed}\n")
+
+        if args.parallel > 1:
+            if args.no_save:
+                print("ERROR: --parallel needs saved results (drop --no-save).",
+                      file=sys.stderr)
+                return 1
+            return _run_parallel_leaderboard(bm_keys, custom_models, args)
 
         lb_results = run_leaderboard(
             bm_keys,

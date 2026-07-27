@@ -18,6 +18,8 @@ from typing import Any, Optional
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
+from surge.utils import resolve_device
+
 _LOG = logging.getLogger("surge.botorch.gp")
 
 try:
@@ -87,7 +89,7 @@ class ExactGPModel:
         self.n_train_iter = n_epochs if n_epochs is not None else n_train_iter
         self.learning_rate = learning_rate
         self.noise_init = noise_init
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = resolve_device(device)
         self.random_state = random_state
         self.scaler_X = StandardScaler()
         self.scaler_y = StandardScaler()
@@ -242,7 +244,7 @@ class SparseGPModel:
         self.n_train_iter = n_epochs if n_epochs is not None else n_train_iter
         self.learning_rate = learning_rate
         self.batch_size = batch_size
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = resolve_device(device)
         self.random_state = random_state
         self.scaler_X = StandardScaler()
         self.scaler_y = StandardScaler()

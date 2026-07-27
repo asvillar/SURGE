@@ -102,3 +102,31 @@ def test_registration_table_is_printable():
     table = registration_table()
     assert table.startswith("Adapter registration:")
     assert "registered" in table
+
+
+def test_resolve_device_policy(monkeypatch):
+    """Default never silently picks MPS; auto opts in; env respected."""
+    pytest.importorskip("torch")
+    import torch
+
+    from surge.utils import resolve_device
+
+    monkeypatch.delenv("SURGE_DEVICE", raising=False)
+    default = resolve_device()
+    assert default.type in ("cuda", "cpu")  # mps must never be the default
+
+    monkeypatch.setenv("SURGE_DEVICE", "cpu")
+    assert resolve_device().type == "cpu"
+
+    monkeypatch.setenv("SURGE_DEVICE", "auto")
+    auto = resolve_device()
+    mps_ok = getattr(torch.backends, "mps", None)
+    if torch.cuda.is_available():
+        assert auto.type == "cuda"
+    elif mps_ok is not None and mps_ok.is_available():
+        assert auto.type == "mps"
+    else:
+        assert auto.type == "cpu"
+
+    # explicit request always wins over the env var
+    assert resolve_device("cpu").type == "cpu"

@@ -23,6 +23,8 @@ from typing import Any, Optional
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
+from surge.utils import resolve_device
+
 _LOG = logging.getLogger("surge.pytorch.cnn1d")
 
 try:
@@ -130,7 +132,7 @@ class CNN1DModel:
         self.patience = patience
         self._in_channels = in_channels
         self._out_channels = out_channels
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = resolve_device(device)
         self.random_state = random_state
         self.verbose = verbose
         self.log_file = log_file
