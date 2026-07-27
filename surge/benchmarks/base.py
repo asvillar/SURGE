@@ -51,7 +51,11 @@ class BenchmarkResult:
         if not self.surge_version:
             self.surge_version = __version__
 
-        out_dir = root / self.benchmark_key / self.timestamp
+        # include the model in the directory name: second-resolution
+        # timestamps collide when jobs run in parallel (surge bench --parallel)
+        slug = self.model_key.replace(".", "_") if self.model_key else ""
+        out_dir = root / self.benchmark_key / (
+            f"{self.timestamp}__{slug}" if slug else self.timestamp)
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "result.json"
         out_path.write_text(

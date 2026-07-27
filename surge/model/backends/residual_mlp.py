@@ -23,6 +23,8 @@ from sklearn.preprocessing import StandardScaler
 
 from ..layer_schedule import LayerSchedule, resolve_hidden_layers
 
+from surge.utils import resolve_device
+
 _LOG = logging.getLogger("surge.pytorch.residual_mlp")
 
 try:
@@ -163,7 +165,7 @@ class ResidualMLPModel:
         self.patience = patience
         self.patience_window = max(1, int(patience_window))
         self.min_delta = float(min_delta)
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = resolve_device(device)
         self.random_state = random_state
         self.verbose = verbose
         self.log_file = log_file or os.environ.get("SURGE_TRAINING_PROGRESS_JSONL")

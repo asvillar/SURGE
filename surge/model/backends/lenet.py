@@ -22,6 +22,8 @@ from typing import Any, Optional
 
 import numpy as np
 
+from surge.utils import resolve_device
+
 _LOG = logging.getLogger("surge.pytorch.lenet5")
 
 try:
@@ -107,7 +109,7 @@ class LeNet5Model:
         self.batch_size = batch_size
         self.patience = patience
         self.lr_decay_epochs = lr_decay_epochs
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = resolve_device(device)
         self.random_state = random_state
         self.verbose = verbose
         self.log_file = log_file

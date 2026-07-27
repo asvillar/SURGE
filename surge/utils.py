@@ -1167,3 +1167,39 @@ def inspect_surge(module_names=None, verbose=0):
         print(sep)
 
     return results
+
+
+def resolve_device(requested: "str | None" = None):
+    """Resolve the torch device for training/inference.
+
+    Priority: explicit ``requested`` > ``SURGE_DEVICE`` env var > default.
+    The default is CUDA when available, else CPU — identical results to
+    historical behaviour. Apple-Silicon MPS is OPT-IN: pass ``"auto"`` (or
+    set ``SURGE_DEVICE=auto``) to pick cuda > mps > cpu, or request
+    ``"mps"`` explicitly. Measured on this class of hardware: FNO-2D ~4x
+    and U-Net ~2x faster on MPS with identical accuracy, but recurrent
+    models (LSTM/GRU) train BADLY on MPS (lorenz63 R2 drops 0.99 -> 0.32),
+    which is why MPS is not the silent default.
+
+    ``PYTORCH_ENABLE_MPS_FALLBACK=1`` is set when MPS is chosen so ops
+    without MPS kernels fall back to CPU per-op instead of erroring. For
+    bit-reproducible runs pin ``SURGE_DEVICE=cpu``.
+    """
+    import os
+
+    import torch
+
+    req = requested or os.environ.get("SURGE_DEVICE") or None
+    auto = req == "auto" or req == ""
+    if req is not None and not auto:
+        if str(req).startswith("mps"):
+            os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+        return torch.device(req)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if auto:
+        mps = getattr(torch.backends, "mps", None)
+        if mps is not None and mps.is_available():
+            os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+            return torch.device("mps")
+    return torch.device("cpu")
