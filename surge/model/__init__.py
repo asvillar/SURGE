@@ -192,6 +192,7 @@ _TORCH_GROUPS = [
                        ('GRUAdapter', 'pytorch.gru', ['gru'])]),
     ('.adapters.fno', [('FNO1dAdapter', 'pytorch.fno1d', ['fno1d', 'fno'])]),
     ('.adapters.deeponet', [('DeepONetAdapter', 'pytorch.deeponet', ['deeponet'])]),
+    ('.adapters.simformer', [('SimformerAdapter', 'pytorch.simformer', ['simformer'])]),
     ('.adapters.lenet', [('LeNet5Adapter', 'pytorch.lenet5', ['lenet5', 'lenet'])]),
     ('.adapters.resnet', [('ResNet20Adapter', 'pytorch.resnet20', ['resnet20']),
                           ('ResNet56Adapter', 'pytorch.resnet56', ['resnet56'])]),

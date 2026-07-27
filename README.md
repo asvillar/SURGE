@@ -37,7 +37,8 @@ real SURGE output, regenerated from run artifacts
   **scikit-learn** (RF, GBM, ridge, logistic, GPR), boosted trees
   (**XGBoost / LightGBM / CatBoost**), **PyTorch** (MLP families,
   FNO / DeepONet / U-Net operator learners, LSTM/GRU,
-  CNN/ResNet/ViT vision, KAN, FT-Transformer, VAE/DDPM/CGAN),
+  CNN/ResNet/ViT vision, KAN, FT-Transformer, VAE/DDPM/CGAN,
+  **Simformer** all-in-one simulation-based inference),
   **TensorFlow/Keras** (`keras.mlp`, or **bring your own compiled
   `tf.keras` model** via `build_fn`), and Gaussian processes with
   predictive uncertainty (sklearn GPR, BoTorch exact/sparse, GPflow).
@@ -372,6 +373,30 @@ Per-run figures: `from surge.viz import viz_run; viz_run(Path("runs/<tag>"))`.
 Gallery of every figure type: `python examples/viz_theme_gallery.py`.
 
 ---
+
+## Simulation-based inference (Simformer)
+
+`pytorch.simformer` is an independent PyTorch implementation of the
+Simformer ([Gloeckler et al., ICML 2024](https://arxiv.org/abs/2404.09636)):
+one score-based transformer trained on the **joint** p(θ, x) of
+simulation parameters and observables. Because the condition mask is a
+model input, the same trained network samples the posterior p(θ|x), the
+likelihood p(x|θ), or **any conditional** — including inference with
+missing observables. Validated against the one SBI problem with a known
+closed-form posterior:
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/simformer_sbi.png"><img src="docs/assets/readme/simformer_sbi.png"
+       alt="Simformer validation: sampled posterior matches the analytic 1-and-2-sigma ellipses; the same network samples the likelihood and the joint"/></picture>
+</p>
+
+```python
+model = MODEL_REGISTRY.create("pytorch.simformer")
+model.fit(x, theta)                        # learns the joint p(theta, x)
+model.sample_posterior(x_obs, 1000)        # amortized Bayesian inversion
+model.sample_likelihood(theta_0, 1000)     # forward surrogate, same net
+model.predict_with_uncertainty(X)          # registry contract: mean, std
+```
 
 ## Run monitoring — mission control
 

@@ -117,6 +117,15 @@ SURGE_DEVICE=auto python examples/thewell_helmholtz_study.py
 
 ![TheWell Helmholtz staircase study](assets/gallery/thewell_helmholtz.png)
 
+## Simulation-based inference — Simformer
+
+One score-based transformer over the joint p(θ, x) samples every
+conditional: posterior, likelihood, joint, or inference with missing
+observables (`pytorch.simformer`, Gloeckler et al. ICML 2024).
+Validated against the linear-Gaussian benchmark's closed-form posterior.
+
+![Simformer SBI validation](assets/gallery/simformer_sbi.png)
+
 ## Stellarator design — ConStellaration
 
 One residual MLP maps stellarator plasma-boundary Fourier coefficients
