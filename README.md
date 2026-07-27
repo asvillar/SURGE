@@ -139,6 +139,16 @@ architecture wins everywhere
        alt="Helmholtz staircase phase advance: standing-wave pressure field, FNO-2D prediction indistinguishable from truth at rel-L2 0.019, persistence fails at 1.38"/></picture>
 </p>
 
+And it holds up **autoregressively**: a 2-in/2-out FNO advancing the
+(Re, Im) quadratures 2/50 of a cycle per step, rolled out over the full
+harmonic cycle — 24 recursive applications, rolling rel-L2 in the title
+([`examples/make_helmholtz_gif.py`](examples/make_helmholtz_gif.py)):
+
+<p align="center">
+  <img src="docs/assets/readme/helmholtz_rollout.gif" width="560"
+       alt="Animated rollout: truth vs FNO-2D recursive prediction of the Helmholtz standing wave over one full cycle, with the error panel staying dark"/>
+</p>
+
 <details>
 <summary><b>The single-step Gray-Scott task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
 <p align="center">

@@ -561,17 +561,25 @@ def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
         axs.set_xticks(theta)
         axs.set_xticklabels(names6, fontsize=7, color=p["ink2"], **mono)
         axs.tick_params(pad=1)
-        # progress rings: concentric circles with level labels
         axs.set_ylim(0, 1.0)
         axs.set_yticks([0.25, 0.5, 0.75, 1.0])
         axs.set_yticklabels([])
-        axs.grid(color=p["grid"], lw=0.7, alpha=0.9)
-        axs.spines["polar"].set_visible(True)
-        axs.spines["polar"].set_color(p["grid"])
-        axs.spines["polar"].set_linewidth(0.9)
-        for lev in (0.5, 1.0):
-            axs.text(np.pi / 3, lev - 0.02, f"{lev:g}", fontsize=5.5,
-                     color=p["muted"], ha="center", va="top", **mono)
+        # faint rings + one bright spoke per metric radiating from a
+        # bright center dot, ticked at 0.25/0.5/0.75/1.0
+        axs.grid(color=p["grid"], lw=0.6, alpha=0.55)
+        axs.spines["polar"].set_visible(False)
+        spoke = p["ink"]
+        axs.plot(0, 0, "o", ms=4.5, color=spoke, zorder=6, clip_on=False)
+        levels = (0.25, 0.5, 0.75, 1.0)
+        for t_ax in theta:
+            axs.plot([t_ax, t_ax], [0, 1.0], color=spoke, lw=0.9,
+                     alpha=0.55, zorder=1)
+            axs.plot([t_ax] * len(levels), levels, ls="none", marker="o",
+                     ms=1.8, color=spoke, alpha=0.8, zorder=2)
+            for lev in levels:
+                axs.annotate(f"{lev:g}", (t_ax, lev),
+                             textcoords="offset points", xytext=(5, 1),
+                             fontsize=4.4, color=p["muted"], **mono)
         axs.set_title("top 3  ·  1 = best in field", fontsize=8.5,
                       pad=13, **mono)
         axs.legend(handles, [r["model"] for r in top3],

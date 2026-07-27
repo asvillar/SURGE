@@ -202,7 +202,9 @@ class UNetModel:
         for i in range(0, len(Xt), self.batch_size):
             with torch.no_grad():
                 preds.append(self._net(Xt[i:i + self.batch_size].to(self.device)).cpu().numpy())
-        return np.concatenate(preds).squeeze(1)  # (B, nx, ny)
+        out = np.concatenate(preds)
+        # single-channel: (B, nx, ny); multi-channel output keeps (B, C, nx, ny)
+        return out[:, 0] if out.shape[1] == 1 else out
 
     def save(self, path: str) -> None:
         import joblib

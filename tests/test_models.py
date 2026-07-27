@@ -612,3 +612,18 @@ def test_ft_transformer_benchmark_smoke():
     )
     assert result is not None
     assert "test_r2" in result.metrics
+
+
+def test_fno2d_multichannel_output():
+    """FNO-2D with C-channel targets returns (B, C, H, W), not a crash."""
+    pytest.importorskip("torch")
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((12, 2, 16, 16)).astype("float32")
+    y = np.roll(X, 1, axis=-1)
+    adapter = MODEL_REGISTRY.create(
+        "pytorch.fno2d", n_epochs=2, n_modes=4, hidden_channels=8,
+        n_layers=1, batch_size=4)
+    adapter.fit(X, y)
+    pred = np.asarray(adapter.predict(X[:3]))
+    assert pred.shape == (3, 2, 16, 16)
+    assert np.isfinite(pred).all()
