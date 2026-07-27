@@ -18,9 +18,9 @@ with every run reproducible from its own `runs/<tag>/` directory.
 [DOI 10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
 
 <p align="center">
-  <img src="docs/assets/readme/architecture.png"
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/architecture.png"><img src="docs/assets/readme/architecture.png"
        alt="SURGE architecture: ingest & characterize, model & optimize, evaluate & quantify, report & deploy — with real result figures embedded per stage and a provenance strip"
-       width="900"/>
+       width="900"/></picture>
 </p>
 <p align="center"><sub><em>The workflow by functionality — every thumbnail is a
 real SURGE output, regenerated from run artifacts
@@ -69,8 +69,8 @@ suite — repeated seeds, mean ± std, runtime, and published pass
 thresholds with citations:
 
 <p align="center">
-  <img src="docs/assets/readme/leaderboard.png" width="820"
-       alt="QLKNN plasma-transport leaderboard: 10 models, test R² mean ± std over repeated seeds against the published 0.90 threshold, with runtime panel"/>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/leaderboard.png"><img src="docs/assets/readme/leaderboard.png" width="820"
+       alt="QLKNN plasma-transport leaderboard: 10 models, test R² mean ± std over repeated seeds against the published 0.90 threshold, with runtime panel"/></picture>
 </p>
 <p align="center"><sub><em>QLKNN ITG heat-flux transport: ten models over
 repeated seeds — the HPO-tuned residual MLP leads at R² 0.948 ± 0.003
@@ -95,32 +95,61 @@ same task shape):
 
 | | | |
 |:---:|:---:|:---:|
-| <img src="docs/assets/readme/field2d_truth.png" alt="Truth solution field u(x,y)"/> | <img src="docs/assets/readme/field2d_prediction.png" alt="FNO-2D predicted field"/> | <img src="docs/assets/readme/field2d_error.png" alt="Signed prediction error on a diverging colormap"/> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_truth.png"><img src="docs/assets/readme/field2d_truth.png" alt="Truth solution field u(x,y)"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_prediction.png"><img src="docs/assets/readme/field2d_prediction.png" alt="FNO-2D predicted field"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_error.png"><img src="docs/assets/readme/field2d_error.png" alt="Signed prediction error on a diverging colormap"/></picture> |
 
 **External PDE benchmark — [TheWell](https://polymathic-ai.org/the_well/)
-Gray-Scott reaction–diffusion** (Ohana et al., NeurIPS 2024). Four registry
-models on the same next-step operator task, one script
+Gray-Scott reaction–diffusion** (Ohana et al., NeurIPS 2024). Forecast the
+species-B field **160 stored steps ahead** — the horizon is chosen so that
+the *persistence* baseline ("predict no change", green bar) visibly fails,
+because at single-step the task is trivial (persistence rel-L2 0.002 beats
+every model). Seven registry surrogates, one script
 ([`examples/thewell_grayscott_study.py`](examples/thewell_grayscott_study.py)):
-FNO-2D median rel-L2 **0.056**, U-Net **0.073** — both reproduce the Turing
-pattern; DeepONet and a ridge baseline can't:
+**U-Net (residual target) leads at median rel-L2 0.206** and is the only
+architecture that beats persistence (0.265); FNO-2D blurs the sharp Turing
+interfaces at this horizon (0.428 even with 24 modes + residual target), and
+DeepONet's global low-rank basis can't localize (0.554):
 
 <p align="center">
-  <img src="docs/assets/readme/thewell_grayscott.png"
-       alt="TheWell Gray-Scott study: input, truth, FNO-2D / U-Net / Ridge / DeepONet predictions, FNO error map, and model comparison bars"/>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_grayscott.png"><img src="docs/assets/readme/thewell_grayscott.png"
+       alt="TheWell Gray-Scott study: input, truth, FNO-2D / U-Net / Ridge / DeepONet predictions, FNO error map, and model comparison bars"/></picture>
 </p>
+
+<details>
+<summary><b>The single-step task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_grayscott_h1.png"><img src="docs/assets/readme/thewell_grayscott_h1.png"
+       alt="Next-step Gray-Scott task: persistence baseline beats all seven models; residual-target variants dominate the model ranking"/></picture>
+</p>
+</details>
 
 **Plasma-transport regression** (QLKNN ITG heat flux) — HPO-tuned residual
 MLP, log-density parity in the style of the ICRF surrogate papers:
 
 | | | |
 |:---:|:---:|:---:|
-| <img src="docs/assets/readme/parity_train.png" alt="Training parity density, R² 0.98"/> | <img src="docs/assets/readme/parity_test.png" alt="Test parity density, R² 0.96"/> | <img src="docs/assets/readme/parity_residuals.png" alt="Test residual distribution with KDE"/> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_train.png"><img src="docs/assets/readme/parity_train.png" alt="Training parity density, R² 0.98"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_test.png"><img src="docs/assets/readme/parity_test.png" alt="Test parity density, R² 0.96"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_residuals.png"><img src="docs/assets/readme/parity_residuals.png" alt="Test residual distribution with KDE"/></picture> |
+
+**Stellarator design surrogate — ConStellaration** (Proxima Fusion ×
+Hugging Face; Goodman et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
+One residual MLP maps the plasma boundary Fourier coefficients
+$(R_{mn}, Z_{mn})$ to **12 equilibrium figures of merit** for 26,897
+QI-like configurations — quasi-isodynamic quality at R² **0.93**, and real
+rotating boundary cross-sections, not toy shapes:
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/constellaration.png"><img src="docs/assets/readme/constellaration.png"
+       alt="ConStellaration: stellarator boundary cross-sections, log10 QI parity density (R² 0.93), per-metric learnability bars"/></picture>
+</p>
+
+```bash
+surge bench -b plasma.constellaration -m pytorch.residual_mlp --seeds 3
+```
 
 **Optimization, uncertainty, and monitoring**:
 
 | | | |
 |:---:|:---:|:---:|
-| <img src="docs/assets/readme/hpo_convergence.png" alt="HPO history with running best and starred optima"/> | <img src="docs/assets/readme/uncertainty.png" alt="GP surrogate with 68/95% credible bands, 96% truth coverage"/> | <img src="docs/assets/gallery/training_curves.png" alt="Training curves with generalisation gap, power-law fit, and smoothed early stopping"/> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/hpo_convergence.png"><img src="docs/assets/readme/hpo_convergence.png" alt="HPO history with running best and starred optima"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/uncertainty.png"><img src="docs/assets/readme/uncertainty.png" alt="GP surrogate with 68/95% credible bands, 96% truth coverage"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/training_curves.png"><img src="docs/assets/readme/training_curves.png" alt="Training curves with generalisation gap, power-law fit, and smoothed early stopping"/></picture> |
 | *Optuna HPO: per-trial traces, running best, gold-starred optima.* | *GP credible bands widen where data is absent (96% truth coverage).* | *Per-epoch monitoring with **smoothed early stopping** — training halts itself at true saturation (epoch 147/300).* |
 
 **Deep-ensemble uncertainty** (`pytorch.mlp_ensemble`) — mean ± 2σ
@@ -128,8 +157,8 @@ predictions and honest calibration: raw spread is overconfident; σ-rescaling
 on a held-out split recovers near-Gaussian coverage:
 
 <p align="center">
-  <img src="docs/assets/readme/ensemble.png" width="820"
-       alt="Deep-ensemble UQ: mean ± 2 sigma parity, spread vs error, raw vs calibrated coverage"/>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/ensemble.png"><img src="docs/assets/readme/ensemble.png" width="820"
+       alt="Deep-ensemble UQ: mean ± 2 sigma parity, spread vs error, raw vs calibrated coverage"/></picture>
 </p>
 
 Regenerate everything above from your own runs — full gallery per
@@ -235,7 +264,7 @@ small-data regime is exactly where the Gaussian process earns its keep:
 
 | | | |
 |:---:|:---:|:---:|
-| <img src="docs/assets/readme/trio_random_forest.png" alt="Random forest parity, R² 0.66"/> | <img src="docs/assets/readme/trio_pytorch_mlp.png" alt="PyTorch MLP parity, R² 0.86"/> | <img src="docs/assets/readme/trio_gaussian_process.png" alt="Gaussian process parity, R² 0.94"/> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/trio_random_forest.png"><img src="docs/assets/readme/trio_random_forest.png" alt="Random forest parity, R² 0.66"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/trio_pytorch_mlp.png"><img src="docs/assets/readme/trio_pytorch_mlp.png" alt="PyTorch MLP parity, R² 0.86"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/trio_gaussian_process.png"><img src="docs/assets/readme/trio_gaussian_process.png" alt="Gaussian process parity, R² 0.94"/></picture> |
 
 ### 5 · Your own CSV / Parquet / PKL / HDF5 / NetCDF file
 
@@ -308,6 +337,24 @@ Gallery of every figure type: `python examples/viz_theme_gallery.py`.
 
 ---
 
+## Run monitoring — mission control
+
+Every HPO campaign leaves machine-readable artifacts (per-trial training
+histories, the trials manifest, metrics, parquet predictions), and the
+gallery renders them as a one-look dashboard — here the QLKNN residual-MLP
+campaign: all trial loss curves with the winner highlighted, search
+convergence with the starred best, parameter sensitivity, and the tuned
+model's test parity:
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/mission_control.png"><img src="docs/assets/readme/mission_control.png"
+       alt="SURGE mission control: per-trial validation loss curves, HPO convergence with starred best, run summary card, best-trial train/val curves, parameter sensitivity, test parity"/></picture>
+</p>
+
+```bash
+python examples/viz_theme_gallery.py --only mission_control --hpo-run runs/qlknn_multi_hpo
+```
+
 ## Experiment tracking (MLflow)
 
 Every run's parameters, per-model metrics, and artifacts can be mirrored
@@ -332,6 +379,15 @@ from pathlib import Path; log_surge_run(Path('runs/qlknn_multi_hpo'))"
 </p>
 <p align="center"><sub><em>A real SURGE run in the MLflow UI — per-model
 train/val/test metrics, parameters, and run artifacts.</em></sub></p>
+
+HPO campaigns are logged as **nested runs**: the parent run links its
+trials, and every trial streams its per-epoch `train_loss` / `val_loss`
+so the MLflow chart view plots live loss curves per trial:
+
+<p align="center">
+  <img src="docs/assets/readme/mlflow_hpo_trials.png" width="820"
+       alt="MLflow UI showing one HPO trial's per-epoch train and validation loss curves and its val_r2 score"/>
+</p>
 
 ## Documentation
 

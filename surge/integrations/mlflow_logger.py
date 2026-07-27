@@ -109,6 +109,60 @@ def log_surge_run(
                 except Exception as e:
                     LOG.debug("Could not log metrics: %s", e)
 
+            # Per-epoch training curves (chart view in the MLflow UI):
+            # training_log_<model>.jsonl -> <model>.train_loss / .val_loss
+            for log_f in sorted(run_dir.glob("training_log_*.jsonl")):
+                model_name = log_f.stem.replace("training_log_", "")
+                try:
+                    for line in log_f.read_text().splitlines():
+                        rec = json.loads(line)
+                        step = int(rec.get("epoch", 0))
+                        series = {
+                            f"{model_name}.{k}": float(v)
+                            for k, v in rec.items()
+                            if k != "epoch" and isinstance(v, (int, float))
+                        }
+                        if series:
+                            mlflow.log_metrics(series, step=step)
+                except Exception as e:
+                    LOG.debug("Could not log training curve %s: %s", log_f, e)
+
+            # HPO campaign: one nested child run per trial, with its params,
+            # objective value, and per-epoch curves
+            manifest = run_dir / "hpo_trials_manifest.jsonl"
+            if manifest.exists():
+                try:
+                    for line in manifest.read_text().splitlines():
+                        t = json.loads(line)
+                        idx = int(t.get("trial", 0))
+                        with mlflow.start_run(
+                            run_name=f"hpo-trial-{idx:04d}", nested=True
+                        ):
+                            params = {
+                                k: str(v)
+                                for k, v in (t.get("params") or {}).items()
+                            }
+                            if params:
+                                mlflow.log_params(params)
+                            if isinstance(t.get("value"), (int, float)):
+                                mlflow.log_metric(
+                                    t.get("metric", "value"),
+                                    float(t["value"]))
+                            hist_f = (run_dir /
+                                      f"hpo_trial_{idx:04d}_training_history.json")
+                            if hist_f.exists():
+                                for rec in json.loads(hist_f.read_text()):
+                                    step = int(rec.get("epoch", 0))
+                                    series = {
+                                        k: float(v) for k, v in rec.items()
+                                        if k != "epoch"
+                                        and isinstance(v, (int, float))
+                                    }
+                                    if series:
+                                        mlflow.log_metrics(series, step=step)
+                except Exception as e:
+                    LOG.debug("Could not log HPO trials: %s", e)
+
             # Log artifacts
             for name, subpath in [
                 ("workflow_summary", "workflow_summary.json"),

@@ -9,7 +9,7 @@ note instead of failing.
 Usage (from repo root):
     python examples/viz_theme_gallery.py \
         [--run runs/diabetes_rf] [--hpo-run runs/qlknn_multi_hpo] \
-        [--benchmark tabular.california_housing] [--modes light dark] \
+        [--benchmark plasma.qlknn_transport] [--modes light dark] \
         [--only parity field_operator ...] [--out examples/viz_gallery_output]
 
 Figures (per mode, deterministic PNG/SVG/PDF):
@@ -24,6 +24,8 @@ Figures (per mode, deterministic PNG/SVG/PDF):
     ensemble          deep-ensemble UQ with raw vs calibrated coverage
     trio              RF + PyTorch MLP + GP on identical splits
     characterization  dataset EDA panel (distributions, SNR, PCA)
+    mission_control   HPO campaign dashboard from run artifacts
+    constellaration   stellarator boundary → 12 equilibrium metrics
 """
 from __future__ import annotations
 
@@ -57,11 +59,16 @@ from surge.viz.theme import (
 
 
 def _benchmark_threshold(key: str):
-    """Published pass threshold from the benchmark registry (or None)."""
+    """Published pass threshold from the benchmark metadata (or None)."""
+    import re
+
     try:
-        from surge.benchmarks.leaderboard import _THRESHOLDS
-        metric, value = _THRESHOLDS[key]
-        return value if metric.endswith("r2") or "accuracy" in metric else None
+        from surge.report.leaderboard import load_metadata
+        spec = load_metadata()[key]["threshold"]  # e.g. "R² ≥ 0.90"
+        if any(t in spec.lower() for t in ("rmse", "mse", "mae", "error")):
+            return None  # lower-is-better gates don't fit the R² axis
+        m = re.search(r"(\d+(?:\.\d+)?)", spec)
+        return float(m.group(1)) if m else None
     except Exception:  # noqa: BLE001 - decorative line only
         return None
 
@@ -380,42 +387,178 @@ def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
     if not stats:
         return None
 
+    from matplotlib.colors import LinearSegmentedColormap, to_rgb
+
+    from surge.report.leaderboard import load_metadata
+
+    meta = load_metadata().get(benchmark_key, {})
+
+    def _blend(c1, c2, t):
+        a, b = np.array(to_rgb(c1)), np.array(to_rgb(c2))
+        return tuple((1 - t) * a + t * b)
+
+    # pretty math symbols for the flagship benchmarks; fall back to \mathrm
+    _SYM = {
+        "Ati": r"A_{T_i}", "Ate": r"A_{T_e}", "Ane": r"A_{n_e}",
+        "Ani": r"A_{n_i}", "q": r"q", "smag": r"\hat{s}", "x": r"\rho",
+        "Ti_Te": r"T_i/T_e", "LogNuStar": r"\log\nu^{*}",
+        "normni": r"\bar{n}_i", "efeITG": r"q_e^{\mathrm{ITG}}",
+    }
+
+    def _sym(name):
+        return _SYM.get(name, r"\mathrm{%s}" % name.replace("_", r"\_"))
+
+    mono = {"family": "monospace"}
+
     with surge_theme(mode) as p:
-        fig, (ax, axt) = plt.subplots(
-            1, 2, figsize=(7.6, 0.44 * len(stats) + 1.4),
-            width_ratios=[1.0, 0.36], sharey=True)
-        ypos = np.arange(len(stats))[::-1]
-        if threshold is not None:  # sub-threshold zone, tinted
-            ax.axvspan(0, threshold, color=p["critical"], alpha=0.05, zorder=0)
-            ax.axvline(threshold, color=p["serious"], lw=1.0,
-                       ls=(0, (4, 3)), zorder=1)
-            ax.text(threshold, -0.66, f"threshold {threshold} ",
-                    color=p["serious"], fontsize=7, va="top", ha="right")
+        n = len(stats)
+        fig = plt.figure(figsize=(11.6, 0.52 * n + 3.2))
+        # manual header band + gridspec margins — constrained layout would
+        # reclaim the reserved space and collide the header with the bars
+        fig.set_layout_engine("none")
+        gs = fig.add_gridspec(
+            2, 2, width_ratios=[1.72, 1.0], height_ratios=[1.0, 1.12],
+            left=0.045, right=0.975, top=0.795, bottom=0.09,
+            wspace=0.16, hspace=0.42)
+        ax = fig.add_subplot(gs[:, 0])
+
+        # ── identity strip ────────────────────────────────────────────
+        fig.text(0.045, 0.955, benchmark_key.upper(), fontsize=15,
+                 fontweight="bold", color=p["ink"], va="top", **mono)
+        if meta.get("name"):
+            fig.text(0.045, 0.905, meta["name"], fontsize=10,
+                     color=p["ink2"], va="top")
+        inputs = [i["name"] for i in meta.get("inputs", [])]
+        outputs = [o["name"] for o in meta.get("outputs", [])]
+        if inputs and outputs:
+            shown = inputs[:4] + ([r"\ldots"] if len(inputs) > 4 else [])
+            task = (r"$(" + ",\; ".join(_sym(i) if i != r"\ldots" else i
+                                        for i in shown)
+                    + r") \;\mapsto\; " + _sym(outputs[0]) + r"$")
+            fig.text(0.045, 0.868, task, fontsize=11.5, color=p["ink"],
+                     va="top")
+        chips = []
+        if meta.get("n"):
+            chips.append(f"n = {meta['n']}")
+        if meta.get("shape"):
+            chips.append(f"shape {meta['shape']}")
+        if threshold is not None:
+            chips.append(f"gate {meta.get('threshold', f'≥ {threshold}')}")
+        if meta.get("citation"):
+            chips.append(meta["citation"])
+        if chips:
+            fig.text(0.045, 0.828, "  ·  ".join(chips), fontsize=8,
+                     color=p["muted"], va="top", **mono)
+
+        # ── score bars: gradient fill, glowing gate, pass/fail caps ──
+        base = p["series"][0]
+        bar_cmap = LinearSegmentedColormap.from_list(
+            "surge_bar",
+            [_blend(p["surface"], base, 0.18), base,
+             _blend(base, "#ffffff", 0.22)])
+        ypos = np.arange(n)[::-1]
+        h = 0.335
+        if threshold is not None:
+            ax.axvspan(0, threshold, color=p["critical"], alpha=0.04, zorder=0)
+            for lw, al in ((7.0, 0.07), (3.4, 0.18), (1.4, 0.95)):
+                ax.axvline(threshold, color=p["serious"], lw=lw, alpha=al,
+                           zorder=1)
+            ax.text(threshold, n - 0.22, f" gate {threshold:.2f}", fontsize=7.5,
+                    color=p["serious"], ha="left", va="bottom", **mono)
+        grad = np.linspace(0, 1, 256)[None, :]
         for y, r in zip(ypos, stats):
-            ax.barh(y, r["mean"], height=0.62, color=p["series"][0], alpha=0.92)
+            passed = threshold is None or r["mean"] >= threshold
+            cap = p["good"] if passed else p["critical"]
+            ax.imshow(grad, extent=(0, r["mean"], y - h, y + h),
+                      cmap=bar_cmap, aspect="auto", zorder=2,
+                      interpolation="bilinear")
+            ax.plot([r["mean"]] * 2, [y - h, y + h], color=cap, lw=2.4,
+                    solid_capstyle="butt", zorder=4)
             if r["std"] > 0:
                 ax.errorbar(r["mean"], y, xerr=r["std"], fmt="none",
-                            ecolor=p["ink2"], elinewidth=1.1, capsize=2.5)
+                            ecolor=p["ink2"], elinewidth=1.0, capsize=2.4,
+                            zorder=5)
+            ax.text(0.012, y, r["model"], va="center", fontsize=8.5,
+                    color=p["ink"], zorder=6, **mono)
             label = fmt_metric(r["mean"])
             if r["std"] > 0:
-                label += f' ± {r["std"]:.3f}'
-            label += f'  (n={r["n"]})'
-            ax.text(0.006, y, " " + r["model"], va="center", fontsize=8,
-                    color=p["ink"], zorder=3)
-            ax.text(min(r["mean"] + r["std"] + 0.015, 1.0), y, label,
-                    va="center", fontsize=7, color=p["ink2"])
+                label += f'±{r["std"]:.3f}'
+            label += f' · n={r["n"]}'
             if r["runtime"] is not None:
-                axt.barh(y, max(r["runtime"], 1e-2), height=0.62,
-                         color=p["series"][1], alpha=0.92)
-                axt.text(max(r["runtime"], 1e-2), y,
-                         " " + fmt_metric(r["runtime"], "runtime"),
-                         va="center", fontsize=7, color=p["ink2"])
-        ax.set_yticks([]); ax.set_xlim(0, 1.02)
+                label += f' · {fmt_metric(r["runtime"], "runtime")}'
+            ax.text(min(r["mean"] + r["std"] + 0.014, 1.005), y, label,
+                    va="center", fontsize={True: 7.5, False: 7}[n <= 8],
+                    color=cap if not passed else p["ink2"], zorder=6, **mono)
+        ax.set_yticks([])
+        ax.set_ylim(-0.7, n - 0.3)
+        ax.set_xlim(0, 1.06)
         ax.set_xlabel("test R²  (mean ± std over runs)")
-        ax.set_title(f"Leaderboard — {benchmark_key}")
-        axt.set_xscale("log")
-        axt.set_title("runtime", fontsize=9)
-        axt.set_xlabel("seconds (log)")
+
+        # ── spider: top-3 models on 4 normalised axes ─────────────────
+        axs = fig.add_subplot(gs[0, 1], projection="polar")
+        logs = [np.log10(max(r["runtime"], 1e-2))
+                for r in stats if r["runtime"] is not None]
+        lo, hi = (min(logs), max(logs)) if logs else (0.0, 1.0)
+        spread = (hi - lo) or 1.0
+
+        def _axes4(r):
+            acc = max(r["mean"], 0.0)
+            stab = 1.0 - min(r["std"] / 0.05, 1.0)
+            speed = (1.0 - (np.log10(max(r["runtime"], 1e-2)) - lo) / spread
+                     if r["runtime"] is not None else 0.0)
+            marg = (np.clip((r["mean"] - threshold) / (1 - threshold), 0, 1)
+                    if threshold is not None else acc)
+            return [acc, stab, speed, marg]
+
+        names4 = ["accuracy", "stability", "speed", "gate margin"]
+        theta = np.linspace(0, 2 * np.pi, 4, endpoint=False)
+        axs.set_theta_offset(np.pi / 4)   # diagonal spokes: labels stay inside
+        handles = []
+        for k, r in enumerate(stats[:3]):
+            vals = _axes4(r)
+            t = np.concatenate([theta, theta[:1]])
+            v = np.array(vals + vals[:1])
+            line, = axs.plot(t, v, color=p["series"][k], lw=1.5,
+                             zorder=3 - k * 0.1)
+            axs.fill(t, v, color=p["series"][k], alpha=0.13)
+            handles.append(line)
+        axs.set_xticks(theta)
+        axs.set_xticklabels(names4, fontsize=7.5, color=p["ink2"], **mono)
+        axs.set_ylim(0, 1)
+        axs.set_yticks([0.5, 1.0])
+        axs.set_yticklabels([])
+        axs.grid(alpha=0.35)
+        axs.spines["polar"].set_visible(False)
+        axs.set_title("top 3 — normalised", fontsize=8.5, pad=13, **mono)
+        axs.legend(handles, [r["model"] for r in stats[:3]],
+                   loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=1,
+                   frameon=False, labelcolor=p["ink2"],
+                   prop={"family": "monospace", "size": 6.6})
+
+        # ── dataset preview: density of strongest input vs target ────
+        axd = fig.add_subplot(gs[1, 1])
+        d = None
+        if "." in benchmark_key:
+            grp, name = benchmark_key.split(".", 1)
+            from surge.report.dataset_previews import _npz
+            d = _npz(f"{grp}/{name}.npz")
+        if d is not None and "X" in d and "y" in d:
+            X, yv = np.asarray(d["X"], float), np.asarray(d["y"], float).ravel()
+            corr = [abs(np.corrcoef(X[:, j], yv)[0, 1]) for j in range(X.shape[1])]
+            j = int(np.argmax(corr))
+            axd.hist2d(X[:, j], yv, bins=90, cmap=density_cmap(mode),
+                       norm=LogNorm(vmin=1), cmin=1)
+            xin = inputs[j] if j < len(inputs) else f"x_{j}"
+            axd.set_xlabel(f"${_sym(xin)}$" + "  (strongest input)",
+                           fontsize=8.5)
+            yout = outputs[0] if outputs else "y"
+            axd.set_ylabel(f"${_sym(yout)}$", fontsize=8.5)
+            axd.set_title(f"the data — {len(yv):,} samples", fontsize=8.5,
+                          loc="left", **mono)
+        else:
+            axd.text(0.5, 0.5, "dataset preview unavailable", fontsize=8,
+                     ha="center", va="center", color=p["muted"], **mono)
+            axd.set_xticks([]); axd.set_yticks([])
         return fig
 
 
@@ -775,6 +918,11 @@ def ensemble_figure(mode: str, seed: int = 0):
     adapter.fit((Xtr - mu_x) / sd_x, ytr)
     mean, std = adapter.predict_with_uncertainty((Xte - mu_x) / sd_x)
     mean, std = np.asarray(mean).ravel(), np.asarray(std).ravel()
+    # per-member predictions (n_members, n_test) — the raw ingredient the
+    # concept panel needs to show WHY the spread measures uncertainty
+    members = np.asarray(
+        adapter._model._predict_raw((Xte - mu_x) / sd_x)).reshape(
+        adapter._model.n_ensembles, len(yte))
     err = np.abs(mean - yte)
 
     from sklearn.metrics import r2_score
@@ -792,28 +940,50 @@ def ensemble_figure(mode: str, seed: int = 0):
     expected = [norm.cdf(k) - norm.cdf(-k) for k in ks]
 
     with surge_theme(mode) as p:
-        fig, axes = plt.subplots(1, 3, figsize=(9.8, 3.1))
-        ax = axes[0]
-        sel = rng.choice(len(yte), 220, replace=False)
-        ax.errorbar(yte[sel], mean[sel], yerr=2 * std[sel], fmt="o",
-                    ms=3.2, color=p["series"][0], ecolor=p["series"][0],
-                    elinewidth=0.7, alpha=0.55, capsize=0)
-        lims = (min(yte.min(), mean.min()), max(yte.max(), mean.max()))
-        ax.plot(lims, lims, color=p["axis"], lw=0.9)
-        ax.set_xlabel("ground truth [gB]"); ax.set_ylabel("ensemble mean ± 2σ")
-        ax.set_title(f"(a) 6-member deep ensemble · R² {r2:.3f}", fontsize=9)
+        fig, axes = plt.subplots(1, 3, figsize=(10.6, 3.4))
 
+        # (a) the concept: 6 independently-seeded MLPs vote; their mean is
+        # the prediction and their disagreement is the uncertainty
+        ax = axes[0]
+        sel = rng.choice(len(yte), 130, replace=False)
+        for k in range(members.shape[0]):
+            ax.plot(yte[sel], members[k, sel], "o", ms=2.2,
+                    color=p["series"][1], alpha=0.35, zorder=2,
+                    label="members (6 seeds)" if k == 0 else None)
+        ax.errorbar(yte[sel], mean[sel], yerr=2 * lam * std[sel], fmt="o",
+                    ms=3.4, color=p["series"][0], ecolor=p["series"][0],
+                    elinewidth=0.8, alpha=0.8, capsize=0, zorder=3,
+                    label="mean ± 2σ (calibrated)")
+        lims = (min(yte.min(), mean.min()), max(yte.max(), mean.max()))
+        ax.plot(lims, lims, color=p["axis"], lw=0.9, zorder=1)
+        ax.set_xlabel("ground truth [gB]")
+        ax.set_ylabel("member / ensemble prediction [gB]")
+        ax.set_title("(a) 6 MLPs vote — spread = uncertainty", fontsize=9)
+        ax.legend(fontsize=6.5, loc="upper left")
+        _stat_chip(ax, f"R² = {r2:.3f}", p, loc=(0.66, 0.14))
+
+        # (b) does the spread track the error? (density over the visible
+        # range only, with both the raw and the calibrated diagonal)
         ax = axes[1]
         cmap = density_cmap(mode)
         ax.set_facecolor(cmap.get_under())
-        ax.hist2d(std, err, bins=40, cmap=cmap, norm=LogNorm(vmin=1), cmin=1)
-        hi = max(np.quantile(std, 0.99), np.quantile(err, 0.99))
-        ax.plot([0, hi], [0, hi], color=p["ink2"], lw=1.0, ls=(0, (4, 3)))
-        ax.set_xlim(0, hi); ax.set_ylim(0, hi)
-        ax.set_xlabel("predicted σ"); ax.set_ylabel("|error|")
-        ax.set_title("(b) raw spread is overconfident", fontsize=9)
+        # σ and |error| live on very different scales — that IS the story,
+        # so give each axis its own range instead of a mostly-empty square
+        x_hi = float(np.quantile(std, 0.995))
+        y_hi = float(np.quantile(err, 0.995))
+        ax.hist2d(std, err, bins=46, range=[[0, x_hi], [0, y_hi]], cmap=cmap,
+                  norm=LogNorm(vmin=1), cmin=1)
+        ax.plot([0, x_hi], [0, x_hi], color=p["ink2"], lw=1.0, ls=(0, (4, 3)),
+                label="|error| = σ (raw)")
+        ax.plot([0, x_hi], [0, lam * x_hi], color=p["series"][2], lw=1.4,
+                label=f"|error| = {lam:.1f}·σ (calibrated)")
+        ax.set_xlim(0, x_hi); ax.set_ylim(0, y_hi)
+        ax.set_xlabel("predicted σ [gB]"); ax.set_ylabel("|error| [gB]")
+        ax.set_title("(b) errors exceed the raw spread", fontsize=9)
+        ax.legend(fontsize=6.5, loc="upper right")
         ax.grid(alpha=0.5)
 
+        # (c) the honesty check: fraction of truths inside k·σ
         ax = axes[2]
         ax.plot(ks, expected, color=p["axis"], lw=1.2, ls=(0, (4, 3)),
                 label="Gaussian ideal")
@@ -821,8 +991,13 @@ def ensemble_figure(mode: str, seed: int = 0):
                 ms=3.2, label="raw σ")
         ax.plot(ks, coverage_cal, color=p["series"][2], lw=1.8, marker="s",
                 ms=3.2, label=f"calibrated σ (×{lam:.1f})")
+        for k_ref, cov_ref in ((1.0, 0.683), (2.0, 0.954)):
+            ax.axvline(k_ref, color=p["grid"], lw=0.8, zorder=1)
+            ax.annotate(f"{cov_ref:.0%}", (k_ref, cov_ref),
+                        textcoords="offset points", xytext=(4, -10),
+                        fontsize=6.5, color=p["muted"])
         ax.set_xlabel("k (σ multiples)"); ax.set_ylabel("coverage")
-        ax.set_title("(c) coverage: raw vs calibrated", fontsize=9)
+        ax.set_title("(c) calibration restores honest coverage", fontsize=9)
         ax.legend(fontsize=7, loc="lower right")
         return fig
 
@@ -1020,13 +1195,321 @@ def field2d_figure(mode: str, seed: int = 0, n: int = 600, side: int = 32,
         return fig
 
 
+# --------------------------------------------------- HPO mission control
+
+def mission_control_figure(run_dir: Path, mode: str,
+                           model_name: str = "qlknn_residual_mlp"):
+    """One-look HPO campaign dashboard for a run: per-trial loss curves,
+    convergence, parameter sensitivity, best-trial detail, outcome parity,
+    and a run-summary card — all from the run's own artifacts.
+    """
+    from scipy.stats import spearmanr
+    from sklearn.metrics import r2_score
+
+    manifest_f = run_dir / "hpo_trials_manifest.jsonl"
+    if not manifest_f.exists():
+        return None
+    trials = [json.loads(ln) for ln in manifest_f.read_text().splitlines()]
+    hists = {}
+    for t in range(len(trials)):
+        f = run_dir / f"hpo_trial_{t:04d}_training_history.json"
+        if f.exists():
+            hists[t] = json.loads(f.read_text())
+    if not hists:
+        return None
+    values = [t["value"] for t in trials]
+    best_i = int(np.argmax(values))
+    metrics = json.loads((run_dir / "metrics.json").read_text()).get(
+        model_name, {})
+
+    mono = {"family": "monospace"}
+
+    def _card(ax, p, title):
+        ax.set_facecolor(p["surface"])
+        for s in ax.spines.values():
+            s.set_color(p["grid"]); s.set_linewidth(0.8); s.set_visible(True)
+        ax.set_title(title, fontsize=8.5, loc="left", color=p["ink2"],
+                     pad=5, **mono)
+
+    with surge_theme(mode) as p:
+        fig = plt.figure(figsize=(12.6, 7.0))
+        fig.set_layout_engine("none")
+        gs = fig.add_gridspec(2, 3, left=0.05, right=0.975, top=0.845,
+                              bottom=0.075, wspace=0.24, hspace=0.36)
+
+        fig.text(0.05, 0.965, "SURGE · MISSION CONTROL", fontsize=15,
+                 fontweight="bold", color=p["ink"], va="top", **mono)
+        fig.text(0.05, 0.915,
+                 f"HPO campaign — {model_name}  ·  Optuna TPE  ·  "
+                 f"{len(trials)} trials × {max(len(h) for h in hists.values())}"
+                 " epochs", fontsize=9.5, color=p["ink2"], va="top", **mono)
+
+        # (1) all trials: validation loss per epoch, best highlighted
+        ax = fig.add_subplot(gs[0, 0])
+        _card(ax, p, "VAL LOSS — ALL TRIALS")
+        for t, h in hists.items():
+            ep = [r["epoch"] for r in h]
+            vl = [r["val_loss"] for r in h]
+            if t == best_i:
+                ax.plot(ep, vl, color=p["series"][0], lw=2.0, zorder=5,
+                        label=f"best (trial {t})")
+            else:
+                ax.plot(ep, vl, color=p["muted"], lw=0.9, alpha=0.55, zorder=2)
+        ax.set_yscale("log")
+        ax.set_xlabel("epoch"); ax.set_ylabel("val loss")
+        ax.legend(fontsize=7, loc="upper right")
+
+        # (2) HPO convergence: per-trial score + running best + gold star
+        ax = fig.add_subplot(gs[0, 1])
+        _card(ax, p, "SEARCH CONVERGENCE")
+        xs = np.arange(len(values))
+        run_best = np.maximum.accumulate(values)
+        ax.plot(xs, values, "o", ms=4, color=p["series"][0], alpha=0.75,
+                label="trial")
+        ax.plot(xs, run_best, color=p["series"][0], lw=1.4, ls=(0, (4, 3)),
+                label="running best")
+        ax.plot(best_i, values[best_i], marker="*", ms=15,
+                color=p["warning"], markeredgecolor=p["ink"],
+                markeredgewidth=0.7, zorder=6)
+        ax.annotate(f"{values[best_i]:.3f}", (best_i, values[best_i]),
+                    textcoords="offset points", xytext=(-8, -13),
+                    ha="right", fontsize=7.5, color=p["ink"], **mono)
+        ax.set_xlabel("trial"); ax.set_ylabel(trials[0].get("metric", "value"))
+        ax.legend(fontsize=7, loc="lower right")
+
+        # (3) run summary card
+        ax = fig.add_subplot(gs[0, 2])
+        _card(ax, p, "RUN SUMMARY")
+        ax.set_xticks([]); ax.set_yticks([])
+        bp = trials[best_i].get("params", {})
+        te = metrics.get("test", {})
+        tm = metrics.get("timings", {})
+        lines = [
+            ("MODEL", model_name),
+            ("TRIALS", f"{len(trials)} (TPE, max val_r2)"),
+            ("BEST VAL R²", f"{values[best_i]:.4f}"),
+            ("TEST R²", f"{te.get('r2', float('nan')):.4f}"),
+            ("TEST RMSE", f"{te.get('rmse', float('nan')):.3f} gB"),
+            ("FIT TIME", fmt_metric(tm.get("train_seconds"), "runtime")
+             if tm.get("train_seconds") else "—"),
+        ] + [(k.upper().replace("_", " "),
+              f"{v:.3g}" if isinstance(v, float) else str(v))
+             for k, v in bp.items()]
+        for j, (k, v) in enumerate(lines):
+            y = 0.93 - j * 0.095
+            ax.text(0.06, y, k, transform=ax.transAxes, fontsize=7.5,
+                    color=p["muted"], va="top", **mono)
+            ax.text(0.52, y, v, transform=ax.transAxes, fontsize=8,
+                    color=p["ink"], va="top", **mono)
+
+        # (4) best trial: train vs val loss with generalisation gap
+        ax = fig.add_subplot(gs[1, 0])
+        _card(ax, p, f"BEST TRIAL {best_i} — TRAIN VS VAL")
+        h = hists[best_i]
+        ep = np.array([r["epoch"] for r in h])
+        tl = np.array([r["train_loss"] for r in h])
+        vl = np.array([r["val_loss"] for r in h])
+        ax.plot(ep, tl, color=p["series"][1], lw=1.4, label="train")
+        ax.plot(ep, vl, color=p["series"][0], lw=1.6, label="val")
+        ax.fill_between(ep, tl, vl, color=p["series"][0], alpha=0.10)
+        be = int(ep[np.argmin(vl)])
+        ax.axvline(be, color=p["good"], lw=1.0, ls=(0, (4, 3)))
+        ax.text(be, float(vl.min()), f" best ep {be}", fontsize=7,
+                color=p["good_text"], **mono)
+        ax.set_yscale("log")
+        ax.set_xlabel("epoch"); ax.set_ylabel("loss")
+        ax.legend(fontsize=7, loc="upper right")
+
+        # (5) which hyperparameters mattered (rank correlation with score)
+        ax = fig.add_subplot(gs[1, 1])
+        _card(ax, p, "PARAMETER SENSITIVITY")
+        pkeys = [k for k in trials[0].get("params", {})
+                 if isinstance(trials[0]["params"][k], (int, float))]
+        rho = []
+        for k in pkeys:
+            vals = [t["params"][k] for t in trials]
+            r = spearmanr(vals, values).statistic
+            rho.append(0.0 if np.isnan(r) else float(r))
+        order = np.argsort(np.abs(rho))
+        ypos = np.arange(len(pkeys))
+        for y, o in zip(ypos, order):
+            col = p["series"][0] if rho[o] >= 0 else p["series"][1]
+            ax.barh(y, rho[o], height=0.55, color=col, alpha=0.85)
+            ax.text(0.02 if rho[o] < 0 else -0.02, y, pkeys[order[y]] if False
+                    else pkeys[o],
+                    ha="left" if rho[o] < 0 else "right", va="center",
+                    fontsize=7.5, color=p["ink"], **mono)
+        ax.axvline(0, color=p["axis"], lw=0.9)
+        ax.set_yticks([])
+        ax.set_xlim(-1, 1)
+        ax.set_xlabel("Spearman ρ (param vs score)")
+
+        # (6) outcome: test parity density of the tuned model
+        ax = fig.add_subplot(gs[1, 2])
+        _card(ax, p, "OUTCOME — TEST PARITY")
+        try:
+            y_t, y_q = _load_split(run_dir, model_name, "test")
+            cmap = density_cmap(mode)
+            ax.set_facecolor(cmap.get_under())
+            lims = (float(min(y_t.min(), y_q.min())),
+                    float(max(y_t.max(), y_q.max())))
+            bins = np.linspace(*lims, 48)
+            ax.hist2d(y_t, y_q, bins=[bins, bins], cmap=cmap,
+                      norm=LogNorm(vmin=1), cmin=1)
+            ax.plot(lims, lims, color=p["ink2"], lw=1.0, ls=(0, (5, 3)))
+            ax.set_aspect("equal")
+            ax.set_xlabel("ground truth [gB]"); ax.set_ylabel("prediction")
+            _stat_chip(ax, f"R² = {r2_score(y_t, y_q):.3f}", p,
+                       loc=(0.05, 0.93))
+        except FileNotFoundError:
+            ax.text(0.5, 0.5, "predictions unavailable", fontsize=8,
+                    ha="center", va="center", color=p["muted"], **mono)
+            ax.set_xticks([]); ax.set_yticks([])
+        return fig
+
+
+# ---------------------------------------------- ConStellaration stellarators
+
+def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
+    """Stellarator design surrogate on the ConStellaration dataset
+    (Goodman et al. 2025, arXiv:2506.19583, proxima-fusion/constellaration):
+    boundary Fourier coefficients (5×9 r_cos + 5×9 z_sin, n_fp = 3) → 12
+    equilibrium figures of merit. Shows real plasma boundary shapes, the
+    log₁₀(qi) parity, and which metrics are learnable.
+    """
+    npz = _REPO / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz"
+    if not npz.exists():
+        return None
+    from sklearn.metrics import r2_score
+
+    from surge.model import MODEL_REGISTRY
+
+    d = np.load(npz, allow_pickle=True)
+    X, Y = d["X"], d["Y"]
+    names = [str(s) for s in d["metric_names"]]
+    split = np.load(_REPO / "data" / "datasets" / "benchmarks" / "plasma"
+                    / "constellaration" / "split_n26897_seed42_test0.2.npz")
+    tr, te = split["train_idx"], split["test_idx"]
+    Xtr, Ytr, Xte, Yte = X[tr], Y[tr], X[te], Y[te]
+    mu_x, sd_x = Xtr.mean(0), Xtr.std(0) + 1e-9
+    mu_y, sd_y = Ytr.mean(0), Ytr.std(0) + 1e-9
+
+    try:
+        adapter = MODEL_REGISTRY.create(
+            "pytorch.residual_mlp", hidden_layers=[256, 256, 128],
+            n_epochs=n_epochs, random_state=seed)
+    except KeyError:
+        return None
+    adapter.fit(((Xtr - mu_x) / sd_x).astype(np.float32),
+                ((Ytr - mu_y) / sd_y).astype(np.float32))
+    pred = np.asarray(adapter.predict(
+        ((Xte - mu_x) / sd_x).astype(np.float32))) * sd_y + mu_y
+
+    r2s = [r2_score(Yte[:, j], pred[:, j]) for j in range(Y.shape[1])]
+    qi_j = names.index("log_10_qi")
+
+    NFP = 3
+    theta = np.linspace(0, 2 * np.pi, 181)
+
+    def boundary_rz(x_row, phi):
+        r_mn = x_row[:45].reshape(5, 9)   # m = 0..4, n = -4..4
+        z_mn = x_row[45:].reshape(5, 9)
+        R = np.zeros_like(theta); Z = np.zeros_like(theta)
+        for m in range(5):
+            for jn, n in enumerate(range(-4, 5)):
+                ang = m * theta - NFP * n * phi
+                R += r_mn[m, jn] * np.cos(ang)
+                Z += z_mn[m, jn] * np.sin(ang)
+        return R, Z
+
+    # three test-set stellarators spanning the elongation range
+    elong = Yte[:, names.index("max_elongation")]
+    picks = [int(np.argsort(elong)[k]) for k in
+             (len(elong) // 20, len(elong) // 2, int(len(elong) * 0.95))]
+    phis = np.array([0.0, 0.25, 0.5]) * (2 * np.pi / NFP) / 2
+
+    _PRETTY = {
+        "aspect_ratio": "aspect ratio",
+        "aspect_ratio_over_edge_rotational_transform": r"$A/\iota_{edge}$",
+        "max_elongation": "max elongation",
+        "axis_rotational_transform_over_n_field_periods": r"$\iota_{axis}/n_{fp}$",
+        "edge_rotational_transform_over_n_field_periods": r"$\iota_{edge}/n_{fp}$",
+        "axis_magnetic_mirror_ratio": r"mirror ratio (axis)",
+        "edge_magnetic_mirror_ratio": r"mirror ratio (edge)",
+        "average_triangularity": "avg triangularity",
+        "vacuum_well": "vacuum well",
+        "minimum_normalized_magnetic_gradient_scale_length":
+            r"min $L_{\nabla B}$",
+        "flux_compression_in_regions_of_bad_curvature": "flux compression",
+        "log_10_qi": r"$\log_{10}$ QI residual",
+    }
+
+    with surge_theme(mode) as p:
+        fig, axes = plt.subplots(
+            1, 3, figsize=(11.4, 3.6), width_ratios=[1.15, 1.0, 1.15])
+
+        # (a) the objects: boundary cross-sections through half a field period
+        ax = axes[0]
+        for ki, i in enumerate(picks):
+            for jp, phi in enumerate(phis):
+                R, Z = boundary_rz(Xte[i], phi)
+                ax.plot(R, Z, color=p["series"][ki], lw=1.5,
+                        alpha=(1.0, 0.62, 0.35)[jp],
+                        label=(f"elongation {elong[i]:.1f}"
+                               if jp == 0 else None))
+        ax.set_aspect("equal")
+        ax.set_xlabel("R [m]"); ax.set_ylabel("Z [m]")
+        ax.set_title(r"(a) boundaries, $\varphi$: 0 → ¼ period", fontsize=9)
+        ax.legend(fontsize=6.5, loc="upper right")
+
+        # (b) parity for the headline metric: QI quality
+        ax = axes[1]
+        cmap = density_cmap(mode)
+        ax.set_facecolor(cmap.get_under())
+        yt, yq = Yte[:, qi_j], pred[:, qi_j]
+        lims = (float(min(yt.min(), yq.min())), float(max(yt.max(), yq.max())))
+        bins = np.linspace(*lims, 52)
+        ax.hist2d(yt, yq, bins=[bins, bins], cmap=cmap,
+                  norm=LogNorm(vmin=1), cmin=1)
+        ax.plot(lims, lims, color=p["ink2"], lw=1.1, ls=(0, (5, 3)))
+        ax.set_aspect("equal")
+        ax.set_xlabel(r"true $\log_{10}$ QI residual")
+        ax.set_ylabel("predicted")
+        ax.set_title("(b) quasi-isodynamic quality", fontsize=9)
+        _stat_chip(ax, f"R² = {r2s[qi_j]:.3f}", p, loc=(0.05, 0.94))
+
+        # (c) which figures of merit are learnable from shape alone
+        ax = axes[2]
+        order = np.argsort(r2s)
+        ypos = np.arange(len(names))
+        for y, o in zip(ypos, order):
+            ax.barh(y, max(r2s[o], 0.0), height=0.62,
+                    color=p["series"][0] if o != qi_j else p["series"][2],
+                    alpha=0.9)
+            ax.text(max(r2s[o], 0.0) + 0.012, y, f"{r2s[o]:.2f}",
+                    va="center", fontsize=6.5, color=p["ink2"])
+        ax.set_yticks(ypos)
+        ax.set_yticklabels([_PRETTY.get(names[o], names[o]) for o in order],
+                           fontsize=7)
+        ax.set_xlim(0, 1.12)
+        ax.set_xlabel("test R²  (one 90 → 12 surrogate)")
+        ax.set_title("(c) learnability by metric", fontsize=9)
+
+        fig.suptitle(
+            "ConStellaration — stellarator boundary "
+            r"$(R_{mn}, Z_{mn}) \mapsto$ 12 equilibrium metrics · "
+            f"{len(tr):,} train / {len(te):,} test QI configurations",
+            fontsize=10.5, fontweight="bold")
+        return fig
+
+
 # -------------------------------------------------------------------- main
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", default=str(_REPO / "runs" / "qlknn_multi_hpo"))
     ap.add_argument("--hpo-run", default=str(_REPO / "runs" / "qlknn_multi_hpo"))
-    ap.add_argument("--benchmark", default="tabular.california_housing")
+    ap.add_argument("--benchmark", default="plasma.qlknn_transport")
     ap.add_argument("--reports", default=str(_REPO / "benchmark_reports"))
     ap.add_argument("--modes", nargs="+", default=["light", "dark"])
     ap.add_argument("--only", nargs="+", default=None,
@@ -1049,6 +1532,9 @@ def main():
         "ensemble": ensemble_figure,
         "trio": trio_figure,
         "field2d": field2d_figure,
+        "mission_control": lambda m: mission_control_figure(
+            Path(args.hpo_run), m),
+        "constellaration": constellaration_figure,
         "parity_singles": lambda m: parity_figure(Path(args.run), m, singles=True),
         "trio_singles": lambda m: trio_figure(m, singles=True),
         "field2d_singles": lambda m: field2d_figure(m, singles=True),

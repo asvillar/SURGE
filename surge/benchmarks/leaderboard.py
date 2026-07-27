@@ -1896,6 +1896,10 @@ def log_leaderboard_to_mlflow(
                 table_path.write_text(table_text + "\n", encoding="utf-8")
 
             for result_idx, result in enumerate(res_list):
+                if result.extra.get("status") == "skipped":
+                    # a skipped model has no metrics — an empty MLflow run
+                    # would only pollute the comparison view
+                    continue
                 run_name = f"{result.benchmark_key}__{result.model_key}"
                 with mlflow.start_run(run_name=run_name):
                     mlflow.set_tags({

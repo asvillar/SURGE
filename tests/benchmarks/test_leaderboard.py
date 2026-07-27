@@ -256,7 +256,7 @@ def test_log_leaderboard_to_mlflow(tmp_path):
 
     import mlflow
 
-    tracking_uri = f"file://{tmp_path / 'mlruns'}"
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"  # file store is deprecated in mlflow>=3.14
     results = run_leaderboard(
         ["synthetic.regression_1d"],
         model_keys=["sklearn.random_forest", "sklearn.mlp"],
@@ -299,7 +299,7 @@ def test_cli_leaderboard_mlflow(tmp_path):
     import mlflow
     from surge.benchmarks.run import main
 
-    tracking_uri = f"file://{tmp_path / 'mlruns'}"
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"  # file store is deprecated in mlflow>=3.14
     code = main([
         "--leaderboard",
         "--benchmark", "synthetic.classification_binary",

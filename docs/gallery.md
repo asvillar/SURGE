@@ -7,6 +7,7 @@ dark variants, deterministic PNG/SVG/PDF) with:
 
 ```bash
 python examples/viz_theme_gallery.py
+python scripts/sync_readme_assets.py                        # curate into docs/
 python -m surge.report.leaderboard --out leaderboard.html   # dashboard
 ```
 
@@ -60,11 +61,15 @@ same task shape.
 
 ## External PDE benchmark — TheWell Gray-Scott
 
-Next-step operator learning on the Gray-Scott reaction–diffusion system
-from [TheWell](https://polymathic-ai.org/the_well/) (Ohana et al.,
-NeurIPS 2024): four registry models on identical 64×64 species-B fields.
-FNO-2D (median rel-L2 0.056) and U-Net (0.073) reproduce the Turing
-pattern; DeepONet and a ridge baseline cannot. Reproduce with:
+Operator forecasting on the Gray-Scott reaction–diffusion system from
+[TheWell](https://polymathic-ai.org/the_well/) (Ohana et al., NeurIPS
+2024): predict the 64×64 species-B field 160 stored steps ahead. The
+horizon is set where the persistence baseline ("predict no change",
+green bar) visibly fails — at single-step the task is trivial
+(persistence rel-L2 0.002). U-Net with a residual target leads (median
+rel-L2 0.206) and is the only architecture beating persistence (0.265);
+FNO-2D blurs the sharp Turing interfaces at this horizon and DeepONet's
+global low-rank basis cannot localize. Reproduce with:
 
 ```bash
 # note: the full Gray-Scott archive is ~132 GB (117 train + 15 valid)
@@ -73,6 +78,33 @@ python examples/thewell_grayscott_study.py
 ```
 
 ![TheWell Gray-Scott surrogate study](assets/gallery/thewell_grayscott.png)
+
+The single-step task (`--horizon 1`) exists too and shows why the
+horizon matters: every model — even residual DeepONet at rel-L2 0.020 —
+loses to persistence at 0.002, so a leaderboard on it would measure
+nothing.
+
+![Next-step Gray-Scott task with persistence winning](assets/gallery/thewell_grayscott_h1.png)
+
+## Stellarator design — ConStellaration
+
+One residual MLP maps stellarator plasma-boundary Fourier coefficients
+(R_mn, Z_mn; n_fp = 3) to 12 equilibrium figures of merit across 26,897
+QI-like configurations (Goodman et al. 2025, arXiv:2506.19583): real
+rotating boundary cross-sections, log₁₀(QI) parity at R² 0.93, and
+per-metric learnability.
+
+![ConStellaration stellarator surrogate](assets/gallery/constellaration.png)
+
+## HPO mission control
+
+The per-trial artifacts of an HPO campaign rendered as a one-look
+dashboard: all validation-loss curves with the winning trial highlighted,
+search convergence with the starred best, run-summary card, best-trial
+train/val detail, parameter sensitivity, and the tuned model's test
+parity.
+
+![HPO mission control dashboard](assets/gallery/mission_control.png)
 
 ## Multi-backend comparison
 
