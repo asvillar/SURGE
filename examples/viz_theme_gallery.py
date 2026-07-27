@@ -518,22 +518,38 @@ def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
         all_rmse = [r["rmse"] for r in stats if r["rmse"] is not None]
         all_mem = [r["mem"] for r in stats if r["mem"] is not None]
 
-        def _axes6(r):
-            acc = max(r["mean"], 0.0)
-            prec = _lognorm(all_rmse, r["rmse"])           # low RMSE = 1
-            stab = 1.0 - min(r["std"] / 0.05, 1.0)
-            speed = _lognorm(all_rt, r["runtime"])         # fast = 1
-            memv = _lognorm(all_mem, r["mem"])             # lean = 1
-            marg = (np.clip((r["mean"] - threshold) / (1 - threshold), 0, 1)
-                    if threshold is not None else acc)
-            return [acc, prec, stab, speed, memv, marg]
+        # only draw axes whose metric is actually reported for the top 3 —
+        # a missing measurement must not render as "worst in field"
+        top3 = stats[:3]
 
-        names6 = ["accuracy", "precision\n(RMSE)", "stability", "speed",
-                  "memory", "gate\nmargin"]
-        theta = np.linspace(0, 2 * np.pi, 6, endpoint=False)
+        def _spec():
+            axes_spec = [("accuracy", lambda r: max(r["mean"], 0.0))]
+            if all(r["rmse"] is not None for r in top3):
+                axes_spec.append(("precision\n(RMSE)",
+                                  lambda r: _lognorm(all_rmse, r["rmse"])))
+            axes_spec.append(("stability",
+                              lambda r: 1.0 - min(r["std"] / 0.05, 1.0)))
+            if all(r["runtime"] is not None for r in top3):
+                axes_spec.append(("speed",
+                                  lambda r: _lognorm(all_rt, r["runtime"])))
+            if all(r["mem"] is not None for r in top3):
+                axes_spec.append(("memory",
+                                  lambda r: _lognorm(all_mem, r["mem"])))
+            if threshold is not None:
+                axes_spec.append(("gate\nmargin", lambda r: float(
+                    np.clip((r["mean"] - threshold) / (1 - threshold), 0, 1))))
+            return axes_spec
+
+        axes_spec = _spec()
+
+        def _axes6(r):
+            return [f(r) for _, f in axes_spec]
+
+        names6 = [n for n, _ in axes_spec]
+        theta = np.linspace(0, 2 * np.pi, len(axes_spec), endpoint=False)
         axs.set_theta_offset(np.pi / 2)          # first axis points up
         handles = []
-        for k, r in enumerate(stats[:3]):
+        for k, r in enumerate(top3):
             vals = _axes6(r)
             t = np.concatenate([theta, theta[:1]])
             v = np.array(vals + vals[:1])
@@ -558,7 +574,7 @@ def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
                      color=p["muted"], ha="center", va="top", **mono)
         axs.set_title("top 3  ·  1 = best in field", fontsize=8.5,
                       pad=13, **mono)
-        axs.legend(handles, [r["model"] for r in stats[:3]],
+        axs.legend(handles, [r["model"] for r in top3],
                    loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=1,
                    frameon=False, labelcolor=p["ink2"],
                    prop={"family": "monospace", "size": 6.6})
@@ -1398,7 +1414,7 @@ def mission_control_figure(run_dir: Path, mode: str,
 
 # ---------------------------------------------- ConStellaration stellarators
 
-def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
+def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
     """Stellarator design surrogate on the ConStellaration dataset
     (Goodman et al. 2025, arXiv:2506.19583, proxima-fusion/constellaration):
     boundary Fourier coefficients (5×9 r_cos + 5×9 z_sin, n_fp = 3) → 12
@@ -1423,9 +1439,11 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
     mu_y, sd_y = Ytr.mean(0), Ytr.std(0) + 1e-9
 
     try:
+        # trained to saturation: 60-epoch caps left ~0.015 R2 on the table
         adapter = MODEL_REGISTRY.create(
-            "pytorch.residual_mlp", hidden_layers=[256, 256, 128],
-            n_epochs=n_epochs, random_state=seed)
+            "pytorch.residual_mlp", hidden_layers=[512, 512, 256],
+            n_epochs=n_epochs, patience=60, patience_window=10,
+            random_state=seed)
     except KeyError:
         return None
     adapter.fit(((Xtr - mu_x) / sd_x).astype(np.float32),
@@ -1472,39 +1490,59 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
         "log_10_qi": r"$\log_{10}$ QI residual",
     }
 
+    def boundary_rz_grid(x_row, theta_g, phi_g):
+        """Vectorised R, Z over (theta, phi) grids for the 3D surface."""
+        r_mn = x_row[:45].reshape(5, 9)
+        z_mn = x_row[45:].reshape(5, 9)
+        R = np.zeros(theta_g.shape); Z = np.zeros(theta_g.shape)
+        for m in range(5):
+            for jn, n in enumerate(range(-4, 5)):
+                ang = m * theta_g - NFP * n * phi_g
+                R += r_mn[m, jn] * np.cos(ang)
+                Z += z_mn[m, jn] * np.sin(ang)
+        return R, Z
+
     with surge_theme(mode) as p:
         fig = plt.figure(figsize=(12.2, 3.6))
         gs = fig.add_gridspec(1, 3, width_ratios=[1.5, 1.0, 1.15],
-                              wspace=0.28)
-        sub = gs[0, 0].subgridspec(1, 2, wspace=0.08)
+                              wspace=0.24)
         axes = [None,
                 fig.add_subplot(gs[0, 1]),
                 fig.add_subplot(gs[0, 2])]
 
-        # (a1) ONE stellarator: the same boundary at three toroidal angles —
-        # the rotating cross-section is the stellarator fingerprint
-        ax = fig.add_subplot(sub[0, 0])
+        # (a) the LCFS in 3D: full torus, cross-section rings highlighted
+        ax = fig.add_subplot(gs[0, 0], projection="3d")
         i_mid = picks[1]
-        for jp, phi in enumerate(phis):
-            R, Z = boundary_rz(Xte[i_mid], phi)
-            ax.plot(R, Z, color=p["series"][jp], lw=1.6,
-                    label=(r"$\varphi$ = 0", r"¼ period",
-                           r"½ period")[jp])
-        ax.set_aspect("equal")
-        ax.set_xlabel("R [m]"); ax.set_ylabel("Z [m]")
-        ax.set_title("(a) one boundary,\nrotating cross-section", fontsize=8.5)
-        ax.legend(fontsize=6, loc="upper right")
-
-        # (a2) shape diversity across the dataset, all at phi = 0
-        ax = fig.add_subplot(sub[0, 1])
-        for ki, i in enumerate(picks):
-            R, Z = boundary_rz(Xte[i], 0.0)
-            ax.plot(R, Z, color=p["series"][ki], lw=1.6,
-                    label=f"elongation {elong[i]:.1f}")
-        ax.set_aspect("equal")
-        ax.set_xlabel("R [m]"); ax.set_yticklabels([])
-        ax.set_title("(a2) three machines\nat $\\varphi$ = 0", fontsize=8.5)
-        ax.legend(fontsize=6, loc="upper right")
+        th = np.linspace(0, 2 * np.pi, 90)
+        ph = np.linspace(0, 2 * np.pi, 240)
+        TH, PH = np.meshgrid(th, ph, indexing="ij")
+        R, Z = boundary_rz_grid(Xte[i_mid], TH, PH)
+        Xs, Ys = R * np.cos(PH), R * np.sin(PH)
+        ax.plot_surface(Xs, Ys, Z, color=p["series"][0], alpha=0.22,
+                        linewidth=0, antialiased=True, shade=True,
+                        rcount=45, ccount=120)
+        # section rings: half a field period, then repeated by symmetry
+        ring_phis = np.array([0, 1 / 6, 2 / 6]) * (2 * np.pi / NFP)
+        for jp, phi in enumerate(ring_phis):
+            for rep in range(NFP):
+                phv = phi + rep * 2 * np.pi / NFP
+                Rr, Zr = boundary_rz(Xte[i_mid], phv)
+                ax.plot(Rr * np.cos(phv), Rr * np.sin(phv), Zr,
+                        color=p["series"][jp], lw=1.7,
+                        label=(r"$\varphi$ = 0", r"1/6 period",
+                               r"1/3 period")[jp] if rep == 0 else None)
+        ax.set_box_aspect((1, 1, 0.5))
+        # mpl3d does not clip to limits — shrinking them zooms the torus in
+        lim = float(np.abs(R).max()) * 0.72
+        ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
+        ax.set_zlim(-lim * 0.5, lim * 0.5)
+        ax.view_init(elev=26, azim=-58)
+        ax.set_axis_off()
+        ax.set_facecolor("none")
+        ax.set_title(f"(a) LCFS in 3D — $n_{{fp}}$ = {NFP}, "
+                     "sections repeat each period", fontsize=8.5, pad=0,
+                     x=0.62)
+        ax.legend(fontsize=6, loc="upper left", frameon=False)
 
         # (b) parity for the headline metric: QI quality
         ax = axes[1]

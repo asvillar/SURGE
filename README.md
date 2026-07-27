@@ -126,6 +126,19 @@ log-density, Δt = 8) **every neural operator beats persistence** — U-Net
        alt="Turbulent radiative layer forecast: input, truth, U-Net / FNO-2D predictions of the mixing interface, and model comparison with persistence gate"/></picture>
 </p>
 
+**A third system — Helmholtz staircase** (harmonic acoustics, ~80 GB):
+advancing the standing-wave pressure field by ¼ of its cycle from the
+(Re, Im) quadratures. Persistence fails catastrophically here (rel-L2
+1.38) while **FNO-2D nails it at 0.0195** — wave physics is the spectral
+model's home turf, completing the three-system story that no single
+architecture wins everywhere
+([`examples/thewell_helmholtz_study.py`](examples/thewell_helmholtz_study.py)):
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_helmholtz.png"><img src="docs/assets/readme/thewell_helmholtz.png"
+       alt="Helmholtz staircase phase advance: standing-wave pressure field, FNO-2D prediction indistinguishable from truth at rel-L2 0.019, persistence fails at 1.38"/></picture>
+</p>
+
 <details>
 <summary><b>The single-step Gray-Scott task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
 <p align="center">
@@ -145,8 +158,9 @@ MLP, log-density parity in the style of the ICRF surrogate papers:
 Hugging Face; Goodman et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
 One residual MLP maps the plasma boundary Fourier coefficients
 $(R_{mn}, Z_{mn})$ to **12 equilibrium figures of merit** for 26,897
-QI-like configurations — quasi-isodynamic quality at R² **0.93**, and real
-rotating boundary cross-sections, not toy shapes:
+QI-like configurations — quasi-isodynamic quality at R² **0.95** (trained
+to saturation: the earlier 60-epoch cap left ~0.015 R² on the table), with
+the last closed flux surface rendered in 3D:
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/constellaration.png"><img src="docs/assets/readme/constellaration.png"

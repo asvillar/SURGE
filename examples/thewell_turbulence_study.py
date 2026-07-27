@@ -49,8 +49,15 @@ FIELD = 0            # TRL-2D channels: 0 = density, 1 = pressure, 2/3 = velocit
 STRIDE = 2           # 128x384 -> 64x192
 
 
-def load_trl2d(n_train: int, n_test: int, seed: int = 0, horizon: int = 8):
-    """(X, y) grids: density at t -> t + horizon stored steps, (B, 64, 192)."""
+def load_trl2d(n_train: int, n_test: int, seed: int = 0, horizon: int = 8,
+               channels: str = "density"):
+    """(X, y): density (or all 4 fields) at t -> density at t + horizon.
+
+    channels="density": X is (B, 64, 192) log-density.
+    channels="all":     X is (B, 4, 64, 192) — log density, log pressure,
+    z-scored vx, vy — the physics that actually advects the interface.
+    y is always (B, 64, 192) log-density.
+    """
     from the_well.data import WellDataset
 
     from surge.benchmarks.loaders.thewell import _well_base_path
@@ -71,36 +78,49 @@ def load_trl2d(n_train: int, n_test: int, seed: int = 0, horizon: int = 8):
         X_list, y_list = [], []
         for i in idx:
             item = ds[int(i)]
-            xin = np.asarray(item["input_fields"])[0, ..., FIELD]
-            yout = np.asarray(item["output_fields"])[0, ..., FIELD]
-            X_list.append(xin[::STRIDE, ::STRIDE])
-            y_list.append(yout[::STRIDE, ::STRIDE])
+            xin = np.asarray(item["input_fields"])[0, ::STRIDE, ::STRIDE, :]
+            yout = np.asarray(item["output_fields"])[0, ::STRIDE, ::STRIDE,
+                                                     FIELD]
+            X_list.append(xin)
+            y_list.append(yout)
+        Xf = np.stack(X_list).astype(np.float32)      # (B, H, W, 4)
         # density is strictly positive and spans decades -> log-space targets
-        X = np.log10(np.stack(X_list).astype(np.float32))
         y = np.log10(np.stack(y_list).astype(np.float32))
+        if channels == "density":
+            X = np.log10(Xf[..., FIELD])
+        else:  # all four fields as channels
+            dens = np.log10(Xf[..., 0])
+            pres = np.log10(np.maximum(Xf[..., 1], 1e-12))
+            vx = Xf[..., 2] / (np.abs(Xf[..., 2]).max() + 1e-9)
+            vy = Xf[..., 3] / (np.abs(Xf[..., 3]).max() + 1e-9)
+            X = np.stack([dens, pres, vx, vy], axis=1)  # (B, 4, H, W)
         out[split] = (X, y)
     return out["train"], out["valid"]
 
 
 def run_study(n_train: int, n_test: int, epochs: int, seed: int = 0,
-              horizon: int = 8):
+              horizon: int = 8, channels: str = "density"):
     from surge.model import MODEL_REGISTRY
 
-    (Xtr, ytr), (Xte, yte) = load_trl2d(n_train, n_test, seed, horizon)
-    print(f"[data] train {Xtr.shape}  test {Xte.shape}  horizon {horizon}")
+    (Xtr, ytr), (Xte, yte) = load_trl2d(n_train, n_test, seed, horizon,
+                                        channels)
+    print(f"[data] train {Xtr.shape}  test {Xte.shape}  horizon {horizon}"
+          f"  channels {channels}")
     nte = len(Xte)
+    multi = channels != "density"
+    dens_te = Xte[:, 0] if multi else Xte
 
     def rel_l2(pred_flat):
         yf = yte.reshape(nte, -1)
         return (np.linalg.norm(pred_flat - yf, axis=1)
                 / np.maximum(np.linalg.norm(yf, axis=1), 1e-12))
 
-    rel0 = rel_l2(Xte.reshape(nte, -1))
+    rel0 = rel_l2(dens_te.reshape(nte, -1))
     results = [{
         "key": "baseline.persistence", "label": "Persistence",
         "residual_target": False, "runtime_s": 0.0,
         "rel_l2_median": float(np.median(rel0)),
-        "pred": Xte.reshape(nte, -1).copy(), "rel": rel0,
+        "pred": dens_te.reshape(nte, -1).copy(), "rel": rel0,
     }]
     print(f"[done] {'Persistence':18s} median rel-L2 {np.median(rel0):.4f} (0s)")
 
@@ -117,24 +137,29 @@ def run_study(n_train: int, n_test: int, epochs: int, seed: int = 0,
          True, "flat"),
         ("sklearn.ridge", "Ridge (linear)", {}, False, "flat"),
     ]
+    dens_tr = Xtr[:, 0] if multi else Xtr
     for key, label, params, residual, layout in candidates:
+        if multi and layout == "flat":
+            print(f"[skip] {label}: flat models use --channels density")
+            continue
         try:
             model = MODEL_REGISTRY.create(key, **params)
         except KeyError as exc:
             print(f"[skip] {label}: {exc}")
             continue
         if layout == "grid":
-            xin, yin, xq = Xtr, ytr, Xte
+            xin, xq = Xtr, Xte
+            yin = ytr - dens_tr if residual else ytr
         else:
             xin = Xtr.reshape(len(Xtr), -1)
-            yin = ytr.reshape(len(ytr), -1)
+            yin = (ytr - dens_tr if residual else ytr).reshape(len(ytr), -1)
             xq = Xte.reshape(nte, -1)
         t0 = time.perf_counter()
         try:
-            model.fit(xin, yin - xin if residual else yin)
+            model.fit(xin, yin)
             pred = np.asarray(model.predict(xq)).reshape(nte, -1)
             if residual:
-                pred = pred + xq.reshape(nte, -1)
+                pred = pred + dens_te.reshape(nte, -1)
         except Exception as exc:  # noqa: BLE001 - study reports, never dies
             print(f"[fail] {label}: {type(exc).__name__}: {exc}")
             continue
@@ -153,6 +178,8 @@ def run_study(n_train: int, n_test: int, epochs: int, seed: int = 0,
 
 def study_figure(data, results, mode: str = "light", horizon: int = 8):
     Xte, yte = data
+    if Xte.ndim == 4:            # multichannel input: show the density channel
+        Xte = Xte[:, 0]
     nte, H, W = yte.shape
     results = sorted(results, key=lambda r: r["rel_l2_median"])
     best = results[0]
@@ -223,11 +250,14 @@ def main():
     ap.add_argument("--n-test", type=int, default=100)
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--horizon", type=int, default=8)
+    ap.add_argument("--channels", choices=["density", "all"],
+                    default="density",
+                    help="operator-model input: density only, or all 4 fields")
     ap.add_argument("--out", default=str(_REPO / "examples" / "viz_gallery_output"))
     args = ap.parse_args()
 
     data, results = run_study(args.n_train, args.n_test, args.epochs,
-                              horizon=args.horizon)
+                              horizon=args.horizon, channels=args.channels)
     if not results:
         raise SystemExit("no model produced results")
     out = Path(args.out)

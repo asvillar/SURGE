@@ -101,6 +101,22 @@ SURGE_DEVICE=auto python examples/thewell_turbulence_study.py
 
 ![TheWell turbulent radiative layer study](assets/gallery/thewell_turbulence.png)
 
+## External PDE benchmark — TheWell Helmholtz staircase
+
+Harmonic phase advance from the (Re, Im) pressure quadratures: a ¼-cycle
+shift decorrelates the standing wave, so persistence fails at rel-L2
+1.38 while FNO-2D reaches 0.0195 — smooth wave physics is the spectral
+model's home turf. Together the three Well systems (Gray-Scott,
+turbulence, Helmholtz) show no single operator architecture wins
+everywhere.
+
+```bash
+python -c "from surge.benchmarks.loaders.thewell import download_thewell; download_thewell('helmholtz')"  # ~46 GB
+SURGE_DEVICE=auto python examples/thewell_helmholtz_study.py
+```
+
+![TheWell Helmholtz staircase study](assets/gallery/thewell_helmholtz.png)
+
 ## Stellarator design — ConStellaration
 
 One residual MLP maps stellarator plasma-boundary Fourier coefficients
