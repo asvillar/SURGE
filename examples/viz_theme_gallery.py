@@ -1424,7 +1424,7 @@ def mission_control_figure(run_dir: Path, mode: str,
 
 def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
     """Stellarator design surrogate on the ConStellaration dataset
-    (Goodman et al. 2025, arXiv:2506.19583, proxima-fusion/constellaration):
+    (Cadena et al. 2025, arXiv:2506.19583, proxima-fusion/constellaration):
     boundary Fourier coefficients (5×9 r_cos + 5×9 z_sin, n_fp = 3) → 12
     equilibrium figures of merit. Shows real plasma boundary shapes, the
     log₁₀(qi) parity, and which metrics are learnable.

@@ -254,7 +254,7 @@ benchmarks:
   name: ConStellaration Stellarator Surrogate
   capability: Scientific Domain
   tier: 2
-  citation: Goodman et al. (2025) arXiv:2506.19583 — ConStellaration dataset
+  citation: Cadena et al. (2025) arXiv:2506.19583 — ConStellaration dataset
   url: https://arxiv.org/abs/2506.19583
   shape: 90 → 1
   n: 10k / 26,897
@@ -267,7 +267,7 @@ benchmarks:
   name: ConStellaration Multi-output (Paper Benchmark)
   capability: Scientific Domain
   tier: 2
-  citation: Goodman et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol
+  citation: Cadena et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol
   url: https://arxiv.org/abs/2506.19583
   shape: 90 → 12
   n: 26,897
@@ -279,7 +279,7 @@ benchmarks:
   name: ConStellaration Joint Multi-output
   capability: Scientific Domain
   tier: 2
-  citation: Goodman et al. (2025) arXiv:2506.19583 — single 90→12 surrogate
+  citation: Cadena et al. (2025) arXiv:2506.19583 — single 90→12 surrogate
   url: https://arxiv.org/abs/2506.19583
   shape: 90 → 12
   n: 26,897

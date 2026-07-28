@@ -1,7 +1,7 @@
 """Deep MLP ensemble backend — matches the ConStellaration paper architecture.
 
 Reference:
-    Goodman et al. (2025) arXiv:2506.19583 — Appendix A.4
+    Cadena et al. (2025) arXiv:2506.19583 — Appendix A.4
     "ensemble model of ten MLPs with three layers, 256 hidden units, tanh activations"
 """
 from __future__ import annotations
@@ -60,7 +60,7 @@ class _MLP(nn.Module if TORCH_AVAILABLE else object):
 class MLPEnsembleModel:
     """Ensemble of *n_ensembles* independent MLPs for regression.
 
-    Matches the surrogate baseline in the ConStellaration paper (Goodman et al. 2025):
+    Matches the surrogate baseline in the ConStellaration paper (Cadena et al. 2025):
 
     * 10 ensemble members
     * 3 hidden layers of 256 units each

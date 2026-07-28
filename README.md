@@ -166,7 +166,7 @@ MLP, log-density parity in the style of the ICRF surrogate papers:
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_train.png"><img src="docs/assets/readme/parity_train.png" alt="Training parity density, R² 0.98"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_test.png"><img src="docs/assets/readme/parity_test.png" alt="Test parity density, R² 0.96"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_residuals.png"><img src="docs/assets/readme/parity_residuals.png" alt="Test residual distribution with KDE"/></picture> |
 
 **Stellarator design surrogate — ConStellaration** (Proxima Fusion ×
-Hugging Face; Goodman et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
+Hugging Face; Cadena et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
 One residual MLP maps the plasma boundary Fourier coefficients
 $(R_{mn}, Z_{mn})$ to **12 equilibrium figures of merit** for 26,897
 QI-like configurations — quasi-isodynamic quality at R² **0.95** (trained

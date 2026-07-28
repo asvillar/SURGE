@@ -130,7 +130,7 @@ Validated against the linear-Gaussian benchmark's closed-form posterior.
 
 One residual MLP maps stellarator plasma-boundary Fourier coefficients
 (R_mn, Z_mn; n_fp = 3) to 12 equilibrium figures of merit across 26,897
-QI-like configurations (Goodman et al. 2025, arXiv:2506.19583): real
+QI-like configurations (Cadena et al. 2025, arXiv:2506.19583): real
 rotating boundary cross-sections, log₁₀(QI) parity at R² 0.93, and
 per-metric learnability.
 
