@@ -117,6 +117,17 @@ SURGE_DEVICE=auto python examples/thewell_helmholtz_study.py
 
 ![TheWell Helmholtz staircase study](assets/gallery/thewell_helmholtz.png)
 
+## POD reduced-order surrogates
+
+`pod_fit/pod_transform/pod_inverse` (surge.preprocessing) turn any
+tabular model into a field surrogate through k POD modes. On the
+low-rank Helmholtz wave, ridge through 64 modes reaches rel-L2 0.0017 —
+11× better than FNO-2D at ~10,000× less training compute; on the
+chaotic turbulent layer POD+ridge still edges the U-Net. The dotted
+line is the POD reconstruction ceiling (representation limit at each k).
+
+![POD reduced-order surrogates vs neural operators](assets/gallery/thewell_pod.png)
+
 ## Simulation-based inference — Simformer
 
 One score-based transformer over the joint p(θ, x) samples every

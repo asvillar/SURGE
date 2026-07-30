@@ -150,6 +150,21 @@ harmonic cycle — 24 recursive applications, rolling rel-L2 in the title
        alt="Animated rollout: truth vs FNO-2D recursive prediction of the Helmholtz standing wave over one full cycle, with the error panel staying dark"/>
 </p>
 
+**And the honest baseline neural operators must beat — POD reduced-order
+models.** SURGE's new `pod_fit/pod_transform/pod_inverse` helpers project
+fields onto k proper-orthogonal-decomposition modes so *any* tabular model
+becomes a field surrogate. The lesson cuts both ways: on the low-rank
+Helmholtz wave, **ridge regression through 64 modes reaches rel-L2 0.0017
+— 11× better than FNO-2D — in 0.03 s of training**; on the chaotic
+turbulent layer, POD+ridge (0.236) still edges the U-Net (0.250). Always
+run the ROM baseline before reaching for an operator network
+([`examples/thewell_pod_study.py`](examples/thewell_pod_study.py)):
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_pod.png"><img src="docs/assets/readme/thewell_pod.png"
+       alt="POD reduced-order surrogates: rel-L2 vs number of modes with neural-operator baselines as reference lines; POD+ridge beats FNO-2D 11x on Helmholtz and edges U-Net on turbulence"/></picture>
+</p>
+
 <details>
 <summary><b>The single-step Gray-Scott task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
 <p align="center">
