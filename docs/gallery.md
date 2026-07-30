@@ -128,6 +128,15 @@ line is the POD reconstruction ceiling (representation limit at each k).
 
 ![POD reduced-order surrogates vs neural operators](assets/gallery/thewell_pod.png)
 
+## Probabilistic turbulence forecasting (CRPS)
+
+Pointwise error on the turbulent layer is chaos-limited (7-lever study),
+so the honest forecast is a distribution: an 8-member deep ensemble on
+64 POD modes. Calibrated CRPS 0.095 beats the best point forecast by
+18%, with spread–skill correlation 0.88.
+
+![Probabilistic turbulence forecasting](assets/gallery/thewell_crps.png)
+
 ## Simulation-based inference — Simformer
 
 One score-based transformer over the joint p(θ, x) samples every

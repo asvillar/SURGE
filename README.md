@@ -165,6 +165,20 @@ run the ROM baseline before reaching for an operator network
        alt="POD reduced-order surrogates: rel-L2 vs number of modes with neural-operator baselines as reference lines; POD+ridge beats FNO-2D 11x on Helmholtz and edges U-Net on turbulence"/></picture>
 </p>
 
+**When chaos caps pointwise accuracy, change the question — probabilistic
+forecasting.** A 7-lever study showed TRL-2D deterministic error is
+predictability-limited at Δt = 8, so SURGE forecasts a *distribution*
+instead: an 8-member deep ensemble on 64 POD modes, scored with CRPS. The
+calibrated ensemble (spread inflation tuned on held-out data) reaches
+**CRPS 0.095 — 18% better than the best deterministic forecast** — with
+spread–skill correlation 0.88: the forecast knows when it is uncertain
+([`examples/thewell_probabilistic_study.py`](examples/thewell_probabilistic_study.py)):
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_crps.png"><img src="docs/assets/readme/thewell_crps.png"
+       alt="Probabilistic turbulence forecasting: calibrated ensemble CRPS beats deterministic forecasts; spread-skill correlation 0.88; ensemble members fan out at the uncertain mixing interface"/></picture>
+</p>
+
 <details>
 <summary><b>The single-step Gray-Scott task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
 <p align="center">

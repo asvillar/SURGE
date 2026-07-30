@@ -663,3 +663,23 @@ def test_simformer_posterior_likelihood_joint():
     assert mean.shape == (5, 2)
     assert std.shape == (5, 2)
     assert (std > 0).all()
+
+
+def test_convnext_unet_registered():
+    pytest.importorskip("torch")
+    assert "pytorch.convnext_unet" in MODEL_REGISTRY
+
+
+def test_convnext_unet_fit_predict_multichannel():
+    """ConvNeXt U-Net: (B, C, H, W) in/out on non-square grids."""
+    pytest.importorskip("torch")
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((10, 3, 16, 24)).astype("float32")
+    y = np.roll(X[:, :2], 1, axis=-1)
+    adapter = MODEL_REGISTRY.create(
+        "pytorch.convnext_unet", n_epochs=2, base_channels=8, depth=2,
+        blocks_per_stage=1, batch_size=4)
+    adapter.fit(X, y)
+    pred = np.asarray(adapter.predict(X[:3]))
+    assert pred.shape == (3, 2, 16, 24)
+    assert np.isfinite(pred).all()
