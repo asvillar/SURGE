@@ -247,6 +247,18 @@ pip install -e ".[torch,dev]"`.
 All runs write artifacts to `runs/<tag>/` (`metrics.json`, trained models,
 scalers, predictions, spec snapshot).
 
+### 0 · Don't write YAML — generate it (`surge init`)
+
+The wizard inspects your data file, asks three questions (target, goal,
+time budget), and writes a fully commented spec; `surge validate` checks
+any spec offline with did-you-mean error messages:
+
+```bash
+surge init --data my_data.csv            # interactive (or --goal/--budget/--yes)
+surge validate spec.yaml                 # unknown keys? typos? bad types?
+surge run spec.yaml
+```
+
 ### 1 · Smoke test (~5 s) — tabular regression
 
 ```bash
