@@ -52,13 +52,11 @@ def load_trajectory(traj_idx: int = 0):
             / "turbulent_radiative_layer_2D/data/valid")
     f = sorted(glob.glob(str(root / "*.hdf5")))[0]
     with h5py.File(f) as h:
-        fields = []
-        for name in ("density", "pressure", "velocity_x", "velocity_y"):
-            for group in ("t0_fields", "t1_fields", "t2_fields"):
-                if name in h.get(group, {}):
-                    fields.append(h[f"{group}/{name}"][traj_idx])
-                    break
-    return np.stack(fields, axis=1).astype("float32")   # (T, 4, H, W)
+        dens = h["t0_fields/density"][traj_idx]          # (T, H, W)
+        pres = h["t0_fields/pressure"][traj_idx]
+        vel = h["t1_fields/velocity"][traj_idx]          # (T, H, W, 2)
+    return np.stack([dens, pres, vel[..., 0], vel[..., 1]],
+                    axis=1).astype("float32")            # (T, 4, H, W)
 
 
 def load_model():
