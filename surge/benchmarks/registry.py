@@ -644,6 +644,19 @@ def run_benchmark(key: str, **kwargs: Any) -> BenchmarkResult:
         Passed to the underlying task (e.g. ``seed=``, ``model_key=``).
     """
     key = resolve_benchmark_key(key)
+
+    # Fail fast on a regressor asked to classify (or vice versa): otherwise
+    # the model trains to completion and dies inside the metric computation
+    # with an opaque sklearn error.
+    requested_model = kwargs.get("model_key")
+    if requested_model:
+        from .leaderboard import _task_mismatch
+
+        mismatch = _task_mismatch(requested_model,
+                                  benchmark_info(key)["task_type"])
+        if mismatch is not None:
+            raise ValueError(mismatch)
+
     runner = REGISTRY.get(key)
     if runner is None:
         # Generic adapter-based path (CTR-23, plasma, vision via leaderboard).

@@ -9,6 +9,7 @@ import pytest
 
 from surge.benchmarks.leaderboard import (
     _default_models_for,
+    _task_mismatch,
     format_leaderboard_table,
     log_leaderboard_to_mlflow,
     run_leaderboard,
@@ -36,6 +37,46 @@ def test_default_models_for_classification():
     assert "sklearn.gradient_boosting_classifier" in models
     assert "sklearn.logistic_regression" in models
     assert "sklearn.random_forest" not in models
+
+
+# ---------------------------------------------------------------------------
+# Task-compatibility gate
+# ---------------------------------------------------------------------------
+
+
+def test_task_mismatch_flags_regressor_on_classification():
+    reason = _task_mismatch("pytorch.mlp", "classification")
+    assert reason is not None
+    assert "regressor" in reason
+    # the message must point at the fix, not just the problem
+    assert "pytorch.mlp_classifier" in reason
+
+
+def test_task_mismatch_flags_classifier_on_regression():
+    reason = _task_mismatch("sklearn.logistic_regression", "regression")
+    assert reason is not None
+    assert "classifier" in reason
+
+
+def test_task_mismatch_allows_matching_pairs():
+    assert _task_mismatch("sklearn.random_forest", "regression") is None
+    assert _task_mismatch("sklearn.random_forest_classifier",
+                          "classification") is None
+
+
+def test_task_mismatch_passes_through_unknown_models():
+    """Field/generative backends are outside the curated lists — never block
+    them, or the gate becomes a whitelist and breaks operator benchmarks."""
+    for key in ("pytorch.unet", "pytorch.fno2d", "pytorch.simformer"):
+        assert _task_mismatch(key, "regression") is None
+
+
+def test_run_benchmark_rejects_mismatched_model():
+    """The gate must fire BEFORE training, not inside metric computation."""
+    from surge.benchmarks.registry import run_benchmark
+
+    with pytest.raises(ValueError, match="regressor"):
+        run_benchmark("classification.flow_regime", model_key="pytorch.mlp")
 
 
 # ---------------------------------------------------------------------------

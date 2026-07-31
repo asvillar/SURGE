@@ -343,6 +343,19 @@ def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
                     **{k: v for k, v in d.items() if k in field_names}))
     if collected:
         print_leaderboard(dict(collected))
+
+    # Honest verdict on whether the fan-out earned its overhead. Every job
+    # pays a fresh interpreter + import cost and the workers share cores, so
+    # short jobs come out SLOWER in parallel than sequentially.
+    wall = time.time() - t0
+    train_s = sum(float(r.metrics.get("runtime_s") or 0.0)
+                  for rs in collected.values() for r in rs)
+    if train_s and wall > train_s:
+        print(f"\nNOTE: --parallel did not pay off here — {wall:.0f}s wall "
+              f"vs {train_s:.0f}s of actual training across {len(jobs)} jobs. "
+              f"Subprocess startup and core contention dominate when jobs are "
+              f"short; --parallel is for long jobs or many cores/GPUs.",
+              file=sys.stderr)
     return 1 if any(codes) else 0
 
 
@@ -698,6 +711,13 @@ def main(argv: list[str] | None = None) -> int:
         _monitor_kwargs["log_file"] = args.train_log_file
 
     try:
+        if args.model:
+            # covers both dispatch branches below
+            from .leaderboard import _task_mismatch
+            _mm = _task_mismatch(
+                args.model, benchmark_info(single_bm_key)["task_type"])
+            if _mm is not None:
+                raise ValueError(_mm)
         if _monitor_kwargs and args.model:
             from .leaderboard import _run_with_adapter
             from surge.model.registry import MODEL_REGISTRY
@@ -708,7 +728,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         else:
             result = run_benchmark(single_bm_key, seed=args.seed, model_key=args.model)
-    except KeyError as exc:
+    except (KeyError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
