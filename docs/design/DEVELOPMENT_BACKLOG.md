@@ -24,6 +24,19 @@ R1–R14, `RESOURCE_MANAGEMENT.md` R15–R18, `FIGURE_UPGRADE_PLAN.md`).
   pairs — the published 12h-H100 baselines' data advantage is bounded;
   overnight all-pairs x14-epoch run in flight.
 
+- **TheWell-protocol scaling sweep on HPC** — PREPARED, NOT SUBMITTED.
+  `scripts/hpc/` holds a 2x2x2 factorial (data 1400/6984 x capacity
+  3.4M/19.8M x epochs 60/500) that disentangles why our ConvNeXt U-Net
+  sits at VRMSE 0.486 vs the published 0.125 on
+  turbulent_radiative_layer_2D. Sweep driver (checkpoint/resume for the
+  12h queue wall), calibration job, and Perlmutter + Frontier submit
+  scripts are written and smoke-tested locally. Estimated ~24 GPU-hours
+  total (~12-22 Perlmutter node-hours, ~11 on Frontier). NEXT: run
+  `calibrate_throughput.py` on the target machine, stage the 6 GB
+  dataset to $SCRATCH, set the account line, submit. Then write the
+  collation script (step 5 in `scripts/hpc/README.md`) — the only piece
+  deliberately left unbuilt.
+
 - **Simformer follow-ups** (adapter `pytorch.simformer` SHIPPED and
   validated against the analytic linear-Gaussian posterior; private
   NSTX-U amortized-reconstruction demo lives in ../TokaMakerGen):
