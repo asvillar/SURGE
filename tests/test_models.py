@@ -683,3 +683,23 @@ def test_convnext_unet_fit_predict_multichannel():
     pred = np.asarray(adapter.predict(X[:3]))
     assert pred.shape == (3, 2, 16, 24)
     assert np.isfinite(pred).all()
+
+
+def test_convnext_unet_fit_from_loader():
+    """Streaming path: train from a DataLoader, RAM-independent."""
+    pytest.importorskip("torch")
+    import torch
+    from torch.utils.data import DataLoader, TensorDataset
+
+    from surge.model.backends.convnext_unet import ConvNeXtUNetModel
+
+    rng = np.random.default_rng(0)
+    X = torch.from_numpy(rng.standard_normal((12, 3, 16, 24)).astype("f4"))
+    y = X[:, :2]
+    loader = DataLoader(TensorDataset(X, y), batch_size=4, shuffle=True)
+    m = ConvNeXtUNetModel(n_epochs=2, base_channels=8, depth=2,
+                          blocks_per_stage=1, device="cpu")
+    m.fit_from_loader(loader, in_channels=3, out_channels=2)
+    pred = m.predict(np.asarray(X[:3]))
+    assert pred.shape == (3, 2, 16, 24)
+    assert np.isfinite(pred).all()

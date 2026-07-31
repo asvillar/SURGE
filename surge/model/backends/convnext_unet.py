@@ -204,6 +204,47 @@ class ConvNeXtUNetModel:
         self.is_fitted = True
         return self
 
+    def fit_from_loader(self, loader, in_channels: int,
+                        out_channels: int) -> "ConvNeXtUNetModel":
+        """Train from a torch DataLoader yielding (x, y) batches.
+
+        Streams data lazily (e.g. HDF5-backed datasets), so the training
+        set size is bounded by disk, not RAM. No early stopping — the
+        epoch budget is the contract for streaming runs.
+        """
+        torch.manual_seed(self.random_state)
+        self._net = _CNextUNet(in_channels, out_channels,
+                               self.base_channels, self.depth,
+                               self.blocks_per_stage).to(self.device)
+        opt = torch.optim.AdamW(self._net.parameters(),
+                                lr=self.learning_rate,
+                                weight_decay=self.weight_decay)
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=self.n_epochs)
+        crit = nn.MSELoss()
+        from ._progress import ProgressList
+        self.training_history = ProgressList(
+            self.n_epochs, verbose=self.verbose,
+            log_file=self.log_file, desc=type(self).__name__)
+        for epoch in range(self.n_epochs):
+            self._net.train()
+            eloss, nseen = 0.0, 0
+            for xb, yb in loader:
+                xb = xb.to(self.device)
+                yb = yb.to(self.device)
+                opt.zero_grad()
+                loss = crit(self._net(xb), yb)
+                loss.backward()
+                opt.step()
+                eloss += loss.item() * len(xb)
+                nseen += len(xb)
+            sched.step()
+            self.training_history.append(
+                {"epoch": epoch + 1, "train_loss": eloss / max(nseen, 1)})
+        self.training_history.close()
+        self.is_fitted = True
+        return self
+
     def predict(self, X) -> np.ndarray:
         if not self.is_fitted or self._net is None:
             raise ValueError("Not fitted")
