@@ -194,6 +194,20 @@ MLP, log-density parity in the style of the ICRF surrogate papers:
 |:---:|:---:|:---:|
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_train.png"><img src="docs/assets/readme/parity_train.png" alt="Training parity density, R² 0.98"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_test.png"><img src="docs/assets/readme/parity_test.png" alt="Test parity density, R² 0.96"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_residuals.png"><img src="docs/assets/readme/parity_residuals.png" alt="Test residual distribution with KDE"/></picture> |
 
+**Reproducing QLKNN from its own public training data** — the
+`plasma.qlknn10d` benchmark trains directly on the 290M QuaLiKiz
+gyrokinetic flux calculations behind QLKNN ([Zenodo, CC-BY 4.0](https://zenodo.org/records/3497066)):
+a SURGE residual MLP reaches **R² 0.989** on 200k held-out fluxes (ITG
+leading flux) after 15 minutes of laptop training on a 2.2M-row
+subsample — above the paper-quality 0.95 gate, fully reproducible
+end-to-end from public data
+([`examples/qlknn10d_study.py`](examples/qlknn10d_study.py)):
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/qlknn10d.png"><img src="docs/assets/readme/qlknn10d.png"
+       alt="QLKNN10D reproduction: residual MLP R2 0.989 on held-out QuaLiKiz ITG fluxes, parity density plot"/></picture>
+</p>
+
 **Stellarator design surrogate — ConStellaration** (Proxima Fusion ×
 Hugging Face; Cadena et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
 One residual MLP maps the plasma boundary Fourier coefficients

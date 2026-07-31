@@ -320,6 +320,30 @@ benchmarks:
     desc: Flux compression in bad-curvature regions
   - name: log_10_qi
     desc: log₁₀ quasi-isodynamic quality (lower = better QI)
+- key: plasma.qlknn10d
+  name: QLKNN10D QuaLiKiz Training Data
+  capability: Scientific Domain
+  tier: 2
+  citation: van de Plassche et al. (2020) Phys. Plasmas 27, 022310 — QLKNN10D, Zenodo 10.5281/zenodo.3497066
+  url: https://zenodo.org/records/3497066
+  shape: 9 → 1
+  n: 2.4M / 290M
+  primary_metric: R²
+  threshold: R² ≥ 0.95
+  threshold_note: paper-quality gate for the ITG leading flux on unstable points; subset documented in the loader.
+  description: 'Reproduce QLKNN from its own public training data: predict the QuaLiKiz ITG ion heat flux from 9 gyrokinetic parameters.'
+  inputs:
+  - {name: Zeff, desc: Effective charge}
+  - {name: Ati, desc: Normalised ion temperature gradient}
+  - {name: Ate, desc: Normalised electron temperature gradient}
+  - {name: An, desc: Normalised density gradient (electrons = ions)}
+  - {name: q, desc: Safety factor}
+  - {name: smag, desc: Magnetic shear}
+  - {name: x, desc: Normalised minor radius}
+  - {name: Ti_Te, desc: Ion-to-electron temperature ratio}
+  - {name: Nustar, desc: Collisionality}
+  outputs:
+  - {name: efiITG, desc: ITG ion heat flux (leading flux, GyroBohm units)}
 - key: plasma.qlknn_transport
   name: QLKNN Turbulent Transport Coefficient
   capability: Scientific Domain

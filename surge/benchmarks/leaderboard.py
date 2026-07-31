@@ -738,6 +738,7 @@ def _load_dataset(benchmark_key: str):
         "fusion.mhd_sample":        lambda: _load_fusion_mhd_sample(),
         "plasma.cmod_density_limit":  lambda: _load_cmod_density_limit(),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
+        "plasma.qlknn10d":            lambda: _load_qlknn10d(),
         "plasma.constellaration":              lambda: _load_constellaration(),
         "plasma.constellaration_multioutput":  lambda: _load_constellaration_multioutput(),
         "thewell.gray_scott":         lambda: _load_thewell_gray_scott(),
@@ -1248,6 +1249,59 @@ def _load_thewell_gray_scott(*, n_train: int = 500, n_test: int = 100, seed: int
     )
     X = np.vstack([X_train, X_test])
     y = np.vstack([y_train, y_test])
+    return X, y
+
+
+
+def _load_qlknn10d(n_rows: int = 2_400_000, seed: int = 42):
+    """QLKNN10D: train on the ACTUAL QuaLiKiz gyrokinetic fluxes.
+
+    The public training data behind QLKNN (van de Plassche et al., Phys.
+    Plasmas 27, 022310 (2020); Zenodo 10.5281/zenodo.3497066, CC-BY 4.0):
+    290,304,000 QuaLiKiz flux calculations on a 9-D input grid
+    (Zeff, Ati, Ate, An, q, smag, x, Ti_Te, Nustar). This benchmark
+    predicts the ITG LEADING flux (ion heat flux efiITG, GyroBohm units,
+    a-normalised) on ITG-unstable points — the task the published QLKNN
+    solves — from a strided subsample of the full table (subset size in
+    the cache; grid coverage via stride sampling).
+
+    Requires data/datasets/benchmarks/plasma/qlknn10d/
+    gen5_9D_nions0_flat_filter10.h5 (13.3 GB, open download).
+    """
+    cache = _bench_data_root() / "plasma" / "qlknn10d_sub.npz"
+    if cache.exists():
+        d = np.load(cache)
+        return d["X"], d["y"]
+
+    import h5py
+
+    h5 = (_bench_data_root().parent.parent / "datasets" / "benchmarks"
+          / "plasma" / "qlknn10d" / "gen5_9D_nions0_flat_filter10.h5")
+    h5 = Path(str(h5).replace("benchmarks/benchmarks", "benchmarks"))
+    if not h5.exists():
+        # canonical location under the repo data dir
+        h5 = Path("data/datasets/benchmarks/plasma/qlknn10d/"
+                  "gen5_9D_nions0_flat_filter10.h5")
+    if not h5.exists():
+        raise FileNotFoundError(
+            "QLKNN10D file missing — download 13.3 GB from "
+            "https://zenodo.org/records/3497066 into "
+            "data/datasets/benchmarks/plasma/qlknn10d/")
+
+    with h5py.File(h5) as f:
+        N = f["input/block0_values"].shape[0]
+        # ~20% of rows are ITG-unstable; oversample by 5x then filter
+        stride = max(1, N // (5 * n_rows))
+        X = f["input/block0_values"][::stride]
+        efi = f["output/efiITG_GB/block0_values"][::stride][:, 0]
+        itg = f["output/ITG/block0_values"][::stride][:, 0]
+    mask = (itg == 1) & np.isfinite(efi) & (efi > 0)
+    X, y = X[mask].astype(np.float32), efi[mask].astype(np.float32)
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(len(X))[:n_rows]
+    X, y = X[perm], y[perm]
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, X=X, y=y)
     return X, y
 
 

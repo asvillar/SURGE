@@ -251,6 +251,14 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "van de Plassche et al. Nuclear Fusion 2020. "
         "[requires: pip install fusion_surrogates]",
     ),
+    "plasma.qlknn10d": (
+        None, "plasma", "regression", "9→1 (2.4M subsample of 290M)",
+        "Train on the ACTUAL QuaLiKiz gyrokinetic fluxes behind QLKNN: "
+        "predict the ITG leading flux (efiITG, GB units) from the 9-D "
+        "input grid (Zeff, Ati, Ate, An, q, smag, x, Ti_Te, Nustar). "
+        "van de Plassche et al. PoP 27, 022310 (2020); Zenodo "
+        "10.5281/zenodo.3497066 (CC-BY 4.0). [13.3 GB open download]",
+    ),
     "plasma.constellaration": (
         None, "plasma", "regression", "90→1 (10k subsample)",
         "ConStellaration boundary → log₁₀(qi). Subsamples 10k from paper-filtered cache (26,897 rows). "
@@ -309,6 +317,7 @@ _SHORT_ALIASES: dict[str, str] = {
     "lorenz63":             "sequence.lorenz63",
     # plasma
     "qlknn":                "plasma.qlknn_transport",
+    "qlknn10d":             "plasma.qlknn10d",
     "cmod":                 "plasma.cmod_density_limit",
     "constellaration":      "plasma.constellaration",
     "constellaration_paper":"plasma.constellaration_paper",
@@ -408,6 +417,16 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "feature_shape": "6",
         "target_shape": "2 classes",
         "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": []},
+    },
+    "plasma.qlknn10d": {
+        "dataset_source": "QLKNN10D Zenodo 10.5281/zenodo.3497066",
+        "license": "CC-BY 4.0",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/plasma/qlknn10d_sub.npz",
+        "sample_count": 2400000,
+        "feature_shape": "9",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "large", "optional_dependencies": ["h5py"]},
     },
     "plasma.qlknn_transport": {
         "dataset_source": "Google DeepMind fusion_surrogates QLKNN",

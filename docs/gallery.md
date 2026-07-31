@@ -146,6 +146,17 @@ Validated against the linear-Gaussian benchmark's closed-form posterior.
 
 ![Simformer SBI validation](assets/gallery/simformer_sbi.png)
 
+## Reproducing QLKNN from source data (QLKNN10D)
+
+Trains directly on the public 290M-row QuaLiKiz table behind QLKNN
+(Zenodo 10.5281/zenodo.3497066): residual MLP R² 0.989 on 200k held-out
+ITG leading fluxes from a 2.2M-row subsample, 15 min on a laptop —
+above the paper-quality 0.95 gate. The shipped QLKNN_7_11 network
+evaluated cross-generation scores 0.45 here (different data generation
+and flux normalisation — convention, not necessarily quality).
+
+![QLKNN10D reproduction study](assets/gallery/qlknn10d.png)
+
 ## Stellarator design — ConStellaration
 
 One residual MLP maps stellarator plasma-boundary Fourier coefficients
