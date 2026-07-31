@@ -1253,7 +1253,9 @@ def _load_thewell_gray_scott(*, n_train: int = 500, n_test: int = 100, seed: int
 
 
 
-def _load_qlknn10d(n_rows: int = 2_400_000, seed: int = 42):
+def _load_qlknn10d(n_rows: int = 2_400_000, seed: int = 42,
+                   h5_path: "Path | None" = None,
+                   cache_path: "Path | None" = None):
     """QLKNN10D: train on the ACTUAL QuaLiKiz gyrokinetic fluxes.
 
     The public training data behind QLKNN (van de Plassche et al., Phys.
@@ -1268,20 +1270,15 @@ def _load_qlknn10d(n_rows: int = 2_400_000, seed: int = 42):
     Requires data/datasets/benchmarks/plasma/qlknn10d/
     gen5_9D_nions0_flat_filter10.h5 (13.3 GB, open download).
     """
-    cache = _bench_data_root() / "plasma" / "qlknn10d_sub.npz"
+    cache = cache_path or (_bench_data_root() / "plasma" / "qlknn10d_sub.npz")
     if cache.exists():
         d = np.load(cache)
         return d["X"], d["y"]
 
     import h5py
 
-    h5 = (_bench_data_root().parent.parent / "datasets" / "benchmarks"
-          / "plasma" / "qlknn10d" / "gen5_9D_nions0_flat_filter10.h5")
-    h5 = Path(str(h5).replace("benchmarks/benchmarks", "benchmarks"))
-    if not h5.exists():
-        # canonical location under the repo data dir
-        h5 = Path("data/datasets/benchmarks/plasma/qlknn10d/"
-                  "gen5_9D_nions0_flat_filter10.h5")
+    h5 = h5_path or (_bench_data_root() / "plasma" / "qlknn10d"
+                     / "gen5_9D_nions0_flat_filter10.h5")
     if not h5.exists():
         raise FileNotFoundError(
             "QLKNN10D file missing — download 13.3 GB from "
