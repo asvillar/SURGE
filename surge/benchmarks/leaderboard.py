@@ -203,6 +203,34 @@ _BENCHMARK_MODEL_KWARGS: dict[str, dict] = {
 }
 
 
+def _task_mismatch(model_key: str, task_type: str) -> str | None:
+    """Reason why ``model_key`` cannot serve ``task_type``, else None.
+
+    Only fires when a model is KNOWN to belong to the opposite task — a
+    regressor asked to classify, or vice versa. Models outside the curated
+    lists (neural operators, generative backends, GPs) pass through
+    untouched, so this never blocks a legitimate combination.
+
+    Without this gate an explicit ``--model pytorch.mlp`` on a
+    classification benchmark trains happily and then dies inside sklearn's
+    metric code with "Classification metrics can't handle a mix of
+    multiclass and continuous targets" — a confusing error, several
+    minutes of wasted training, and no persisted record of the attempt.
+    """
+    if task_type not in ("regression", "classification"):
+        return None
+    regression = set(_default_models_for("regression"))
+    classification = set(_default_models_for("classification"))
+    if task_type == "regression" and model_key in classification - regression:
+        return (f"{model_key} is a classifier; "
+                f"'{task_type}' benchmarks need a regression model")
+    if task_type == "classification" and model_key in regression - classification:
+        return (f"{model_key} is a regressor; "
+                f"'{task_type}' benchmarks need a classification model "
+                f"(try {model_key}_classifier)")
+    return None
+
+
 def _default_models_for(task_type: str, benchmark_key: str | None = None) -> list[str]:
     # Per-benchmark override takes precedence.
     if benchmark_key is not None and benchmark_key in _BENCHMARK_MODEL_OVERRIDES:
@@ -420,6 +448,20 @@ def run_leaderboard(
                     res.save(root=save_root)
                 results[key].append(res)
                 print(f"  [skip] {model_key} not in MODEL_REGISTRY", file=sys.stderr)
+                continue
+
+            # Explicit --model/--compare-models bypasses the task filter that
+            # _default_models_for applies; catch the mismatch here instead of
+            # failing later inside the metric computation.
+            mismatch = _task_mismatch(model_key, task_type)
+            if mismatch is not None:
+                res = _skip_result(
+                    key, model_key, reason=mismatch, stage="task_compatibility",
+                )
+                if save_root is not None:
+                    res.save(root=save_root)
+                results[key].append(res)
+                print(f"  [skip] {mismatch}", file=sys.stderr)
                 continue
 
             # Load cached HP when requested.
