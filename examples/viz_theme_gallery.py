@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -48,6 +49,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import CenteredNorm, LogNorm
 
+from surge.viz.hpo import robust_hpo_ylim
 from surge.viz.theme import (
     density_cmap,
     diverging_cmap,
@@ -301,9 +303,14 @@ def training_figure(hpo_run: Path, mode: str):
 
 def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
     """HPO history, publication style (Sánchez-Villar et al.): one series
-    per optimizer/model — thin solid per-trial trace, dashed running best,
-    gold-edged star at the best trial with a labelled score box, and an
-    optional dashed black reference line.
+    per optimizer/model — per-trial markers (colored by log10 learning
+    rate for a single tuned model), dashed running-best step line,
+    gold-edged star at the best trial with an in-axes score chip, and an
+    optional dashed reference line. Y-limits are the 5th-100th (maximize)
+    or 0th-95th (minimize) percentile of finite values with small padding,
+    so a handful of diverged trials among many can't collapse the axis;
+    those trials are drawn instead as small muted triangles clamped to the
+    axis edge. Campaigns of <=10 trials keep plain autoscaling.
     """
     files = sorted((hpo_run / "hpo").glob("*_hpo.json"))
     series = []
@@ -315,25 +322,59 @@ def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
         values = np.array([t["value"] for t in trials], dtype=float)
         maximize = d.get("direction", "maximize") == "maximize"
         running = (np.maximum if maximize else np.minimum).accumulate(values)
+        lrs = np.array([t.get("params", {}).get("learning_rate", np.nan)
+                        for t in trials], dtype=float)
         series.append({
             "name": f.stem.replace("_hpo", ""),
             "numbers": np.array([t["number"] for t in trials]),
             "values": values,
             "running": running,
+            "lr": lrs,
             "metric": d.get("metric", "objective"),
             "best": d.get("best_trial", {}),
+            "maximize": maximize,
         })
     if not series:
         return None
     metric = series[0]["metric"]
+    maximize = series[0]["maximize"]
     star_face = "#FFD700"  # gold star fill, edge in series color
+
+    # Robust y-limits + per-series diverged-trial masks (shared helper —
+    # also used by mission_control_figure's SEARCH CONVERGENCE inset).
+    ylim_lo, ylim_hi, ylim_pad, diverged_masks = robust_hpo_ylim(
+        [s["values"] for s in series], maximize)
+
+    # Color scatter by log10(learning_rate) only for a single tuned series
+    # that actually records it; a multi-model overlay (e.g. rf + mlp) keeps
+    # each model's own categorical series color instead.
+    color_by_lr = (len(series) == 1 and series[0]["lr"].size
+                   and np.isfinite(series[0]["lr"]).all())
 
     with surge_theme(mode) as p:
         fig, ax = plt.subplots(figsize=(6.0, 3.5))
+        cmap = sequential_cmap(mode)
+        mappable = None
+        n_diverged = 0
         for i, s in enumerate(series):
-            c = p["series"][i]
-            ax.plot(s["numbers"], s["values"], color=c, lw=1.1, alpha=0.85,
-                    label=s["name"], zorder=2)
+            c = p["series"][1] if color_by_lr else p["series"][i]
+            diverged = diverged_masks[i]
+            n_diverged += int(diverged.sum())
+            keep = ~diverged
+            if color_by_lr:
+                mappable = ax.scatter(
+                    s["numbers"][keep], s["values"][keep],
+                    c=np.log10(s["lr"][keep]), cmap=cmap, s=20, alpha=0.85,
+                    zorder=2, label=s["name"])
+            else:
+                ax.scatter(s["numbers"][keep], s["values"][keep], color=c,
+                           s=20, alpha=0.8, zorder=2, label=s["name"])
+            if diverged.any():
+                clamp_y = ylim_lo if maximize else ylim_hi
+                ax.scatter(s["numbers"][diverged],
+                           np.full(int(diverged.sum()), clamp_y),
+                           marker="v" if maximize else "^", s=26,
+                           color=p["muted"], zorder=2)
             ax.plot(s["numbers"], s["running"], color=c, lw=1.9,
                     ls=(0, (5, 2)), drawstyle="steps-post", zorder=3)
             best = s["best"]
@@ -341,23 +382,31 @@ def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
                 bi, bv = best.get("number"), best.get("value")
                 ax.scatter([bi], [bv], marker="*", s=430, zorder=5,
                            facecolor=star_face, edgecolor=c, linewidth=1.6)
-                ax.annotate(f"{metric} = {fmt_metric(bv)}",
-                            (bi, bv), textcoords="offset points",
-                            xytext=(-8, 12), ha="right", fontsize=7.5,
-                            color=p["ink"],
-                            bbox={"boxstyle": "round,pad=0.3",
-                                  "facecolor": p["surface"],
-                                  "edgecolor": c, "linewidth": 1.0})
+                _stat_chip(ax, f"{s['name']}: {metric} = {fmt_metric(bv)}", p,
+                           loc=(0.03, 0.95 - i * 0.10))
         if reference is not None:
             ax.axhline(reference, color=p["ink"], lw=1.4, ls=(0, (6, 3)),
                        zorder=1, label=f"reference ({reference})")
         ax.plot([], [], color=p["ink2"], lw=1.9, ls=(0, (5, 2)),
                 label="best so far")
+        if n_diverged:
+            # legend proxy (not ax.text) so the muted label sits in the
+            # reserved legend box instead of overlapping the clamped
+            # triangles it describes
+            ax.scatter([], [], marker="v" if maximize else "^", s=26,
+                       color=p["muted"], label=f"{n_diverged} diverged")
         if _is_loss_like(metric) and all((s["values"] > 0).all() for s in series):
             ax.set_yscale("log")
+        if ylim_lo is not None:
+            ax.set_ylim(ylim_lo - ylim_pad, ylim_hi + ylim_pad)
         ax.set_xlabel("iteration"); ax.set_ylabel(metric)
         ax.set_title("Hyperparameter optimization")
-        ax.legend(loc="lower right", fontsize=7)
+        ax.legend(loc="lower right" if maximize else "upper right", fontsize=7)
+        if mappable is not None:
+            cb = fig.colorbar(mappable, ax=ax, pad=0.02)
+            cb.set_label(r"$\log_{10}$ learning rate", fontsize=7.5,
+                         color=p["ink2"])
+            cb.ax.tick_params(labelsize=7, colors=p["muted"])
         return fig
 
 
@@ -1249,6 +1298,22 @@ def field2d_figure(mode: str, seed: int = 0, n: int = 600, side: int = 32,
 
 # --------------------------------------------------- HPO mission control
 
+def _param_label(key: str) -> str:
+    """Human-readable label for a raw Optuna HPO search-space key."""
+    fixed = {
+        "n_blocks": "depth (blocks)",
+        "learning_rate": "learning rate",
+        "batch_size": "batch size",
+        "dropout_rate": "dropout",
+    }
+    if key in fixed:
+        return fixed[key]
+    m = re.match(r"hidden_layers_(\d+)_log$", key)
+    if m:
+        return f"width · block {m.group(1)}"
+    return key.replace("_", " ")
+
+
 def mission_control_figure(run_dir: Path, mode: str,
                            model_name: str = "qlknn_residual_mlp"):
     """One-look HPO campaign dashboard for a run: per-trial loss curves,
@@ -1315,9 +1380,19 @@ def mission_control_figure(run_dir: Path, mode: str,
         ax = fig.add_subplot(gs[0, 1])
         _card(ax, p, "SEARCH CONVERGENCE")
         xs = np.arange(len(values))
-        run_best = np.maximum.accumulate(values)
-        ax.plot(xs, values, "o", ms=4, color=p["series"][0], alpha=0.75,
-                label="trial")
+        values_arr = np.asarray(values, dtype=float)
+        run_best = np.maximum.accumulate(values_arr)
+        # robust y-limits + diverged-trial mask (shared with hpo_figure) —
+        # a handful of diverged trials can't collapse this inset either
+        sc_lo, sc_hi, sc_pad, sc_masks = robust_hpo_ylim([values_arr], True)
+        sc_diverged = sc_masks[0]
+        ax.plot(xs[~sc_diverged], values_arr[~sc_diverged], "o", ms=4,
+                color=p["series"][0], alpha=0.75, label="trial")
+        if sc_diverged.any():
+            ax.scatter(xs[sc_diverged],
+                       np.full(int(sc_diverged.sum()), sc_lo),
+                       marker="v", s=22, color=p["muted"], zorder=3,
+                       label=f"{int(sc_diverged.sum())} diverged")
         ax.plot(xs, run_best, color=p["series"][0], lw=1.4, ls=(0, (4, 3)),
                 label="running best")
         ax.plot(best_i, values[best_i], marker="*", ms=15,
@@ -1326,6 +1401,8 @@ def mission_control_figure(run_dir: Path, mode: str,
         ax.annotate(f"{values[best_i]:.3f}", (best_i, values[best_i]),
                     textcoords="offset points", xytext=(-8, -13),
                     ha="right", fontsize=7.5, color=p["ink"], **mono)
+        if sc_lo is not None:
+            ax.set_ylim(sc_lo - sc_pad, sc_hi + sc_pad)
         ax.set_xlabel("trial"); ax.set_ylabel(trials[0].get("metric", "value"))
         ax.legend(fontsize=7, loc="lower right")
 
@@ -1336,6 +1413,23 @@ def mission_control_figure(run_dir: Path, mode: str,
         bp = trials[best_i].get("params", {})
         te = metrics.get("test", {})
         tm = metrics.get("timings", {})
+
+        # collapse the raw Optuna depth/width keys (n_blocks +
+        # hidden_layers_<i>_log, which vary in count trial to trial) into
+        # one readable row; prefer an explicit widths list from the run's
+        # own artifacts if one is present.
+        hidden_widths = (metrics.get("hidden_layers")
+                          or metrics.get("architecture", {}).get("hidden_layers"))
+        if not hidden_widths:
+            log_keys = sorted(
+                (k for k in bp if re.match(r"hidden_layers_\d+_log$", k)),
+                key=lambda k: int(k.split("_")[2]))
+            if log_keys:
+                hidden_widths = [round(float(np.exp(bp[k]))) for k in log_keys]
+        collapsed = {"n_blocks"} | {k for k in bp
+                                     if re.match(r"hidden_layers_\d+_log$", k)}
+        extra_params = {k: v for k, v in bp.items() if k not in collapsed}
+
         lines = [
             ("MODEL", model_name),
             ("TRIALS", f"{len(trials)} (TPE, max val_r2)"),
@@ -1344,9 +1438,13 @@ def mission_control_figure(run_dir: Path, mode: str,
             ("TEST RMSE", f"{te.get('rmse', float('nan')):.3f} gB"),
             ("FIT TIME", fmt_metric(tm.get("train_seconds"), "runtime")
              if tm.get("train_seconds") else "—"),
-        ] + [(k.upper().replace("_", " "),
-              f"{v:.3g}" if isinstance(v, float) else str(v))
-             for k, v in bp.items()]
+        ]
+        if hidden_widths:
+            lines.append(("HIDDEN LAYERS", str(list(hidden_widths))))
+        lines += [(_param_label(k).upper(),
+                    f"{v:.3g}" if isinstance(v, float) else str(v))
+                   for k, v in extra_params.items()]
+        lines = lines[:10]  # cap card rows so it never overflows into (6)
         for j, (k, v) in enumerate(lines):
             y = 0.93 - j * 0.095
             ax.text(0.06, y, k, transform=ax.transAxes, fontsize=7.5,
@@ -1375,8 +1473,16 @@ def mission_control_figure(run_dir: Path, mode: str,
         # (5) which hyperparameters mattered (rank correlation with score)
         ax = fig.add_subplot(gs[1, 1])
         _card(ax, p, "PARAMETER SENSITIVITY")
+        # keys common to every trial only — variable_list spaces (e.g. a
+        # tunable number of hidden-layer blocks) give trials different
+        # param counts, so anything not shared by all of them is dropped
+        # rather than KeyError-ing on the Spearman pass below.
+        common_keys = set(trials[0].get("params", {}))
+        for t in trials[1:]:
+            common_keys &= set(t.get("params", {}))
         pkeys = [k for k in trials[0].get("params", {})
-                 if isinstance(trials[0]["params"][k], (int, float))]
+                 if k in common_keys
+                 and isinstance(trials[0]["params"][k], (int, float))]
         rho = []
         for k in pkeys:
             vals = [t["params"][k] for t in trials]
@@ -1387,8 +1493,7 @@ def mission_control_figure(run_dir: Path, mode: str,
         for y, o in zip(ypos, order):
             col = p["series"][0] if rho[o] >= 0 else p["series"][1]
             ax.barh(y, rho[o], height=0.55, color=col, alpha=0.85)
-            ax.text(0.02 if rho[o] < 0 else -0.02, y, pkeys[order[y]] if False
-                    else pkeys[o],
+            ax.text(0.02 if rho[o] < 0 else -0.02, y, _param_label(pkeys[o]),
                     ha="left" if rho[o] < 0 else "right", va="center",
                     fontsize=7.5, color=p["ink"], **mono)
         ax.axvline(0, color=p["axis"], lw=0.9)
