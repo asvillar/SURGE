@@ -601,7 +601,7 @@ def _run_hpo(
     except KeyError:
         pass
 
-    from optuna.trial import TrialState
+    from optuna.trial import FixedTrial, TrialState
 
     def _hpo_manifest_best_cb(
         study: "optuna.Study", finished: "optuna.FrozenTrial"
@@ -610,7 +610,10 @@ def _run_hpo(
             return
         if not hpo_track:
             return
-        arch = _hpo_architecture_from_trial_params(finished.params)
+        resolved_params = _sample_hpo_params(
+            FixedTrial(finished.params), config.search_space
+        )
+        arch = _hpo_architecture_from_trial_params(resolved_params)
         line = {
             "trial": finished.number,
             "value": float(finished.value),
@@ -752,20 +755,14 @@ def _run_hpo(
             if tqdm_pbar is not None:
                 tqdm_pbar.close()
 
-    # Resolve _index params (categoricals with list/tuple choices) back to actual values
-    best_params = dict(base_spec.params)
-    for k, v in study.best_trial.params.items():
-        if k.endswith("_index") and k[:-6] in config.search_space:
-            cat_spec = config.search_space[k[:-6]]
-            if cat_spec.get("type") == "categorical":
-                choices = cat_spec["choices"]
-                normalized = [
-                    tuple(c) if isinstance(c, list) else c for c in choices
-                ]
-                val = normalized[v]
-                best_params[k[:-6]] = list(val) if isinstance(val, tuple) else val
-                continue
-        best_params[k] = v
+    # Replay the search space against the winning trial's raw Optuna params so every
+    # spec type (categorical `_index`, `variable_list` num-layers/log-int elements, ...)
+    # is reconstructed the same way it was sampled during the study, instead of copying
+    # raw Optuna keys (e.g. "hidden_layers_0_log") straight into the refit params.
+    best_sampled = _sample_hpo_params(
+        FixedTrial(study.best_trial.params), config.search_space
+    )
+    best_params = {**base_spec.params, **best_sampled}
     updated_spec = replace(base_spec, params=best_params)
 
     hpo_summary: Dict[str, Any] = {
