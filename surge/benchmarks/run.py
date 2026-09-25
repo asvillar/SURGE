@@ -451,6 +451,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--train-log-file", metavar="PATH", default=None,
                     help="Stream per-epoch loss records to this JSONL file during training.")
+    ap.add_argument(
+        "--input-features", metavar="NAME", default=None,
+        help="Apply a named input-feature transform (surge.benchmarks.features registry) "
+             "to X right after loading, before the train/test split. E.g. "
+             "'stellarator_geometry' for plasma.constellaration.* benchmarks. "
+             "Requires --model (single-benchmark run). Default: no transform.",
+    )
 
     # ── persistence ───────────────────────────────────────────────────────────
     ap.add_argument("--output", "-o", type=Path, default=None,
@@ -718,11 +725,13 @@ def main(argv: list[str] | None = None) -> int:
                 args.model, benchmark_info(single_bm_key)["task_type"])
             if _mm is not None:
                 raise ValueError(_mm)
-        if _monitor_kwargs and args.model:
+        if (_monitor_kwargs or args.input_features) and args.model:
             from .leaderboard import _run_with_adapter
             from surge.model.registry import MODEL_REGISTRY
             adapter = MODEL_REGISTRY.create(args.model, **_monitor_kwargs)
-            result = _run_with_adapter(single_bm_key, adapter, seed=args.seed)
+            result = _run_with_adapter(
+                single_bm_key, adapter, seed=args.seed, input_features=args.input_features
+            )
             if result is None:
                 print("Error: benchmark run failed (see stderr above).", file=sys.stderr)
                 return 1

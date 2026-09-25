@@ -157,8 +157,26 @@ def _reg_metrics(y_test, y_pred) -> dict[str, float]:
     return {"test_r2": r2, "test_rmse": rmse}
 
 
-def _multioutput_reg_extras(y_test, y_pred) -> tuple[dict[str, float], dict[str, Any]]:
-    """Per-column R² and normalised RMSE for vector-valued regression targets."""
+def _multioutput_reg_extras(
+    y_test,
+    y_pred,
+    names: list[str] | None = None,
+    kinds: dict[str, str] | None = None,
+) -> tuple[dict[str, float], dict[str, Any]]:
+    """Per-column R² and normalised RMSE for vector-valued regression targets.
+
+    Generic across datasets — nothing here is ConStellaration-specific.
+
+    Parameters
+    ----------
+    names: optional per-column target names, in the same order as the
+        columns of ``y_test``/``y_pred``. When given, adds
+        ``extra["per_metric_r2_by_name"]``.
+    kinds: optional map of ``name -> kind`` (e.g. from
+        :func:`surge.benchmarks.dataset_io.output_kinds`). When given
+        together with ``names``, adds one ``test_r2_<kind>_mean`` metric
+        per distinct kind present plus ``extra["metric_kinds"]``.
+    """
     import numpy as np
     from sklearn.metrics import r2_score
 
@@ -169,12 +187,30 @@ def _multioutput_reg_extras(y_test, y_pred) -> tuple[dict[str, float], dict[str,
     per = [float(r2_score(y_test[:, j], y_pred[:, j])) for j in range(y_test.shape[1])]
     std_y = float(np.std(y_test))
     rmse = float(np.sqrt(np.mean((y_pred - y_test) ** 2)))
-    metrics = {
+    metrics: dict[str, float] = {
         "min_r2": min(per),
         "max_r2": max(per),
         "test_nrmse": rmse / (std_y + 1e-12),
     }
-    extra = {"per_metric_r2": per}
+    extra: dict[str, Any] = {"per_metric_r2": per}
+
+    if names is not None and len(names) == len(per):
+        per_by_name = dict(zip(names, per))
+        extra["per_metric_r2_by_name"] = per_by_name
+
+        if kinds is not None:
+            by_kind: dict[str, list[float]] = {}
+            name_kinds: dict[str, str] = {}
+            for name, r2 in per_by_name.items():
+                kind = kinds.get(name)
+                if kind is None:
+                    continue
+                by_kind.setdefault(kind, []).append(r2)
+                name_kinds[name] = kind
+            for kind, vals in by_kind.items():
+                metrics[f"test_r2_{kind}_mean"] = float(np.mean(vals))
+            extra["metric_kinds"] = name_kinds
+
     return metrics, extra
 
 

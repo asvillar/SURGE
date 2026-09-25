@@ -283,10 +283,16 @@ benchmarks:
   url: https://arxiv.org/abs/2506.19583
   shape: 90 → 12
   n: 26,897
-  primary_metric: R²
-  threshold: R² ≥ 0.85
-  threshold_note: 'One model, all 12 metrics. Also logged: RMSE, min/max per-metric R², NRMSE.
-    HPO: surge run -b constellaration_multi -m pytorch.residual_mlp --hpo'
+  primary_metric: R² (equilibrium mean, 8 metrics)
+  threshold: equilibrium mean R² ≥ 0.85
+  threshold_note: 'Pass gate uses test_r2_equilibrium_mean over the 8 metrics that require
+    the VMEC++ equilibrium solve. Of the other 4: aspect_ratio, max_elongation and
+    average_triangularity are closed-form geometry functions of the boundary shape
+    (reported as a "geometry sanity" check — surrogate should reach R² >= 0.99, a
+    warning is appended if not) and aspect_ratio_over_edge_rotational_transform is
+    derived (an algebraic ratio of two other labels). test_r2 (all 12 metrics) is
+    still logged for backward compatibility. Also logged: RMSE, min/max per-metric
+    R², NRMSE. HPO: surge run -b constellaration_multi -m pytorch.residual_mlp --hpo'
   description: Single joint surrogate predicting all 12 stellarator metrics from boundary
     shape (alternative to the paper’s 12-model protocol).
   io_note: 'Joint multi-output benchmark (not the paper’s 12-model protocol). Workflow: examples/constellaration_multioutput_workflow.py'
@@ -298,28 +304,40 @@ benchmarks:
   outputs:
   - name: aspect_ratio
     desc: Plasma aspect ratio
+    kind: geometry
   - name: aspect_ratio_over_edge_rotational_transform
     desc: Aspect ratio / edge ι
+    kind: derived
   - name: max_elongation
     desc: Maximum elongation
+    kind: geometry
   - name: axis_rotational_transform_over_n_field_periods
     desc: Axis ι / n_fp
+    kind: equilibrium
   - name: edge_rotational_transform_over_n_field_periods
     desc: Edge ι / n_fp
+    kind: equilibrium
   - name: axis_magnetic_mirror_ratio
     desc: Axis magnetic mirror ratio
+    kind: equilibrium
   - name: edge_magnetic_mirror_ratio
     desc: Edge magnetic mirror ratio
+    kind: equilibrium
   - name: average_triangularity
     desc: Average triangularity
+    kind: geometry
   - name: vacuum_well
     desc: Vacuum magnetic well
+    kind: equilibrium
   - name: minimum_normalized_magnetic_gradient_scale_length
     desc: Min normalised |∇B| scale length
+    kind: equilibrium
   - name: flux_compression_in_regions_of_bad_curvature
     desc: Flux compression in bad-curvature regions
+    kind: equilibrium
   - name: log_10_qi
     desc: log₁₀ quasi-isodynamic quality (lower = better QI)
+    kind: equilibrium
 - key: plasma.qlknn10d
   name: QLKNN10D QuaLiKiz Training Data
   capability: Scientific Domain

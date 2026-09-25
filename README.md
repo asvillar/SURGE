@@ -211,18 +211,26 @@ end-to-end from public data
 **Stellarator design surrogate — ConStellaration** (Proxima Fusion ×
 Hugging Face; Cadena et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
 One residual MLP maps the plasma boundary Fourier coefficients
-$(R_{mn}, Z_{mn})$ to **12 equilibrium figures of merit** for 26,897
-QI-like configurations — quasi-isodynamic quality at R² **0.95** (trained
-to saturation: the earlier 60-epoch cap left ~0.015 R² on the table), with
-the last closed flux surface rendered in 3D:
+$(R_{mn}, Z_{mn})$ to 12 stellarator metrics across 26,897 QI-like
+configurations, replacing the VMEC++ ideal-MHD equilibrium solve and
+Boozer-coordinate QI evaluation (minutes per configuration) for the 8
+metrics that need it — ι on axis/edge, both mirror ratios, vacuum
+well, min $L_{\nabla B}$, flux compression, log₁₀(QI) — at
+**equilibrium-mean R² 0.919** in the benchmark run (log₁₀ QI alone: R²
+0.936; the figure's saturation-trained model reaches 0.951). The other 3
+(aspect ratio, elongation, triangularity) are closed-form functions of
+the boundary and are not shown as learned results; the benchmark
+reports them as a sanity check. An optional
+`--input-features stellarator_geometry` flag feeds them back in as
+physics-informed inputs. Last closed flux surface rendered in 3D:
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/constellaration.png"><img src="docs/assets/readme/constellaration.png"
-       alt="ConStellaration: stellarator boundary cross-sections, log10 QI parity density (R² 0.93), per-metric learnability bars"/></picture>
+       alt="ConStellaration: stellarator boundary cross-sections, log10 QI parity density (R² 0.951), learnability bars for the 8 equilibrium metrics"/></picture>
 </p>
 
 ```bash
-surge bench -b plasma.constellaration -m pytorch.residual_mlp --seeds 3
+surge bench -b constellaration_multi -m pytorch.residual_mlp --seeds 3
 ```
 
 **Optimization, uncertainty, and monitoring**:
