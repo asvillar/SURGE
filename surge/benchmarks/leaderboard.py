@@ -583,8 +583,16 @@ def _aggregate_seed_results(results: list[BenchmarkResult]) -> BenchmarkResult:
     )
 
 
-def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> BenchmarkResult | None:
-    """Run a benchmark using a pre-instantiated adapter."""
+def _run_with_adapter(
+    benchmark_key: str, adapter: Any, *, seed: int, input_features: str | None = None
+) -> BenchmarkResult | None:
+    """Run a benchmark using a pre-instantiated adapter.
+
+    ``input_features``, if given, names a transform registered in
+    :mod:`surge.benchmarks.features` (e.g. ``"stellarator_geometry"``);
+    it is applied to ``X`` right after loading and before the train/test
+    split. Default ``None`` leaves ``X`` unchanged.
+    """
     import time
 
     import numpy as np
@@ -603,6 +611,18 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
     except Exception as exc:
         print(f"  [error] could not load {benchmark_key}: {exc}", file=sys.stderr)
         return _skip_result(benchmark_key, model_key, reason=str(exc), stage="data_load")
+
+    input_features_meta: dict[str, Any] | None = None
+    if input_features:
+        from .features import apply_input_features
+
+        n_before = X.shape[1]
+        X = apply_input_features(input_features, X, benchmark_key)
+        input_features_meta = {
+            "input_features": input_features,
+            "input_width": int(X.shape[1]),
+            "input_width_before": int(n_before),
+        }
 
     # Vision benchmarks: official train/test split + 10% train holdout for val/early-stop.
     X_val, y_val = None, None
@@ -684,7 +704,19 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
             # Support multi-output: only ravel for 1-D targets.
             y_pred_mo = y_pred.ravel() if y_test.ndim == 1 else y_pred
             metrics = _reg_metrics(y_test, y_pred_mo)
-            mo_metrics, mo_extra = _multioutput_reg_extras(y_test, y_pred_mo)
+
+            from .dataset_io import get_benchmark_io, output_kinds
+
+            io_spec = get_benchmark_io(benchmark_key)
+            mo_names = (
+                [o["name"] for o in io_spec["outputs"]]
+                if io_spec and io_spec.get("outputs")
+                else None
+            )
+            mo_kinds = output_kinds(io_spec) if io_spec else None
+            mo_metrics, mo_extra = _multioutput_reg_extras(
+                y_test, y_pred_mo, names=mo_names, kinds=mo_kinds
+            )
             metrics.update(mo_metrics)
 
         # UQ metrics — computed when the model exposes predict_with_uncertainty.
@@ -718,6 +750,22 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         metrics["gpu_peak_memory_mb"] = gpu_peak
     passed = _check_pass(benchmark_key, metrics)
 
+    message = f"leaderboard run via {model_key}"
+    if benchmark_key == "plasma.constellaration_multioutput":
+        per_by_name = mo_extra.get("per_metric_r2_by_name") or {}
+        name_kinds = mo_extra.get("metric_kinds") or {}
+        bad_geometry = [
+            (name, r2)
+            for name, r2 in per_by_name.items()
+            if name_kinds.get(name) == "geometry" and r2 < 0.99
+        ]
+        if bad_geometry:
+            detail = ", ".join(f"{name} R²={r2:.2f} < 0.99" for name, r2 in bad_geometry)
+            noun = "target" if len(bad_geometry) == 1 else "targets"
+            message += (
+                f" | geometry sanity: {detail} — closed-form {noun} not recovered"
+            )
+
     result_extra: dict[str, Any] = {
         "status": "completed",
         "n_train": len(X_train),
@@ -726,6 +774,8 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         "resources": resource_info,
     }
     result_extra.update(mo_extra)
+    if input_features_meta:
+        result_extra.update(input_features_meta)
 
     return BenchmarkResult(
         benchmark_key=benchmark_key,
@@ -734,7 +784,7 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         task_type=task_type,
         metrics=metrics,
         passed=passed,
-        message=f"leaderboard run via {model_key}",
+        message=message,
         extra=result_extra,
     )
 
@@ -1782,7 +1832,11 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "thewell.gray_scott": ("test_relative_l2", 0.30),
         # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
         "plasma.constellaration_paper": ("test_r2_mean", 0.97),
-        "plasma.constellaration_multioutput": ("test_r2", 0.85),
+        # Gate on the 8 metrics that need the VMEC++ equilibrium solve — the
+        # geometry (3) and derived (1) targets are reported separately as a
+        # sanity check (see the geometry-sanity warning in the result message)
+        # and would otherwise mask a weak surrogate with an easy R²=1.0.
+        "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
     }
     if benchmark_key not in _THRESHOLDS:
         return True

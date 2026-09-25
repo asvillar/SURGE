@@ -378,7 +378,8 @@ For each benchmark below, a verifier should return:
 | n | 26,897 (same filtered cache as paper benchmark) |
 | Source | Same as `plasma.constellaration_paper` |
 | Outputs | aspect_ratio, elongation, mirror ratios, triangularity, vacuum_well, log₁₀(qi), etc. — see `surge/benchmarks/dataset_io.py` |
-| Metric | R² (joint model) |
+| Target classes | **equilibrium** (8, need the VMEC++ solve): ι axis/edge, both mirror ratios, vacuum well, min L∇B, flux compression, log₁₀(qi) · **geometry** (3, closed-form from the boundary): aspect_ratio, max_elongation, average_triangularity · **derived** (1, algebraic ratio of two other outputs): aspect_ratio_over_edge_rotational_transform — see `output_kinds()` in `surge/benchmarks/dataset_io.py` |
+| Metric | **Gate is the equilibrium-mean R²** (mean over the 8 equilibrium targets); geometry targets are reported as a sanity check (expected R² ≥ 0.99), not part of the gate; log₁₀(qi) also reported standalone |
 
 ### `plasma.qlknn_transport`
 

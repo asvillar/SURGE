@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import statistics
 import sys
@@ -1551,18 +1552,40 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
     mu_x, sd_x = Xtr.mean(0), Xtr.std(0) + 1e-9
     mu_y, sd_y = Ytr.mean(0), Ytr.std(0) + 1e-9
 
-    try:
-        # trained to saturation: 60-epoch caps left ~0.015 R2 on the table
-        adapter = MODEL_REGISTRY.create(
-            "pytorch.residual_mlp", hidden_layers=[512, 512, 256],
-            n_epochs=n_epochs, patience=60, patience_window=10,
-            random_state=seed)
-    except KeyError:
-        return None
-    adapter.fit(((Xtr - mu_x) / sd_x).astype(np.float32),
-                ((Ytr - mu_y) / sd_y).astype(np.float32))
-    pred = np.asarray(adapter.predict(
-        ((Xte - mu_x) / sd_x).astype(np.float32))) * sd_y + mu_y
+    hidden_layers = [512, 512, 256]
+    cache_cfg = {"seed": seed, "n_epochs": n_epochs, "hidden_layers": hidden_layers}
+    cache_path = (_REPO / "examples" / "viz_gallery_output"
+                  / "constellaration_predictions.npz")
+    pred = None
+    if cache_path.exists() and os.environ.get("SURGE_GALLERY_NO_CACHE") != "1":
+        try:
+            c = np.load(cache_path, allow_pickle=True)
+            if (json.loads(str(c["config"])) == cache_cfg
+                    and int(c["n_train"]) == len(tr)
+                    and int(c["n_test"]) == len(te)
+                    and list(c["names"]) == names):
+                Yte, pred = c["Yte"], c["pred"]
+                print("[cache] using constellaration_predictions.npz")
+        except Exception:
+            pred = None
+
+    if pred is None:
+        try:
+            # trained to saturation: 60-epoch caps left ~0.015 R2 on the table
+            adapter = MODEL_REGISTRY.create(
+                "pytorch.residual_mlp", hidden_layers=hidden_layers,
+                n_epochs=n_epochs, patience=60, patience_window=10,
+                random_state=seed)
+        except KeyError:
+            return None
+        adapter.fit(((Xtr - mu_x) / sd_x).astype(np.float32),
+                    ((Ytr - mu_y) / sd_y).astype(np.float32))
+        pred = np.asarray(adapter.predict(
+            ((Xte - mu_x) / sd_x).astype(np.float32))) * sd_y + mu_y
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(cache_path, Yte=Yte, pred=pred, names=np.array(names),
+                 n_train=len(tr), n_test=len(te),
+                 config=json.dumps(cache_cfg))
 
     r2s = [r2_score(Yte[:, j], pred[:, j]) for j in range(Y.shape[1])]
     qi_j = names.index("log_10_qi")
@@ -1673,26 +1696,37 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
         ax.set_title("(b) quasi-isodynamic quality", fontsize=9)
         _stat_chip(ax, f"R² = {r2s[qi_j]:.3f}", p, loc=(0.05, 0.94))
 
-        # (c) which figures of merit are learnable from shape alone
+        # (c) which of the 8 equilibrium figures of merit (need the VMEC++
+        # solve) are learnable from shape alone. Geometry/derived targets
+        # (closed-form functions of the boundary) are omitted.
         ax = axes[2]
-        order = np.argsort(r2s)
-        ypos = np.arange(len(names))
-        for y, o in zip(ypos, order):
+        from surge.benchmarks.dataset_io import get_benchmark_io, output_kinds
+
+        io_spec = get_benchmark_io("plasma.constellaration_multioutput")
+        kinds = output_kinds(io_spec) if io_spec else {}
+        eq_order = sorted(
+            (j for j, n in enumerate(names) if kinds.get(n, "equilibrium") == "equilibrium"),
+            key=lambda j: r2s[j])
+
+        for y, o in enumerate(eq_order):
             ax.barh(y, max(r2s[o], 0.0), height=0.62,
                     color=p["series"][0] if o != qi_j else p["series"][2],
                     alpha=0.9)
             ax.text(max(r2s[o], 0.0) + 0.012, y, f"{r2s[o]:.2f}",
                     va="center", fontsize=6.5, color=p["ink2"])
-        ax.set_yticks(ypos)
-        ax.set_yticklabels([_PRETTY.get(names[o], names[o]) for o in order],
+
+        ax.set_yticks(range(len(eq_order)))
+        ax.set_yticklabels([_PRETTY.get(names[o], names[o]) for o in eq_order],
                            fontsize=7)
         ax.set_xlim(0, 1.12)
-        ax.set_xlabel("test R²  (one 90 → 12 surrogate)")
-        ax.set_title("(c) learnability by metric", fontsize=9)
+        ax.set_ylim(-0.65, len(eq_order) - 1 + 0.65)
+        ax.set_xlabel("test R²  (one 90 → 12 surrogate;\ngeometry targets omitted)")
+        ax.set_title("(c) learnability of the 8 equilibrium metrics", fontsize=9,
+                     loc="right")
 
         fig.suptitle(
             "ConStellaration — stellarator boundary "
-            r"$(R_{mn}, Z_{mn}) \mapsto$ 12 equilibrium metrics · "
+            r"$(R_{mn}, Z_{mn}) \mapsto$ 8 equilibrium metrics · "
             f"{len(tr):,} train / {len(te):,} test QI configurations",
             fontsize=10.5, fontweight="bold")
         return fig

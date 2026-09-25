@@ -160,10 +160,13 @@ and flux normalisation — convention, not necessarily quality).
 ## Stellarator design — ConStellaration
 
 One residual MLP maps stellarator plasma-boundary Fourier coefficients
-(R_mn, Z_mn; n_fp = 3) to 12 equilibrium figures of merit across 26,897
-QI-like configurations (Cadena et al. 2025, arXiv:2506.19583): real
-rotating boundary cross-sections, log₁₀(QI) parity at R² 0.93, and
-per-metric learnability.
+(R_mn, Z_mn; n_fp = 3) to 12 stellarator metrics across 26,897 QI-like
+configurations (Cadena et al. 2025, arXiv:2506.19583): real rotating
+boundary cross-sections, log₁₀(QI) parity at R² 0.939, and learnability
+of the 8 metrics that need the VMEC++ equilibrium solve (equilibrium-mean
+R² 0.919). The other 3 (aspect ratio, elongation, triangularity) are
+closed-form functions of the boundary and are not shown as learned
+results; the benchmark reports them as a sanity check.
 
 ![ConStellaration stellarator surrogate](assets/gallery/constellaration.png)
 

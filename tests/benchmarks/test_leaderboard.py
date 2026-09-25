@@ -361,3 +361,73 @@ def test_cli_leaderboard_mlflow(tmp_path):
     for run in runs:
         assert "test_accuracy" in run.data.metrics
         assert run.data.tags["benchmark_key"] == "synthetic.classification_binary"
+
+
+# ---------------------------------------------------------------------------
+# Multi-output extras: per-name / per-kind aggregation (ConStellaration gate)
+# ---------------------------------------------------------------------------
+
+
+def test_multioutput_reg_extras_per_kind_means_on_synthetic_3_column():
+    import numpy as np
+
+    from surge.benchmarks.tasks import _multioutput_reg_extras
+
+    rng = np.random.default_rng(0)
+    n = 200
+    y_test = rng.normal(size=(n, 3))
+    # Column 0 ("geo"): near-perfect fit. Columns 1,2 ("eq_a","eq_b"): noisy fit.
+    y_pred = y_test.copy()
+    y_pred[:, 0] += rng.normal(scale=1e-6, size=n)
+    y_pred[:, 1] += rng.normal(scale=1.0, size=n)
+    y_pred[:, 2] += rng.normal(scale=1.0, size=n)
+
+    names = ["geo", "eq_a", "eq_b"]
+    kinds = {"geo": "geometry", "eq_a": "equilibrium", "eq_b": "equilibrium"}
+
+    metrics, extra = _multioutput_reg_extras(y_test, y_pred, names=names, kinds=kinds)
+
+    assert set(extra["per_metric_r2_by_name"]) == set(names)
+    assert extra["per_metric_r2_by_name"]["geo"] == pytest.approx(1.0, abs=1e-6)
+    assert extra["metric_kinds"] == kinds
+
+    assert "test_r2_geometry_mean" in metrics
+    assert "test_r2_equilibrium_mean" in metrics
+    assert metrics["test_r2_geometry_mean"] == pytest.approx(
+        extra["per_metric_r2_by_name"]["geo"]
+    )
+    expected_eq_mean = (
+        extra["per_metric_r2_by_name"]["eq_a"] + extra["per_metric_r2_by_name"]["eq_b"]
+    ) / 2
+    assert metrics["test_r2_equilibrium_mean"] == pytest.approx(expected_eq_mean)
+    # Geometry column fits far better than the noisy equilibrium columns.
+    assert metrics["test_r2_geometry_mean"] > metrics["test_r2_equilibrium_mean"]
+
+
+def test_multioutput_reg_extras_without_names_or_kinds_unchanged():
+    import numpy as np
+
+    from surge.benchmarks.tasks import _multioutput_reg_extras
+
+    y_test = np.array([[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0]])
+    y_pred = y_test + 0.01
+
+    metrics, extra = _multioutput_reg_extras(y_test, y_pred)
+    assert "per_metric_r2_by_name" not in extra
+    assert "metric_kinds" not in extra
+    assert set(metrics) == {"min_r2", "max_r2", "test_nrmse"}
+
+
+def test_check_pass_constellaration_multioutput_uses_equilibrium_mean():
+    from surge.benchmarks.leaderboard import _check_pass
+
+    # Weak equilibrium mean must fail even though the (legacy) all-12 test_r2
+    # looks fine — this is exactly the gap the "kind" gate closes.
+    assert not _check_pass(
+        "plasma.constellaration_multioutput",
+        {"test_r2": 0.95, "test_r2_equilibrium_mean": 0.5},
+    )
+    assert _check_pass(
+        "plasma.constellaration_multioutput",
+        {"test_r2": 0.95, "test_r2_equilibrium_mean": 0.90},
+    )
