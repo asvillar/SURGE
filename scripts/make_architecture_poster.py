@@ -66,6 +66,33 @@ PROVENANCE = ("every run reproducible from runs/<tag>/ :   spec.yaml   ·   "
               "model card   ·   parquet predictions   ·   training logs")
 
 
+
+def _resolve_thumb(assets: Path, name: str, mode: str) -> Path:
+    """Pick the thumbnail for the requested theme.
+
+    Search order (first hit wins):
+      dark  -> <assets>/<name>_dark.png, <assets>/dark/<name>.png,
+               docs/assets/readme/dark/<name>.png,
+               examples/viz_gallery_output/<name>_dark.png
+      light -> <assets>/<name>.png, docs/assets/readme/<name>.png,
+               examples/viz_gallery_output/<name>_light.png
+    Falls back to the light file so a missing dark variant never blanks a card.
+    """
+    stem = name[:-4] if name.endswith(".png") else name
+    readme = _REPO / "docs/assets/readme"
+    gallery_out = _REPO / "examples/viz_gallery_output"
+    if mode == "dark":
+        candidates = [assets / f"{stem}_dark.png", assets / "dark" / f"{stem}.png",
+                      readme / "dark" / f"{stem}.png", gallery_out / f"{stem}_dark.png"]
+    else:
+        candidates = [assets / f"{stem}.png", readme / f"{stem}.png",
+                      gallery_out / f"{stem}_light.png"]
+    for c in candidates:
+        if c.exists():
+            return c
+    return assets / f"{stem}.png"
+
+
 def build(assets: Path, mode: str = "light"):
     with surge_theme(mode) as p:
         fig = plt.figure(figsize=(12.4, 6.4))
@@ -105,11 +132,7 @@ def build(assets: Path, mode: str = "light"):
                               "facecolor": p["page"],
                               "edgecolor": p["grid"], "linewidth": 0.7})
 
-            thumb_path = assets / col["thumb"]
-            if mode == "dark":
-                dark = assets / col["thumb"].replace(".png", "_dark.png")
-                if dark.exists():
-                    thumb_path = dark
+            thumb_path = _resolve_thumb(assets, col["thumb"], mode)
             if thumb_path.exists():
                 img = mpimg.imread(thumb_path)
                 ih, iw = img.shape[:2]

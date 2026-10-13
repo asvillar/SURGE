@@ -59,6 +59,9 @@ CURATED = {
     "thewell_crps": "thewell_crps",
     "thewell_rollout": "thewell_rollout",
     "qlknn10d": "qlknn10d",
+    "grayscott_rollout_curve": "grayscott_rollout_curve", "grayscott_regime_split", "grayscott_rollout_cases",
+    "grayscott_regime_split": "grayscott_regime_split",
+    "grayscott_rollout_cases": "grayscott_rollout_cases",
 }
 
 # gallery.md embeds this subset (light only — RTD theme is light)
@@ -68,6 +71,7 @@ GALLERY_SET = {
     "characterization", "leaderboard", "thewell_grayscott",
     "thewell_grayscott_h1",
     "mission_control", "constellaration", "scale", "thewell_turbulence", "thewell_helmholtz", "simformer_sbi", "thewell_pod", "thewell_crps", "thewell_rollout", "qlknn10d",
+    "grayscott_rollout_curve",
 }
 
 

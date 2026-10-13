@@ -47,6 +47,15 @@ from .benchmark import (
     plot_multi_benchmark_dashboard,
 )
 
+from .animate import (
+    frames_to_gif,
+    frames_to_video,
+    hpo_evolution_frames,
+    leaderboard_frames,
+    mission_control_frames,
+    training_frames,
+)
+
 __all__ = [
     # Run viz
     "load_predictions",
@@ -88,5 +97,12 @@ __all__ = [
     "plot_multi_benchmark_dashboard",
     "plot_model_spider_chart",
     "load_benchmark_results",
+    # Animation
+    "hpo_evolution_frames",
+    "mission_control_frames",
+    "leaderboard_frames",
+    "training_frames",
+    "frames_to_video",
+    "frames_to_gif",
 ]
 
