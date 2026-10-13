@@ -442,6 +442,11 @@ def main(argv: list[str] | None = None) -> int:
     # ── listing ───────────────────────────────────────────────────────────────
     ap.add_argument("--list", "-l", action="store_true",
                     help="Print registered benchmark keys grouped by category and exit.")
+    ap.add_argument("--status-md", nargs="?", const="docs/benchmarks/README.md",
+                    default=None, metavar="PATH",
+                    help="Render the per-benchmark status ledger (metadata.yaml + newest "
+                         "results under --save-dir) to PATH "
+                         "(default docs/benchmarks/README.md) and exit.")
     ap.add_argument("--list-models", action="store_true",
                     help="Print all models available in MODEL_REGISTRY and exit.")
     ap.add_argument(
@@ -479,6 +484,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tier", metavar="TIER", help=argparse.SUPPRESS)
 
     args = ap.parse_args(argv)
+
+    if args.status_md is not None:
+        from surge.benchmarks.status import write_status_md
+        print(f"Wrote {write_status_md(Path(args.status_md), args.save_dir)}")
+        return 0
 
     # --tier accepted legacy category names historically; numeric tiers stay
     # numeric and are passed to the registry.
