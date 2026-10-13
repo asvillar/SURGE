@@ -343,6 +343,19 @@ def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
                     **{k: v for k, v in d.items() if k in field_names}))
     if collected:
         print_leaderboard(dict(collected))
+
+    # Honest verdict on whether the fan-out earned its overhead. Every job
+    # pays a fresh interpreter + import cost and the workers share cores, so
+    # short jobs come out SLOWER in parallel than sequentially.
+    wall = time.time() - t0
+    train_s = sum(float(r.metrics.get("runtime_s") or 0.0)
+                  for rs in collected.values() for r in rs)
+    if train_s and wall > train_s:
+        print(f"\nNOTE: --parallel did not pay off here — {wall:.0f}s wall "
+              f"vs {train_s:.0f}s of actual training across {len(jobs)} jobs. "
+              f"Subprocess startup and core contention dominate when jobs are "
+              f"short; --parallel is for long jobs or many cores/GPUs.",
+              file=sys.stderr)
     return 1 if any(codes) else 0
 
 
@@ -429,6 +442,11 @@ def main(argv: list[str] | None = None) -> int:
     # ── listing ───────────────────────────────────────────────────────────────
     ap.add_argument("--list", "-l", action="store_true",
                     help="Print registered benchmark keys grouped by category and exit.")
+    ap.add_argument("--status-md", nargs="?", const="docs/benchmarks/README.md",
+                    default=None, metavar="PATH",
+                    help="Render the per-benchmark status ledger (metadata.yaml + newest "
+                         "results under --save-dir) to PATH "
+                         "(default docs/benchmarks/README.md) and exit.")
     ap.add_argument("--list-models", action="store_true",
                     help="Print all models available in MODEL_REGISTRY and exit.")
     ap.add_argument(
@@ -438,6 +456,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--train-log-file", metavar="PATH", default=None,
                     help="Stream per-epoch loss records to this JSONL file during training.")
+    ap.add_argument(
+        "--input-features", metavar="NAME", default=None,
+        help="Apply a named input-feature transform (surge.benchmarks.features registry) "
+             "to X right after loading, before the train/test split. E.g. "
+             "'stellarator_geometry' for plasma.constellaration.* benchmarks. "
+             "Requires --model (single-benchmark run). Default: no transform.",
+    )
 
     # ── persistence ───────────────────────────────────────────────────────────
     ap.add_argument("--output", "-o", type=Path, default=None,
@@ -459,6 +484,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tier", metavar="TIER", help=argparse.SUPPRESS)
 
     args = ap.parse_args(argv)
+
+    if args.status_md is not None:
+        from surge.benchmarks.status import write_status_md
+        print(f"Wrote {write_status_md(Path(args.status_md), args.save_dir)}")
+        return 0
 
     # --tier accepted legacy category names historically; numeric tiers stay
     # numeric and are passed to the registry.
@@ -698,17 +728,26 @@ def main(argv: list[str] | None = None) -> int:
         _monitor_kwargs["log_file"] = args.train_log_file
 
     try:
-        if _monitor_kwargs and args.model:
+        if args.model:
+            # covers both dispatch branches below
+            from .leaderboard import _task_mismatch
+            _mm = _task_mismatch(
+                args.model, benchmark_info(single_bm_key)["task_type"])
+            if _mm is not None:
+                raise ValueError(_mm)
+        if (_monitor_kwargs or args.input_features) and args.model:
             from .leaderboard import _run_with_adapter
             from surge.model.registry import MODEL_REGISTRY
             adapter = MODEL_REGISTRY.create(args.model, **_monitor_kwargs)
-            result = _run_with_adapter(single_bm_key, adapter, seed=args.seed)
+            result = _run_with_adapter(
+                single_bm_key, adapter, seed=args.seed, input_features=args.input_features
+            )
             if result is None:
                 print("Error: benchmark run failed (see stderr above).", file=sys.stderr)
                 return 1
         else:
             result = run_benchmark(single_bm_key, seed=args.seed, model_key=args.model)
-    except KeyError as exc:
+    except (KeyError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 

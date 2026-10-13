@@ -345,7 +345,7 @@ For each benchmark below, a verifier should return:
 
 | Field | Detail |
 |-------|--------|
-| Citation | Goodman et al. (2025) — [arXiv:2506.19583](https://arxiv.org/abs/2506.19583) |
+| Citation | Cadena et al. (2025) — [arXiv:2506.19583](https://arxiv.org/abs/2506.19583) |
 | Problem | Stellarator surrogate: VMEC/DESC boundary shape → log₁₀(qi) quasi-isodynamic quality. |
 | Task | Scalar regression |
 | I/O | 90 boundary Fourier coefficients → 1 target |
@@ -357,7 +357,7 @@ For each benchmark below, a verifier should return:
 
 | Field | Detail |
 |-------|--------|
-| Citation | Goodman et al. (2025) §A.4 — [arXiv:2506.19583](https://arxiv.org/abs/2506.19583) |
+| Citation | Cadena et al. (2025) §A.4 — [arXiv:2506.19583](https://arxiv.org/abs/2506.19583) |
 | Problem | Paper protocol: **12 independent 90→1 models**, one per stellarator metric. |
 | Task | 12 scalar regressions (reported as mean test R²) |
 | I/O | 90 → 12 metrics |
@@ -365,20 +365,21 @@ For each benchmark below, a verifier should return:
 | Source | HF `proxima-fusion/constellaration` |
 | Filters | nfp=3, optimised DESC/VMEC, 0.05% outlier clip per metric |
 | Metric | Mean test R² across 12 models |
-| Verify | Filtering matches Goodman et al. Appendix A.4. |
+| Verify | Filtering matches Cadena et al. Appendix A.4. |
 
 ### `plasma.constellaration_multioutput`
 
 | Field | Detail |
 |-------|--------|
-| Citation | Goodman et al. (2025) — [arXiv:2506.19583](https://arxiv.org/abs/2506.19583) |
-| Problem | **Single joint surrogate** predicting all 12 stellarator metrics from boundary shape (alternative to the paper’s 12-model protocol). |
+| Citation | Cadena et al. (2025) — [arXiv:2506.19583](https://arxiv.org/abs/2506.19583) |
+| Problem | **Single joint surrogate** predicting the 8 equilibrium-solve stellarator metrics from boundary shape (alternative to the paper’s 12-model protocol). |
 | Task | Multi-output regression |
-| I/O | 90 → 12 |
-| n | 26,897 (same filtered cache as paper benchmark) |
+| I/O | 90 → 8 |
+| n | 26,897 (same filtered cache as paper benchmark; the on-disk cache still stores all 12 columns, only 8 are selected at load) |
 | Source | Same as `plasma.constellaration_paper` |
-| Outputs | aspect_ratio, elongation, mirror ratios, triangularity, vacuum_well, log₁₀(qi), etc. — see `surge/benchmarks/dataset_io.py` |
-| Metric | R² (joint model) |
+| Outputs | ι axis/edge, both mirror ratios, vacuum_well, min L∇B, flux compression, log₁₀(qi) — see `surge/benchmarks/dataset_io.py` |
+| Not trained | aspect_ratio, max_elongation, average_triangularity are computed in closed form from the boundary coefficients (`surge.benchmarks.loaders.constellaration.geometry_metrics`, machine precision), and aspect_ratio_over_edge_rotational_transform follows by dividing that exact aspect_ratio by the learned edge ι/n_fp — none of the 4 are part of the spec or the gate any more (see `output_kinds()` in `surge/benchmarks/dataset_io.py`) |
+| Metric | **Gate is the mean R² over the 8 equilibrium metrics** (`test_r2_equilibrium_mean`); log₁₀(qi) also reported standalone |
 
 ### `plasma.qlknn_transport`
 

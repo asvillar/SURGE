@@ -25,12 +25,14 @@ Figures (per mode, deterministic PNG/SVG/PDF):
     trio              RF + PyTorch MLP + GP on identical splits
     characterization  dataset EDA panel (distributions, SNR, PCA)
     mission_control   HPO campaign dashboard from run artifacts
-    constellaration   stellarator boundary → 12 equilibrium metrics
+    constellaration   stellarator boundary → 8 equilibrium metrics
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -48,6 +50,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import CenteredNorm, LogNorm
 
+from surge.viz.hpo import robust_hpo_ylim
 from surge.viz.theme import (
     density_cmap,
     diverging_cmap,
@@ -301,9 +304,14 @@ def training_figure(hpo_run: Path, mode: str):
 
 def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
     """HPO history, publication style (Sánchez-Villar et al.): one series
-    per optimizer/model — thin solid per-trial trace, dashed running best,
-    gold-edged star at the best trial with a labelled score box, and an
-    optional dashed black reference line.
+    per optimizer/model — per-trial markers (colored by log10 learning
+    rate for a single tuned model), dashed running-best step line,
+    gold-edged star at the best trial with an in-axes score chip, and an
+    optional dashed reference line. Y-limits are the 5th-100th (maximize)
+    or 0th-95th (minimize) percentile of finite values with small padding,
+    so a handful of diverged trials among many can't collapse the axis;
+    those trials are drawn instead as small muted triangles clamped to the
+    axis edge. Campaigns of <=10 trials keep plain autoscaling.
     """
     files = sorted((hpo_run / "hpo").glob("*_hpo.json"))
     series = []
@@ -315,25 +323,59 @@ def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
         values = np.array([t["value"] for t in trials], dtype=float)
         maximize = d.get("direction", "maximize") == "maximize"
         running = (np.maximum if maximize else np.minimum).accumulate(values)
+        lrs = np.array([t.get("params", {}).get("learning_rate", np.nan)
+                        for t in trials], dtype=float)
         series.append({
             "name": f.stem.replace("_hpo", ""),
             "numbers": np.array([t["number"] for t in trials]),
             "values": values,
             "running": running,
+            "lr": lrs,
             "metric": d.get("metric", "objective"),
             "best": d.get("best_trial", {}),
+            "maximize": maximize,
         })
     if not series:
         return None
     metric = series[0]["metric"]
+    maximize = series[0]["maximize"]
     star_face = "#FFD700"  # gold star fill, edge in series color
+
+    # Robust y-limits + per-series diverged-trial masks (shared helper —
+    # also used by mission_control_figure's SEARCH CONVERGENCE inset).
+    ylim_lo, ylim_hi, ylim_pad, diverged_masks = robust_hpo_ylim(
+        [s["values"] for s in series], maximize)
+
+    # Color scatter by log10(learning_rate) only for a single tuned series
+    # that actually records it; a multi-model overlay (e.g. rf + mlp) keeps
+    # each model's own categorical series color instead.
+    color_by_lr = (len(series) == 1 and series[0]["lr"].size
+                   and np.isfinite(series[0]["lr"]).all())
 
     with surge_theme(mode) as p:
         fig, ax = plt.subplots(figsize=(6.0, 3.5))
+        cmap = sequential_cmap(mode)
+        mappable = None
+        n_diverged = 0
         for i, s in enumerate(series):
-            c = p["series"][i]
-            ax.plot(s["numbers"], s["values"], color=c, lw=1.1, alpha=0.85,
-                    label=s["name"], zorder=2)
+            c = p["series"][1] if color_by_lr else p["series"][i]
+            diverged = diverged_masks[i]
+            n_diverged += int(diverged.sum())
+            keep = ~diverged
+            if color_by_lr:
+                mappable = ax.scatter(
+                    s["numbers"][keep], s["values"][keep],
+                    c=np.log10(s["lr"][keep]), cmap=cmap, s=20, alpha=0.85,
+                    zorder=2, label=s["name"])
+            else:
+                ax.scatter(s["numbers"][keep], s["values"][keep], color=c,
+                           s=20, alpha=0.8, zorder=2, label=s["name"])
+            if diverged.any():
+                clamp_y = ylim_lo if maximize else ylim_hi
+                ax.scatter(s["numbers"][diverged],
+                           np.full(int(diverged.sum()), clamp_y),
+                           marker="v" if maximize else "^", s=26,
+                           color=p["muted"], zorder=2)
             ax.plot(s["numbers"], s["running"], color=c, lw=1.9,
                     ls=(0, (5, 2)), drawstyle="steps-post", zorder=3)
             best = s["best"]
@@ -341,23 +383,31 @@ def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
                 bi, bv = best.get("number"), best.get("value")
                 ax.scatter([bi], [bv], marker="*", s=430, zorder=5,
                            facecolor=star_face, edgecolor=c, linewidth=1.6)
-                ax.annotate(f"{metric} = {fmt_metric(bv)}",
-                            (bi, bv), textcoords="offset points",
-                            xytext=(-8, 12), ha="right", fontsize=7.5,
-                            color=p["ink"],
-                            bbox={"boxstyle": "round,pad=0.3",
-                                  "facecolor": p["surface"],
-                                  "edgecolor": c, "linewidth": 1.0})
+                _stat_chip(ax, f"{s['name']}: {metric} = {fmt_metric(bv)}", p,
+                           loc=(0.03, 0.95 - i * 0.10))
         if reference is not None:
             ax.axhline(reference, color=p["ink"], lw=1.4, ls=(0, (6, 3)),
                        zorder=1, label=f"reference ({reference})")
         ax.plot([], [], color=p["ink2"], lw=1.9, ls=(0, (5, 2)),
                 label="best so far")
+        if n_diverged:
+            # legend proxy (not ax.text) so the muted label sits in the
+            # reserved legend box instead of overlapping the clamped
+            # triangles it describes
+            ax.scatter([], [], marker="v" if maximize else "^", s=26,
+                       color=p["muted"], label=f"{n_diverged} diverged")
         if _is_loss_like(metric) and all((s["values"] > 0).all() for s in series):
             ax.set_yscale("log")
+        if ylim_lo is not None:
+            ax.set_ylim(ylim_lo - ylim_pad, ylim_hi + ylim_pad)
         ax.set_xlabel("iteration"); ax.set_ylabel(metric)
         ax.set_title("Hyperparameter optimization")
-        ax.legend(loc="lower right", fontsize=7)
+        ax.legend(loc="lower right" if maximize else "upper right", fontsize=7)
+        if mappable is not None:
+            cb = fig.colorbar(mappable, ax=ax, pad=0.02)
+            cb.set_label(r"$\log_{10}$ learning rate", fontsize=7.5,
+                         color=p["ink2"])
+            cb.ax.tick_params(labelsize=7, colors=p["muted"])
         return fig
 
 
@@ -365,7 +415,8 @@ def hpo_figure(hpo_run: Path, mode: str, reference: float | None = None):
 
 def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
                        threshold: float | None = None):
-    rows = defaultdict(lambda: {"scores": [], "runtimes": []})
+    rows = defaultdict(lambda: {"scores": [], "runtimes": [], "rmses": [],
+                                "mems": []})
     for rj in sorted((reports_dir / benchmark_key).glob("*/result.json")):
         d = json.loads(rj.read_text())
         model = d.get("model_key")
@@ -376,12 +427,18 @@ def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
         rows[model]["scores"].append(float(score))
         if met.get("runtime_s") is not None:
             rows[model]["runtimes"].append(float(met["runtime_s"]))
+        if met.get("test_rmse") is not None:
+            rows[model]["rmses"].append(float(met["test_rmse"]))
+        if met.get("peak_memory_mb") is not None:
+            rows[model]["mems"].append(float(met["peak_memory_mb"]))
     stats = sorted(
         ({"model": k,
           "mean": statistics.fmean(v["scores"]),
           "std": statistics.stdev(v["scores"]) if len(v["scores"]) > 1 else 0.0,
           "n": len(v["scores"]),
-          "runtime": statistics.fmean(v["runtimes"]) if v["runtimes"] else None}
+          "runtime": statistics.fmean(v["runtimes"]) if v["runtimes"] else None,
+          "rmse": statistics.fmean(v["rmses"]) if v["rmses"] else None,
+          "mem": statistics.fmean(v["mems"]) if v["mems"] else None}
          for k, v in rows.items()),
         key=lambda r: r["mean"], reverse=True)[:10]
     if not stats:
@@ -432,7 +489,7 @@ def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
         outputs = [o["name"] for o in meta.get("outputs", [])]
         if inputs and outputs:
             shown = inputs[:4] + ([r"\ldots"] if len(inputs) > 4 else [])
-            task = (r"$(" + ",\; ".join(_sym(i) if i != r"\ldots" else i
+            task = (r"$(" + r",\; ".join(_sym(i) if i != r"\ldots" else i
                                         for i in shown)
                     + r") \;\mapsto\; " + _sym(outputs[0]) + r"$")
             fig.text(0.045, 0.868, task, fontsize=11.5, color=p["ink"],
@@ -494,43 +551,88 @@ def leaderboard_figure(reports_dir: Path, benchmark_key: str, mode: str,
         ax.set_xlim(0, 1.06)
         ax.set_xlabel("test R²  (mean ± std over runs)")
 
-        # ── spider: top-3 models on 4 normalised axes ─────────────────
+        # ── spider: top-3 models, 6 normalised axes, circular rings ──
         axs = fig.add_subplot(gs[0, 1], projection="polar")
-        logs = [np.log10(max(r["runtime"], 1e-2))
-                for r in stats if r["runtime"] is not None]
-        lo, hi = (min(logs), max(logs)) if logs else (0.0, 1.0)
-        spread = (hi - lo) or 1.0
 
-        def _axes4(r):
-            acc = max(r["mean"], 0.0)
-            stab = 1.0 - min(r["std"] / 0.05, 1.0)
-            speed = (1.0 - (np.log10(max(r["runtime"], 1e-2)) - lo) / spread
-                     if r["runtime"] is not None else 0.0)
-            marg = (np.clip((r["mean"] - threshold) / (1 - threshold), 0, 1)
-                    if threshold is not None else acc)
-            return [acc, stab, speed, marg]
+        def _lognorm(vals, value):
+            """1 = best (smallest), 0 = worst, on a log scale."""
+            if value is None or not vals:
+                return 0.0
+            logs = [np.log10(max(v, 1e-2)) for v in vals]
+            lo, hi = min(logs), max(logs)
+            if hi - lo < 1e-12:
+                return 1.0
+            return 1.0 - (np.log10(max(value, 1e-2)) - lo) / (hi - lo)
 
-        names4 = ["accuracy", "stability", "speed", "gate margin"]
-        theta = np.linspace(0, 2 * np.pi, 4, endpoint=False)
-        axs.set_theta_offset(np.pi / 4)   # diagonal spokes: labels stay inside
+        all_rt = [r["runtime"] for r in stats if r["runtime"] is not None]
+        all_rmse = [r["rmse"] for r in stats if r["rmse"] is not None]
+        all_mem = [r["mem"] for r in stats if r["mem"] is not None]
+
+        # only draw axes whose metric is actually reported for the top 3 —
+        # a missing measurement must not render as "worst in field"
+        top3 = stats[:3]
+
+        def _spec():
+            axes_spec = [("accuracy", lambda r: max(r["mean"], 0.0))]
+            if all(r["rmse"] is not None for r in top3):
+                axes_spec.append(("precision\n(RMSE)",
+                                  lambda r: _lognorm(all_rmse, r["rmse"])))
+            axes_spec.append(("stability",
+                              lambda r: 1.0 - min(r["std"] / 0.05, 1.0)))
+            if all(r["runtime"] is not None for r in top3):
+                axes_spec.append(("speed",
+                                  lambda r: _lognorm(all_rt, r["runtime"])))
+            if all(r["mem"] is not None for r in top3):
+                axes_spec.append(("memory",
+                                  lambda r: _lognorm(all_mem, r["mem"])))
+            if threshold is not None:
+                axes_spec.append(("gate\nmargin", lambda r: float(
+                    np.clip((r["mean"] - threshold) / (1 - threshold), 0, 1))))
+            return axes_spec
+
+        axes_spec = _spec()
+
+        def _axes6(r):
+            return [f(r) for _, f in axes_spec]
+
+        names6 = [n for n, _ in axes_spec]
+        theta = np.linspace(0, 2 * np.pi, len(axes_spec), endpoint=False)
+        axs.set_theta_offset(np.pi / 2)          # first axis points up
         handles = []
-        for k, r in enumerate(stats[:3]):
-            vals = _axes4(r)
+        for k, r in enumerate(top3):
+            vals = _axes6(r)
             t = np.concatenate([theta, theta[:1]])
             v = np.array(vals + vals[:1])
             line, = axs.plot(t, v, color=p["series"][k], lw=1.5,
-                             zorder=3 - k * 0.1)
-            axs.fill(t, v, color=p["series"][k], alpha=0.13)
+                             marker="o", ms=2.6, zorder=4 - k * 0.1)
+            axs.fill(t, v, color=p["series"][k],
+                     alpha=0.16 if k == 0 else 0.08)
             handles.append(line)
         axs.set_xticks(theta)
-        axs.set_xticklabels(names4, fontsize=7.5, color=p["ink2"], **mono)
-        axs.set_ylim(0, 1)
-        axs.set_yticks([0.5, 1.0])
+        axs.set_xticklabels(names6, fontsize=7, color=p["ink2"], **mono)
+        axs.tick_params(pad=1)
+        axs.set_ylim(0, 1.0)
+        axs.set_yticks([0.25, 0.5, 0.75, 1.0])
         axs.set_yticklabels([])
-        axs.grid(alpha=0.35)
+        # faint rings + one bright spoke per metric radiating from a
+        # bright center dot, ticked at 0.25/0.5/0.75/1.0
+        axs.grid(color=p["grid"], lw=0.6, alpha=0.55)
         axs.spines["polar"].set_visible(False)
-        axs.set_title("top 3 — normalised", fontsize=8.5, pad=13, **mono)
-        axs.legend(handles, [r["model"] for r in stats[:3]],
+        spoke = p["ink"]
+        axs.plot(0, 0, "o", ms=4.5, color=spoke, zorder=6, clip_on=False)
+        levels = (0.25, 0.5, 0.75, 1.0)
+        for t_ax in theta:
+            axs.plot([t_ax, t_ax], [0, 1.0], color=spoke, lw=0.9,
+                     alpha=0.55, zorder=1)
+            axs.plot([t_ax] * len(levels), levels, ls="none", marker="o",
+                     ms=1.8, color=spoke, alpha=0.8, zorder=2)
+            for lev in levels:
+                axs.annotate(f"{lev:g}", (t_ax, lev),
+                             textcoords="offset points", xytext=(5, 1),
+                             fontsize=4.4, color=p["muted"], **mono)
+        axs.set_title("top 3  ·  1 = best in field", fontsize=8.5,
+                      pad=13, **mono)
+        axs.legend(handles, [r["model"] for r in top3],
                    loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=1,
                    frameon=False, labelcolor=p["ink2"],
                    prop={"family": "monospace", "size": 6.6})
@@ -1197,6 +1299,22 @@ def field2d_figure(mode: str, seed: int = 0, n: int = 600, side: int = 32,
 
 # --------------------------------------------------- HPO mission control
 
+def _param_label(key: str) -> str:
+    """Human-readable label for a raw Optuna HPO search-space key."""
+    fixed = {
+        "n_blocks": "depth (blocks)",
+        "learning_rate": "learning rate",
+        "batch_size": "batch size",
+        "dropout_rate": "dropout",
+    }
+    if key in fixed:
+        return fixed[key]
+    m = re.match(r"hidden_layers_(\d+)_log$", key)
+    if m:
+        return f"width · block {m.group(1)}"
+    return key.replace("_", " ")
+
+
 def mission_control_figure(run_dir: Path, mode: str,
                            model_name: str = "qlknn_residual_mlp"):
     """One-look HPO campaign dashboard for a run: per-trial loss curves,
@@ -1263,9 +1381,19 @@ def mission_control_figure(run_dir: Path, mode: str,
         ax = fig.add_subplot(gs[0, 1])
         _card(ax, p, "SEARCH CONVERGENCE")
         xs = np.arange(len(values))
-        run_best = np.maximum.accumulate(values)
-        ax.plot(xs, values, "o", ms=4, color=p["series"][0], alpha=0.75,
-                label="trial")
+        values_arr = np.asarray(values, dtype=float)
+        run_best = np.maximum.accumulate(values_arr)
+        # robust y-limits + diverged-trial mask (shared with hpo_figure) —
+        # a handful of diverged trials can't collapse this inset either
+        sc_lo, sc_hi, sc_pad, sc_masks = robust_hpo_ylim([values_arr], True)
+        sc_diverged = sc_masks[0]
+        ax.plot(xs[~sc_diverged], values_arr[~sc_diverged], "o", ms=4,
+                color=p["series"][0], alpha=0.75, label="trial")
+        if sc_diverged.any():
+            ax.scatter(xs[sc_diverged],
+                       np.full(int(sc_diverged.sum()), sc_lo),
+                       marker="v", s=22, color=p["muted"], zorder=3,
+                       label=f"{int(sc_diverged.sum())} diverged")
         ax.plot(xs, run_best, color=p["series"][0], lw=1.4, ls=(0, (4, 3)),
                 label="running best")
         ax.plot(best_i, values[best_i], marker="*", ms=15,
@@ -1274,6 +1402,8 @@ def mission_control_figure(run_dir: Path, mode: str,
         ax.annotate(f"{values[best_i]:.3f}", (best_i, values[best_i]),
                     textcoords="offset points", xytext=(-8, -13),
                     ha="right", fontsize=7.5, color=p["ink"], **mono)
+        if sc_lo is not None:
+            ax.set_ylim(sc_lo - sc_pad, sc_hi + sc_pad)
         ax.set_xlabel("trial"); ax.set_ylabel(trials[0].get("metric", "value"))
         ax.legend(fontsize=7, loc="lower right")
 
@@ -1284,6 +1414,23 @@ def mission_control_figure(run_dir: Path, mode: str,
         bp = trials[best_i].get("params", {})
         te = metrics.get("test", {})
         tm = metrics.get("timings", {})
+
+        # collapse the raw Optuna depth/width keys (n_blocks +
+        # hidden_layers_<i>_log, which vary in count trial to trial) into
+        # one readable row; prefer an explicit widths list from the run's
+        # own artifacts if one is present.
+        hidden_widths = (metrics.get("hidden_layers")
+                          or metrics.get("architecture", {}).get("hidden_layers"))
+        if not hidden_widths:
+            log_keys = sorted(
+                (k for k in bp if re.match(r"hidden_layers_\d+_log$", k)),
+                key=lambda k: int(k.split("_")[2]))
+            if log_keys:
+                hidden_widths = [round(float(np.exp(bp[k]))) for k in log_keys]
+        collapsed = {"n_blocks"} | {k for k in bp
+                                     if re.match(r"hidden_layers_\d+_log$", k)}
+        extra_params = {k: v for k, v in bp.items() if k not in collapsed}
+
         lines = [
             ("MODEL", model_name),
             ("TRIALS", f"{len(trials)} (TPE, max val_r2)"),
@@ -1292,9 +1439,13 @@ def mission_control_figure(run_dir: Path, mode: str,
             ("TEST RMSE", f"{te.get('rmse', float('nan')):.3f} gB"),
             ("FIT TIME", fmt_metric(tm.get("train_seconds"), "runtime")
              if tm.get("train_seconds") else "—"),
-        ] + [(k.upper().replace("_", " "),
-              f"{v:.3g}" if isinstance(v, float) else str(v))
-             for k, v in bp.items()]
+        ]
+        if hidden_widths:
+            lines.append(("HIDDEN LAYERS", str(list(hidden_widths))))
+        lines += [(_param_label(k).upper(),
+                    f"{v:.3g}" if isinstance(v, float) else str(v))
+                   for k, v in extra_params.items()]
+        lines = lines[:10]  # cap card rows so it never overflows into (6)
         for j, (k, v) in enumerate(lines):
             y = 0.93 - j * 0.095
             ax.text(0.06, y, k, transform=ax.transAxes, fontsize=7.5,
@@ -1323,8 +1474,16 @@ def mission_control_figure(run_dir: Path, mode: str,
         # (5) which hyperparameters mattered (rank correlation with score)
         ax = fig.add_subplot(gs[1, 1])
         _card(ax, p, "PARAMETER SENSITIVITY")
+        # keys common to every trial only — variable_list spaces (e.g. a
+        # tunable number of hidden-layer blocks) give trials different
+        # param counts, so anything not shared by all of them is dropped
+        # rather than KeyError-ing on the Spearman pass below.
+        common_keys = set(trials[0].get("params", {}))
+        for t in trials[1:]:
+            common_keys &= set(t.get("params", {}))
         pkeys = [k for k in trials[0].get("params", {})
-                 if isinstance(trials[0]["params"][k], (int, float))]
+                 if k in common_keys
+                 and isinstance(trials[0]["params"][k], (int, float))]
         rho = []
         for k in pkeys:
             vals = [t["params"][k] for t in trials]
@@ -1335,8 +1494,7 @@ def mission_control_figure(run_dir: Path, mode: str,
         for y, o in zip(ypos, order):
             col = p["series"][0] if rho[o] >= 0 else p["series"][1]
             ax.barh(y, rho[o], height=0.55, color=col, alpha=0.85)
-            ax.text(0.02 if rho[o] < 0 else -0.02, y, pkeys[order[y]] if False
-                    else pkeys[o],
+            ax.text(0.02 if rho[o] < 0 else -0.02, y, _param_label(pkeys[o]),
                     ha="left" if rho[o] < 0 else "right", va="center",
                     fontsize=7.5, color=p["ink"], **mono)
         ax.axvline(0, color=p["axis"], lw=0.9)
@@ -1370,23 +1528,36 @@ def mission_control_figure(run_dir: Path, mode: str,
 
 # ---------------------------------------------- ConStellaration stellarators
 
-def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
+def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
     """Stellarator design surrogate on the ConStellaration dataset
-    (Goodman et al. 2025, arXiv:2506.19583, proxima-fusion/constellaration):
-    boundary Fourier coefficients (5×9 r_cos + 5×9 z_sin, n_fp = 3) → 12
-    equilibrium figures of merit. Shows real plasma boundary shapes, the
-    log₁₀(qi) parity, and which metrics are learnable.
+    (Cadena et al. 2025, arXiv:2506.19583, proxima-fusion/constellaration):
+    boundary Fourier coefficients (5×9 r_cos + 5×9 z_sin, n_fp = 3) → the 8
+    equilibrium figures of merit (require the VMEC++ solve). aspect_ratio,
+    max_elongation and average_triangularity are closed-form functions of the
+    boundary and are not trained; the on-disk cache still carries all 12
+    columns, so they remain available here for the 3D shape gallery. Shows
+    real plasma boundary shapes, the log₁₀(qi) parity, and which of the 8
+    equilibrium metrics are learnable.
     """
     npz = _REPO / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz"
     if not npz.exists():
         return None
     from sklearn.metrics import r2_score
 
+    from surge.benchmarks.dataset_io import get_benchmark_io
     from surge.model import MODEL_REGISTRY
 
     d = np.load(npz, allow_pickle=True)
-    X, Y = d["X"], d["Y"]
-    names = [str(s) for s in d["metric_names"]]
+    X, Y_full = d["X"], d["Y"]
+    metric_names = [str(s) for s in d["metric_names"]]
+
+    # Joint benchmark now trains on the 8 equilibrium-kind metrics only
+    # (surge.benchmarks.leaderboard._load_constellaration_multioutput).
+    io_spec = get_benchmark_io("plasma.constellaration_multioutput")
+    names = [o["name"] for o in io_spec["outputs"]]
+    keep_idx = [metric_names.index(n) for n in names]
+    Y = Y_full[:, keep_idx]
+
     split = np.load(_REPO / "data" / "datasets" / "benchmarks" / "plasma"
                     / "constellaration" / "split_n26897_seed42_test0.2.npz")
     tr, te = split["train_idx"], split["test_idx"]
@@ -1394,16 +1565,40 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
     mu_x, sd_x = Xtr.mean(0), Xtr.std(0) + 1e-9
     mu_y, sd_y = Ytr.mean(0), Ytr.std(0) + 1e-9
 
-    try:
-        adapter = MODEL_REGISTRY.create(
-            "pytorch.residual_mlp", hidden_layers=[256, 256, 128],
-            n_epochs=n_epochs, random_state=seed)
-    except KeyError:
-        return None
-    adapter.fit(((Xtr - mu_x) / sd_x).astype(np.float32),
-                ((Ytr - mu_y) / sd_y).astype(np.float32))
-    pred = np.asarray(adapter.predict(
-        ((Xte - mu_x) / sd_x).astype(np.float32))) * sd_y + mu_y
+    hidden_layers = [512, 512, 256]
+    cache_cfg = {"seed": seed, "n_epochs": n_epochs, "hidden_layers": hidden_layers}
+    cache_path = (_REPO / "examples" / "viz_gallery_output"
+                  / "constellaration_predictions.npz")
+    pred = None
+    if cache_path.exists() and os.environ.get("SURGE_GALLERY_NO_CACHE") != "1":
+        try:
+            c = np.load(cache_path, allow_pickle=True)
+            if (json.loads(str(c["config"])) == cache_cfg
+                    and int(c["n_train"]) == len(tr)
+                    and int(c["n_test"]) == len(te)
+                    and list(c["names"]) == names):
+                Yte, pred = c["Yte"], c["pred"]
+                print("[cache] using constellaration_predictions.npz")
+        except Exception:
+            pred = None
+
+    if pred is None:
+        try:
+            # trained to saturation: 60-epoch caps left ~0.015 R2 on the table
+            adapter = MODEL_REGISTRY.create(
+                "pytorch.residual_mlp", hidden_layers=hidden_layers,
+                n_epochs=n_epochs, patience=60, patience_window=10,
+                random_state=seed)
+        except KeyError:
+            return None
+        adapter.fit(((Xtr - mu_x) / sd_x).astype(np.float32),
+                    ((Ytr - mu_y) / sd_y).astype(np.float32))
+        pred = np.asarray(adapter.predict(
+            ((Xte - mu_x) / sd_x).astype(np.float32))) * sd_y + mu_y
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(cache_path, Yte=Yte, pred=pred, names=np.array(names),
+                 n_train=len(tr), n_test=len(te),
+                 config=json.dumps(cache_cfg))
 
     r2s = [r2_score(Yte[:, j], pred[:, j]) for j in range(Y.shape[1])]
     qi_j = names.index("log_10_qi")
@@ -1422,8 +1617,10 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
                 Z += z_mn[m, jn] * np.sin(ang)
         return R, Z
 
-    # three test-set stellarators spanning the elongation range
-    elong = Yte[:, names.index("max_elongation")]
+    # three test-set stellarators spanning the elongation range (closed-form
+    # geometry metric — not trained, but still on disk in Y_full for picking
+    # representative shapes to render).
+    elong = Y_full[te, metric_names.index("max_elongation")]
     picks = [int(np.argsort(elong)[k]) for k in
              (len(elong) // 20, len(elong) // 2, int(len(elong) * 0.95))]
     phis = np.array([0.0, 0.25, 0.5]) * (2 * np.pi / NFP) / 2
@@ -1444,23 +1641,59 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
         "log_10_qi": r"$\log_{10}$ QI residual",
     }
 
-    with surge_theme(mode) as p:
-        fig, axes = plt.subplots(
-            1, 3, figsize=(11.4, 3.6), width_ratios=[1.15, 1.0, 1.15])
+    def boundary_rz_grid(x_row, theta_g, phi_g):
+        """Vectorised R, Z over (theta, phi) grids for the 3D surface."""
+        r_mn = x_row[:45].reshape(5, 9)
+        z_mn = x_row[45:].reshape(5, 9)
+        R = np.zeros(theta_g.shape); Z = np.zeros(theta_g.shape)
+        for m in range(5):
+            for jn, n in enumerate(range(-4, 5)):
+                ang = m * theta_g - NFP * n * phi_g
+                R += r_mn[m, jn] * np.cos(ang)
+                Z += z_mn[m, jn] * np.sin(ang)
+        return R, Z
 
-        # (a) the objects: boundary cross-sections through half a field period
-        ax = axes[0]
-        for ki, i in enumerate(picks):
-            for jp, phi in enumerate(phis):
-                R, Z = boundary_rz(Xte[i], phi)
-                ax.plot(R, Z, color=p["series"][ki], lw=1.5,
-                        alpha=(1.0, 0.62, 0.35)[jp],
-                        label=(f"elongation {elong[i]:.1f}"
-                               if jp == 0 else None))
-        ax.set_aspect("equal")
-        ax.set_xlabel("R [m]"); ax.set_ylabel("Z [m]")
-        ax.set_title(r"(a) boundaries, $\varphi$: 0 → ¼ period", fontsize=9)
-        ax.legend(fontsize=6.5, loc="upper right")
+    with surge_theme(mode) as p:
+        fig = plt.figure(figsize=(12.2, 3.6))
+        gs = fig.add_gridspec(1, 3, width_ratios=[1.5, 1.0, 1.15],
+                              wspace=0.24)
+        axes = [None,
+                fig.add_subplot(gs[0, 1]),
+                fig.add_subplot(gs[0, 2])]
+
+        # (a) the LCFS in 3D: full torus, cross-section rings highlighted
+        ax = fig.add_subplot(gs[0, 0], projection="3d")
+        i_mid = picks[1]
+        th = np.linspace(0, 2 * np.pi, 90)
+        ph = np.linspace(0, 2 * np.pi, 240)
+        TH, PH = np.meshgrid(th, ph, indexing="ij")
+        R, Z = boundary_rz_grid(Xte[i_mid], TH, PH)
+        Xs, Ys = R * np.cos(PH), R * np.sin(PH)
+        ax.plot_surface(Xs, Ys, Z, color=p["series"][0], alpha=0.22,
+                        linewidth=0, antialiased=True, shade=True,
+                        rcount=45, ccount=120)
+        # section rings: half a field period, then repeated by symmetry
+        ring_phis = np.array([0, 1 / 6, 2 / 6]) * (2 * np.pi / NFP)
+        for jp, phi in enumerate(ring_phis):
+            for rep in range(NFP):
+                phv = phi + rep * 2 * np.pi / NFP
+                Rr, Zr = boundary_rz(Xte[i_mid], phv)
+                ax.plot(Rr * np.cos(phv), Rr * np.sin(phv), Zr,
+                        color=p["series"][jp], lw=1.7,
+                        label=(r"$\varphi$ = 0", r"1/6 period",
+                               r"1/3 period")[jp] if rep == 0 else None)
+        ax.set_box_aspect((1, 1, 0.5))
+        # mpl3d does not clip to limits — shrinking them zooms the torus in
+        lim = float(np.abs(R).max()) * 0.72
+        ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
+        ax.set_zlim(-lim * 0.5, lim * 0.5)
+        ax.view_init(elev=26, azim=-58)
+        ax.set_axis_off()
+        ax.set_facecolor("none")
+        ax.set_title(f"(a) LCFS in 3D — $n_{{fp}}$ = {NFP}, "
+                     "sections repeat each period", fontsize=8.5, pad=0,
+                     x=0.62)
+        ax.legend(fontsize=6, loc="upper left", frameon=False)
 
         # (b) parity for the headline metric: QI quality
         ax = axes[1]
@@ -1478,32 +1711,115 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 60):
         ax.set_title("(b) quasi-isodynamic quality", fontsize=9)
         _stat_chip(ax, f"R² = {r2s[qi_j]:.3f}", p, loc=(0.05, 0.94))
 
-        # (c) which figures of merit are learnable from shape alone
+        # (c) which of the 8 equilibrium figures of merit (need the VMEC++
+        # solve) are learnable from shape alone. Geometry/derived targets are
+        # not trained at all now, so every column here is "equilibrium".
         ax = axes[2]
-        order = np.argsort(r2s)
-        ypos = np.arange(len(names))
-        for y, o in zip(ypos, order):
+        eq_order = sorted(range(len(names)), key=lambda j: r2s[j])
+
+        for y, o in enumerate(eq_order):
             ax.barh(y, max(r2s[o], 0.0), height=0.62,
                     color=p["series"][0] if o != qi_j else p["series"][2],
                     alpha=0.9)
             ax.text(max(r2s[o], 0.0) + 0.012, y, f"{r2s[o]:.2f}",
                     va="center", fontsize=6.5, color=p["ink2"])
-        ax.set_yticks(ypos)
-        ax.set_yticklabels([_PRETTY.get(names[o], names[o]) for o in order],
+
+        ax.set_yticks(range(len(eq_order)))
+        ax.set_yticklabels([_PRETTY.get(names[o], names[o]) for o in eq_order],
                            fontsize=7)
         ax.set_xlim(0, 1.12)
-        ax.set_xlabel("test R²  (one 90 → 12 surrogate)")
-        ax.set_title("(c) learnability by metric", fontsize=9)
+        ax.set_ylim(-0.65, len(eq_order) - 1 + 0.65)
+        ax.set_xlabel("test R²  (one 90 → 8 surrogate;\ngeometry targets not trained)")
+        ax.set_title("(c) learnability of the 8 equilibrium metrics", fontsize=9,
+                     loc="right")
 
         fig.suptitle(
             "ConStellaration — stellarator boundary "
-            r"$(R_{mn}, Z_{mn}) \mapsto$ 12 equilibrium metrics · "
+            r"$(R_{mn}, Z_{mn}) \mapsto$ 8 equilibrium metrics · "
             f"{len(tr):,} train / {len(te):,} test QI configurations",
             fontsize=10.5, fontweight="bold")
         return fig
 
 
-# -------------------------------------------------------------------- main
+# ------------------------------------------------------------- scale demo
+
+def scale_figure(mode: str):
+    """Training-at-scale levers, from measured numbers
+    (scripts/benchmark_scale.py -> scale_bench.json): device speedups for
+    the 2D operator models and the parallel benchmark fan-out.
+    """
+    bench = _REPO / "examples" / "viz_gallery_output" / "scale_bench.json"
+    if not bench.exists():
+        return None
+    d = json.loads(bench.read_text())
+    dev_rows = d.get("device", [])
+    par_rows = d.get("parallel", [])
+    if not dev_rows or not par_rows:
+        return None
+    mono = {"family": "monospace"}
+
+    with surge_theme(mode) as p:
+        fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.3))
+
+        # (a) cpu vs accelerator fit time per model
+        ax = axes[0]
+        models = sorted({r["model"] for r in dev_rows})
+        devs = [dv for dv in ("cpu", "mps", "cuda")
+                if any(r["device"] == dv for r in dev_rows)]
+        width = 0.8 / len(devs)
+        for j, dv in enumerate(devs):
+            xs, ts = [], []
+            for i, mdl in enumerate(models):
+                row = next((r for r in dev_rows
+                            if r["model"] == mdl and r["device"] == dv), None)
+                if row:
+                    xs.append(i + (j - (len(devs) - 1) / 2) * width)
+                    ts.append(row["fit_seconds"])
+            ax.bar(xs, ts, width=width * 0.9, color=p["series"][j],
+                   alpha=0.9, label=dv)
+            for x, t in zip(xs, ts):
+                ax.text(x, t, f" {t:.1f}s", ha="center", va="bottom",
+                        fontsize=7, color=p["ink2"], **mono)
+        for i, mdl in enumerate(models):
+            cpu = next((r["fit_seconds"] for r in dev_rows
+                        if r["model"] == mdl and r["device"] == "cpu"), None)
+            acc = min((r["fit_seconds"] for r in dev_rows
+                       if r["model"] == mdl and r["device"] != "cpu"),
+                      default=None)
+            if cpu and acc:
+                ax.text(i, cpu * 1.16, f"{cpu / acc:.1f}x", ha="center",
+                        fontsize=9, fontweight="bold", color=p["good_text"],
+                        **mono)
+        ax.set_xticks(range(len(models)))
+        ax.set_xticklabels(models, fontsize=9)
+        ax.set_ylabel("fit time [s]")
+        ax.set_ylim(0, max(r["fit_seconds"] for r in dev_rows) * 1.35)
+        ax.set_title("(a) SURGE_DEVICE=auto — Apple-GPU speedup",
+                     fontsize=9)
+        ax.legend(fontsize=7.5)
+
+        # (b) parallel benchmark fan-out
+        ax = axes[1]
+        ws = [r["workers"] for r in par_rows]
+        ts = [r["wall_seconds"] for r in par_rows]
+        ax.plot(ws, ts, marker="o", ms=5, lw=1.8, color=p["series"][0],
+                label="measured")
+        ax.plot(ws, [ts[0] / w for w in ws], ls=(0, (4, 3)), lw=1.2,
+                color=p["axis"], label="ideal 1/N")
+        for w, t in zip(ws, ts):
+            ax.annotate(f"{t:.0f}s", (w, t), textcoords="offset points",
+                        xytext=(6, 5), fontsize=7.5, color=p["ink2"], **mono)
+        ax.set_xticks(ws)
+        ax.set_xlabel("workers  (surge bench --parallel N)")
+        ax.set_ylabel("wall time [s]")
+        ax.set_ylim(0, ts[0] * 1.15)
+        ax.set_title(f"(b) {par_rows[0]['jobs']} models x 3 seeds — "
+                     "QLKNN benchmark", fontsize=9)
+        ax.legend(fontsize=7.5, loc="upper right")
+        return fig
+
+
+# -------------------------------------------------------------------- main\n
 
 def main():
     ap = argparse.ArgumentParser()
@@ -1535,6 +1851,7 @@ def main():
         "mission_control": lambda m: mission_control_figure(
             Path(args.hpo_run), m),
         "constellaration": constellaration_figure,
+        "scale": scale_figure,
         "parity_singles": lambda m: parity_figure(Path(args.run), m, singles=True),
         "trio_singles": lambda m: trio_figure(m, singles=True),
         "field2d_singles": lambda m: field2d_figure(m, singles=True),

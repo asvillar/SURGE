@@ -26,6 +26,17 @@ with every run reproducible from its own `runs/<tag>/` directory.
 real SURGE output, regenerated from run artifacts
 (<code>python scripts/make_architecture_poster.py</code>).</em></sub></p>
 
+<p align="center">
+  <img src="docs/assets/readme/surge_end_to_end.gif" width="900"
+       alt="SURGE end to end on one real problem: the four-stage architecture, then QLKNN transport through ingest and characterize, model and optimize with a live 200-trial HPO campaign and mission-control dashboard, evaluate and quantify with held-out parity and ensemble calibration, and report and deploy with the benchmark leaderboard growing model by model"/>
+</p>
+<p align="center"><sub><em>The same workflow on one real problem — QLKNN turbulent
+transport — with every animated panel rendered from run artifacts by
+<code>python -m surge.viz.animate</code>: a 200-trial Optuna campaign filling in,
+the mission-control dashboard assembling trial by trial, early stopping, held-out
+parity, and the leaderboard gaining models against the published gate.
+(<a href="docs/assets/readme/surge_end_to_end.mp4">MP4</a>)</em></sub></p>
+
 ---
 
 ## Why SURGE
@@ -37,7 +48,8 @@ real SURGE output, regenerated from run artifacts
   **scikit-learn** (RF, GBM, ridge, logistic, GPR), boosted trees
   (**XGBoost / LightGBM / CatBoost**), **PyTorch** (MLP families,
   FNO / DeepONet / U-Net operator learners, LSTM/GRU,
-  CNN/ResNet/ViT vision, KAN, FT-Transformer, VAE/DDPM/CGAN),
+  CNN/ResNet/ViT vision, KAN, FT-Transformer, VAE/DDPM/CGAN,
+  **Simformer** all-in-one simulation-based inference),
   **TensorFlow/Keras** (`keras.mlp`, or **bring your own compiled
   `tf.keras` model** via `build_fn`), and Gaussian processes with
   predictive uncertainty (sklearn GPR, BoTorch exact/sparse, GPflow).
@@ -64,9 +76,9 @@ real SURGE output, regenerated from run artifacts
 
 ## Model benchmarking
 
-Every registered model can be scored against the curated benchmark
-suite — repeated seeds, mean ± std, runtime, and published pass
-thresholds with citations:
+SURGE ships a curated suite of 30+ benchmarks, each with a citation, a published pass threshold and mandatory baselines, and every run writes machine-readable `result.json` artifacts (repeated seeds, mean ± std, runtime). Not every benchmark is equally mature, so the ledger states per-benchmark status plainly.
+
+**[Full benchmark ledger with per-benchmark status → docs/benchmarks/README.md](docs/benchmarks/README.md)**
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/leaderboard.png"><img src="docs/assets/readme/leaderboard.png" width="820"
@@ -74,85 +86,98 @@ thresholds with citations:
 </p>
 <p align="center"><sub><em>QLKNN ITG heat-flux transport: ten models over
 repeated seeds — the HPO-tuned residual MLP leads at R² 0.948 ± 0.003
-against the published 0.90 gate.</em></sub></p>
+against the published 0.90 gate. The ground truth here is the QLKNN_7_11
+network itself (a surrogate scored against a surrogate), so this is a
+fast, tutorial-scale leaderboard exercising the full bench → HPO → report
+pipeline, not a from-raw-data reproduction — see QLKNN10D below for
+that.</em></sub></p>
 
 ```bash
 surge bench -b plasma.qlknn_transport -m all --seeds 3   # the row above
 surge report --out leaderboard.html                      # full dashboard
 ```
 
-The HTML dashboard adds spider charts per capability domain,
-per-benchmark **dataset previews** (sample MNIST digits, Lorenz
-attractor trajectories, Burgers field pairs), citations, tiers, and
-sortable tables — generated exclusively from
-`benchmark_reports/**/result.json` artifacts, never hand-entered.
+The HTML dashboard adds spider charts per capability domain, per-benchmark dataset previews, citations, tiers, and sortable tables, generated exclusively from `benchmark_reports/**/result.json`.
 
-## Scientific results at a glance
+## Highlights
 
-**2D operator learning** — FNO-2D learns the periodic Poisson solver
-source→solution at median rel-L2 **0.006** (32×32 fields; U-Net covers the
-same task shape):
-
-| | | |
-|:---:|:---:|:---:|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_truth.png"><img src="docs/assets/readme/field2d_truth.png" alt="Truth solution field u(x,y)"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_prediction.png"><img src="docs/assets/readme/field2d_prediction.png" alt="FNO-2D predicted field"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/field2d_error.png"><img src="docs/assets/readme/field2d_error.png" alt="Signed prediction error on a diverging colormap"/></picture> |
-
-**External PDE benchmark — [TheWell](https://polymathic-ai.org/the_well/)
-Gray-Scott reaction–diffusion** (Ohana et al., NeurIPS 2024). Forecast the
-species-B field **160 stored steps ahead** — the horizon is chosen so that
-the *persistence* baseline ("predict no change", green bar) visibly fails,
-because at single-step the task is trivial (persistence rel-L2 0.002 beats
-every model). Seven registry surrogates, one script
-([`examples/thewell_grayscott_study.py`](examples/thewell_grayscott_study.py)):
-**U-Net (residual target) leads at median rel-L2 0.206** and is the only
-architecture that beats persistence (0.265); FNO-2D blurs the sharp Turing
-interfaces at this horizon (0.428 even with 24 modes + residual target), and
-DeepONet's global low-rank basis can't localize (0.554):
+**Reproducing QLKNN from its own public training data** — the
+`plasma.qlknn10d` benchmark trains directly on the 290M QuaLiKiz
+gyrokinetic flux calculations behind QLKNN ([Zenodo, CC-BY 4.0](https://zenodo.org/records/3497066)):
+a SURGE residual MLP reaches **R² 0.989** on 200k held-out fluxes (ITG
+leading flux) after 15 minutes of laptop training on a 2.2M-row
+subsample — above the paper-quality 0.95 gate, fully reproducible
+end-to-end from public data
+([`examples/qlknn10d_study.py`](examples/qlknn10d_study.py)):
 
 <p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_grayscott.png"><img src="docs/assets/readme/thewell_grayscott.png"
-       alt="TheWell Gray-Scott study: input, truth, FNO-2D / U-Net / Ridge / DeepONet predictions, FNO error map, and model comparison bars"/></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/qlknn10d.png"><img src="docs/assets/readme/qlknn10d.png"
+       alt="QLKNN10D reproduction: residual MLP R2 0.989 on held-out QuaLiKiz ITG fluxes, parity density plot"/></picture>
 </p>
-
-<details>
-<summary><b>The single-step task also exists</b> (<code>--horizon 1</code>) — and shows why the forecast horizon matters: every model, even residual DeepONet at 0.020, loses to persistence at 0.002. Click to see it.</summary>
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_grayscott_h1.png"><img src="docs/assets/readme/thewell_grayscott_h1.png"
-       alt="Next-step Gray-Scott task: persistence baseline beats all seven models; residual-target variants dominate the model ranking"/></picture>
-</p>
-</details>
-
-**Plasma-transport regression** (QLKNN ITG heat flux) — HPO-tuned residual
-MLP, log-density parity in the style of the ICRF surrogate papers:
-
-| | | |
-|:---:|:---:|:---:|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_train.png"><img src="docs/assets/readme/parity_train.png" alt="Training parity density, R² 0.98"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_test.png"><img src="docs/assets/readme/parity_test.png" alt="Test parity density, R² 0.96"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/parity_residuals.png"><img src="docs/assets/readme/parity_residuals.png" alt="Test residual distribution with KDE"/></picture> |
 
 **Stellarator design surrogate — ConStellaration** (Proxima Fusion ×
-Hugging Face; Goodman et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
+Hugging Face; Cadena et al. 2025, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)).
 One residual MLP maps the plasma boundary Fourier coefficients
-$(R_{mn}, Z_{mn})$ to **12 equilibrium figures of merit** for 26,897
-QI-like configurations — quasi-isodynamic quality at R² **0.93**, and real
-rotating boundary cross-sections, not toy shapes:
+$(R_{mn}, Z_{mn})$ to the 8 stellarator metrics that need it across
+26,897 QI-like configurations, replacing the VMEC++ ideal-MHD
+equilibrium solve and Boozer-coordinate QI evaluation (minutes per
+configuration) — ι on axis/edge, both mirror ratios, vacuum well, min
+$L_{\nabla B}$, flux compression, log₁₀(QI) — at **mean R² 0.916** in
+the benchmark run (log₁₀ QI alone: R² 0.935; the figure's
+saturation-trained model reaches QI R² 0.942). The other 3 ConStellaration
+labels (aspect ratio, elongation, triangularity) are computed in closed
+form from the boundary coefficients and are not trained at all — the
+model never sees them as targets. An optional
+`--input-features stellarator_geometry` flag feeds them back in as
+physics-informed inputs. Last closed flux surface rendered in 3D:
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/constellaration.png"><img src="docs/assets/readme/constellaration.png"
-       alt="ConStellaration: stellarator boundary cross-sections, log10 QI parity density (R² 0.93), per-metric learnability bars"/></picture>
+       alt="ConStellaration: stellarator boundary cross-sections, log10 QI parity density (R² 0.942), learnability bars for the 8 equilibrium metrics"/></picture>
 </p>
 
 ```bash
-surge bench -b plasma.constellaration -m pytorch.residual_mlp --seeds 3
+surge bench -b constellaration_multi -m pytorch.residual_mlp --seeds 3
 ```
 
-**Optimization, uncertainty, and monitoring**:
+**When chaos caps pointwise accuracy, forecast the distribution** — on the TheWell turbulent radiative layer (non-square 64×192 grid, log-density, Δt = 8) every neural operator beats persistence, but only modestly: **U-Net 0.250 vs persistence 0.355**
+([`examples/thewell_turbulence_study.py`](examples/thewell_turbulence_study.py)).
+A 7-lever study (architecture, capacity, loss, features, …) showed this
+ceiling is predictability-limited, not a modeling gap — so the honest
+next move is to change the question: forecast a *distribution*. An
+8-member deep ensemble on 64 POD modes, scored with CRPS, reaches
+**CRPS 0.095 — 18% better than the best deterministic forecast** — with
+spread–skill correlation **0.88**: the calibrated ensemble knows when it
+is uncertain
+([`examples/thewell_probabilistic_study.py`](examples/thewell_probabilistic_study.py)):
 
-| | | |
-|:---:|:---:|:---:|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/hpo_convergence.png"><img src="docs/assets/readme/hpo_convergence.png" alt="HPO history with running best and starred optima"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/uncertainty.png"><img src="docs/assets/readme/uncertainty.png" alt="GP surrogate with 68/95% credible bands, 96% truth coverage"/></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/training_curves.png"><img src="docs/assets/readme/training_curves.png" alt="Training curves with generalisation gap, power-law fit, and smoothed early stopping"/></picture> |
-| *Optuna HPO: per-trial traces, running best, gold-starred optima.* | *GP credible bands widen where data is absent (96% truth coverage).* | *Per-epoch monitoring with **smoothed early stopping** — training halts itself at true saturation (epoch 147/300).* |
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/thewell_crps.png"><img src="docs/assets/readme/thewell_crps.png"
+       alt="Probabilistic turbulence forecasting: calibrated ensemble CRPS beats deterministic forecasts; spread-skill correlation 0.88; ensemble members fan out at the uncertain mixing interface"/></picture>
+</p>
 
-**Deep-ensemble uncertainty** (`pytorch.mlp_ensemble`) — mean ± 2σ
+**A 200-trial HPO campaign** — Optuna TPE over residual-MLP depth, per-block width, learning rate, batch size and dropout on the public QLKNN transport task (1 h 48 min on a laptop CPU). Best validation R² **0.977** (found at trial 134); the refit model reaches **test R² 0.974 vs 0.959** for the earlier 10-trial run. The same artifacts feed the one-look mission-control dashboard (all trial curves, convergence with the starred best, parameter sensitivity, test parity):
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/hpo_convergence.png"><img src="docs/assets/readme/hpo_convergence.png" width="820" alt="200-trial HPO history with running best and starred optimum at trial 134"/></picture>
+</p>
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/mission_control.png"><img src="docs/assets/readme/mission_control.png"
+       alt="SURGE mission control: per-trial validation loss curves, HPO convergence with starred best, run summary card, best-trial train/val curves, parameter sensitivity, test parity"/></picture>
+</p>
+
+```bash
+python examples/viz_theme_gallery.py --only mission_control --hpo-run runs/qlknn_hpo_200_best
+```
+
+**Uncertainty and inference** — GP surrogates carry calibrated credible bands that widen where data is absent (96% truth coverage), deep ensembles (`pytorch.mlp_ensemble`) give mean ± 2σ predictions with honest calibration, and the Simformer does simulation-based inference with one network:
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/uncertainty.png"><img src="docs/assets/readme/uncertainty.png" width="520" alt="GP surrogate with 68/95% credible bands, 96% truth coverage"/></picture>
+</p>
+
+Deep ensemble: mean ± 2σ
 predictions and honest calibration: raw spread is overconfident; σ-rescaling
 on a held-out split recovers near-Gaussian coverage:
 
@@ -160,6 +185,29 @@ on a held-out split recovers near-Gaussian coverage:
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/ensemble.png"><img src="docs/assets/readme/ensemble.png" width="820"
        alt="Deep-ensemble UQ: mean ± 2 sigma parity, spread vs error, raw vs calibrated coverage"/></picture>
 </p>
+
+
+`pytorch.simformer` is an independent PyTorch implementation of the
+Simformer ([Gloeckler et al., ICML 2024](https://arxiv.org/abs/2404.09636)):
+one score-based transformer trained on the **joint** p(θ, x) of
+simulation parameters and observables. Because the condition mask is a
+model input, the same trained network samples the posterior p(θ|x), the
+likelihood p(x|θ), or **any conditional** — including inference with
+missing observables. Validated against the one SBI problem with a known
+closed-form posterior:
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/simformer_sbi.png"><img src="docs/assets/readme/simformer_sbi.png"
+       alt="Simformer validation: sampled posterior matches the analytic 1-and-2-sigma ellipses; the same network samples the likelihood and the joint"/></picture>
+</p>
+
+```python
+model = MODEL_REGISTRY.create("pytorch.simformer")
+model.fit(x, theta)                        # learns the joint p(theta, x)
+model.sample_posterior(x_obs, 1000)        # amortized Bayesian inversion
+model.sample_likelihood(theta_0, 1000)     # forward surrogate, same net
+model.predict_with_uncertainty(X)          # registry contract: mean, std
+```
 
 Regenerate everything above from your own runs — full gallery per
 problem type in [`docs/gallery.md`](docs/gallery.md):
@@ -209,6 +257,18 @@ pip install -e ".[torch,dev]"`.
 
 All runs write artifacts to `runs/<tag>/` (`metrics.json`, trained models,
 scalers, predictions, spec snapshot).
+
+### 0 · Don't write YAML — generate it (`surge init`)
+
+The wizard inspects your data file, asks three questions (target, goal,
+time budget), and writes a fully commented spec; `surge validate` checks
+any spec offline with did-you-mean error messages:
+
+```bash
+surge init --data my_data.csv            # interactive (or --goal/--budget/--yes)
+surge validate spec.yaml                 # unknown keys? typos? bad types?
+surge run spec.yaml
+```
 
 ### 1 · Smoke test (~5 s) — tabular regression
 
@@ -339,20 +399,10 @@ Gallery of every figure type: `python examples/viz_theme_gallery.py`.
 
 ## Run monitoring — mission control
 
-Every HPO campaign leaves machine-readable artifacts (per-trial training
-histories, the trials manifest, metrics, parquet predictions), and the
-gallery renders them as a one-look dashboard — here the QLKNN residual-MLP
-campaign: all trial loss curves with the winner highlighted, search
-convergence with the starred best, parameter sensitivity, and the tuned
-model's test parity:
-
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/mission_control.png"><img src="docs/assets/readme/mission_control.png"
-       alt="SURGE mission control: per-trial validation loss curves, HPO convergence with starred best, run summary card, best-trial train/val curves, parameter sensitivity, test parity"/></picture>
-</p>
+Every HPO campaign leaves machine-readable artifacts, and the gallery renders them as a one-look dashboard (figure in [Highlights](#highlights)):
 
 ```bash
-python examples/viz_theme_gallery.py --only mission_control --hpo-run runs/qlknn_multi_hpo
+python examples/viz_theme_gallery.py --only mission_control --hpo-run runs/qlknn_hpo_200_best
 ```
 
 ## Experiment tracking (MLflow)
@@ -388,6 +438,47 @@ so the MLflow chart view plots live loss curves per trial:
   <img src="docs/assets/readme/mlflow_hpo_trials.png" width="820"
        alt="MLflow UI showing one HPO trial's per-epoch train and validation loss curves and its val_r2 score"/>
 </p>
+
+## Training at scale
+
+Two levers, both measured on a stock Apple-Silicon workstation
+([`scripts/benchmark_scale.py`](scripts/benchmark_scale.py) regenerates
+the numbers on your hardware):
+
+```bash
+SURGE_DEVICE=auto surge run spec.yaml                    # cuda > mps > cpu
+surge bench -b plasma.qlknn_transport -m all --seeds 3 --parallel 4
+```
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/scale.png"><img src="docs/assets/readme/scale.png"
+       alt="Left: FNO-2D and U-Net fit times on cpu vs Apple-GPU (7.6x and 7.4x speedups). Right: benchmark wall time vs surge bench --parallel workers, measured against ideal 1/N"/></picture>
+</p>
+
+Device selection is deliberately conservative: the default stays
+cuda→cpu, and the Apple GPU is **opt-in** (`SURGE_DEVICE=auto`) because
+not every architecture is MPS-safe — convolutional and spectral models
+are (identical R² to CPU), recurrent models are not. The safety table
+lives in [`docs/design/RESOURCE_MANAGEMENT.md`](docs/design/RESOURCE_MANAGEMENT.md),
+with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
+
+## Agentic workflows (Claude Code skills)
+
+The repo ships seven skills under [`.claude/skills/`](.claude/skills) that
+teach an AI assistant to drive SURGE correctly — spec conventions, the
+figure system, benchmark protocols:
+
+| Skill | What it does |
+|---|---|
+| `surge-wizard` | Q&A → generates a commented `spec.yaml` from your data file and runs it — no YAML by hand |
+| `surge-scale` | device selection (MPS safety table), `--parallel` budgeting, long-run monitoring |
+| `surge-build-surrogate` | end-to-end playbook: characterize → pick models by task shape → HPO → report |
+| `surge-run` / `surge-benchmark` | run workflows / reproduce leaderboard numbers |
+| `surge-viz` / `surge-add-model` | figure-system rules / add a new model adapter end-to-end |
+
+Example: point Claude Code at this repo, type `/surge-wizard` with any
+CSV, answer three questions (target column, goal, time budget), and it
+writes the spec, trains, and reports test metrics against a baseline.
 
 ## Documentation
 

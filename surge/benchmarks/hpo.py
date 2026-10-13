@@ -721,7 +721,19 @@ def _run_with_adapter_data(
     if task_type == "regression":
         y_pred_mo = y_pred.ravel() if np.asarray(y_test).ndim == 1 else y_pred
         metrics = _reg_metrics(y_test, y_pred_mo)
-        mo_metrics, mo_extra = _multioutput_reg_extras(y_test, y_pred_mo)
+
+        from .dataset_io import get_benchmark_io, output_kinds
+
+        io_spec = get_benchmark_io(benchmark_key)
+        mo_names = (
+            [o["name"] for o in io_spec["outputs"]]
+            if io_spec and io_spec.get("outputs")
+            else None
+        )
+        mo_kinds = output_kinds(io_spec) if io_spec else None
+        mo_metrics, mo_extra = _multioutput_reg_extras(
+            y_test, y_pred_mo, names=mo_names, kinds=mo_kinds
+        )
         metrics.update(mo_metrics)
     else:
         y_prob = None

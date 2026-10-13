@@ -91,7 +91,7 @@ include = ["surge*"]
 # Non-Python files that must ship in wheels: the benchmark metadata
 # (names, citations, tiers, thresholds) that reports read at runtime.
 [tool.setuptools.package-data]
-surge = ["benchmarks/metadata.yaml"]
+surge = ["benchmarks/metadata.yaml", "workflow/spec.schema.json"]
 
 # Scope `pytest` to the actual test suite. Without this, `pytest -q` from the
 # repo root walks into scripts/ and examples/ and trips over legacy tutorial

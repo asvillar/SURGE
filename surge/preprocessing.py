@@ -405,3 +405,57 @@ def pca_summary(
         "feature_names": list(feature_names),
         "top_features": top_features,
     }
+
+
+def pod_fit(fields: Any, n_modes: int) -> dict[str, Any]:
+    """Fit a POD (PCA) basis on training fields for reduced-order surrogates.
+
+    Parameters
+    ----------
+    fields:
+        (n_samples, n_dof) flattened training fields (grids ravelled).
+    n_modes:
+        Number of retained modes k (clipped to feasible rank).
+
+    Returns
+    -------
+    dict with ``mean`` (n_dof,), ``components`` (k, n_dof) orthonormal
+    rows, and ``explained_variance_ratio`` (k,). Use with
+    :func:`pod_transform` / :func:`pod_inverse`.
+    """
+    import numpy as np
+
+    F = np.asarray(fields, dtype=np.float64)
+    if F.ndim != 2:
+        F = F.reshape(len(F), -1)
+    k = int(min(n_modes, F.shape[0] - 1, F.shape[1]))
+    if k < 1:
+        raise ValueError(f"n_modes={n_modes} infeasible for shape {F.shape}")
+    mean = F.mean(axis=0)
+    U, s, Vt = np.linalg.svd(F - mean, full_matrices=False)
+    var = s**2
+    return {
+        "mean": mean,
+        "components": Vt[:k],
+        "explained_variance_ratio": (var[:k] / var.sum()),
+    }
+
+
+def pod_transform(basis: dict[str, Any], fields: Any) -> Any:
+    """Project fields onto the POD basis -> mode coefficients (n, k)."""
+    import numpy as np
+
+    F = np.asarray(fields, dtype=np.float64)
+    if F.ndim != 2:
+        F = F.reshape(len(F), -1)
+    return (F - basis["mean"]) @ basis["components"].T
+
+
+def pod_inverse(basis: dict[str, Any], coeffs: Any) -> Any:
+    """Reconstruct fields from mode coefficients -> (n, n_dof)."""
+    import numpy as np
+
+    C = np.asarray(coeffs, dtype=np.float64)
+    if C.ndim == 1:
+        C = C[None, :]
+    return C @ basis["components"] + basis["mean"]

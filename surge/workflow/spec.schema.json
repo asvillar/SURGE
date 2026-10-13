@@ -1,0 +1,253 @@
+{
+  "type": "object",
+  "properties": {
+    "dataset_path": {
+      "type": "string"
+    },
+    "dataset_format": {
+      "type": "string"
+    },
+    "dataset_source": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "metadata_path": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ModelConfig"
+      }
+    },
+    "test_fraction": {
+      "type": "number"
+    },
+    "val_fraction": {
+      "type": "number"
+    },
+    "standardize_inputs": {
+      "type": "boolean"
+    },
+    "standardize_outputs": {
+      "type": "boolean"
+    },
+    "cv_folds": {
+      "type": "integer"
+    },
+    "predictions_scope": {},
+    "predictions_format": {
+      "type": "string"
+    },
+    "output_dir": {
+      "type": "string"
+    },
+    "run_tag": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "sample_rows": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "analyzer": {
+      "type": "object"
+    },
+    "metadata_overrides": {
+      "type": "object"
+    },
+    "batch_dir_mode_step": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "batch_dir_psi_step": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "batch_dir_target_shape": {
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "batch_dir_include_eigenmodes": {
+      "type": "boolean"
+    },
+    "batch_dir_filename": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "overwrite_existing_run": {
+      "type": "boolean"
+    },
+    "pretrained_run_dir": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "finetune_lr_scale": {
+      "type": "number"
+    },
+    "mlflow_tracking": {
+      "type": "boolean"
+    },
+    "mlflow_experiment": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resources": {
+      "$ref": "#/$defs/ResourceSpec"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "dataset_path"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/S-Villar/SURGE/surge/workflow/spec.schema.json",
+  "title": "SURGE workflow spec",
+  "description": "Declarative surrogate workflow: load -> split -> train -> HPO -> metrics -> artifacts.",
+  "$defs": {
+    "ModelConfig": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "params": {
+          "type": "object"
+        },
+        "request_uncertainty": {
+          "type": "boolean"
+        },
+        "store_predictions": {
+          "type": "boolean"
+        },
+        "tags": {},
+        "hpo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HPOConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key"
+      ]
+    },
+    "HPOConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "n_trials": {
+          "type": "integer"
+        },
+        "timeout": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "direction": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "search_space": {
+          "type": "object"
+        },
+        "sampler": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResourceSpec": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string"
+        },
+        "num_workers": {
+          "type": "integer"
+        },
+        "max_gpus": {
+          "type": "integer"
+        },
+        "pin_memory": {
+          "type": "boolean"
+        },
+        "persistent_workers": {
+          "type": "boolean"
+        },
+        "strict": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

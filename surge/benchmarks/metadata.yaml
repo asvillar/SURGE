@@ -6,6 +6,8 @@
 # always come from benchmark_reports/**/result.json at render time.
 benchmarks:
 - key: tabular.california_housing
+  status: ready
+  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: California Housing
   capability: Scalar Regression
   tier: 1
@@ -18,6 +20,8 @@ benchmarks:
   description: Predict median house value in California census block groups from socioeconomic
     and geographic features (1990 US Census aggregates).
 - key: tabular.concrete_strength
+  status: ready
+  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: Concrete Compressive Strength
   capability: Scalar Regression
   tier: 1
@@ -29,6 +33,8 @@ benchmarks:
   threshold: R² ≥ 0.80
   description: Predict concrete compressive strength (MPa) from mixture composition and age.
 - key: tabular.energy_efficiency
+  status: ready
+  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: Building Energy Efficiency
   capability: Scalar Regression
   tier: 1
@@ -40,6 +46,8 @@ benchmarks:
   threshold: R² ≥ 0.90
   description: Predict building heating load from envelope, geometry, and HVAC features.
 - key: tabular.airfoil_noise
+  status: ready
+  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: NASA Airfoil Self-Noise
   capability: Scalar Regression
   tier: 1
@@ -52,6 +60,8 @@ benchmarks:
   description: Predict scaled sound pressure level of airfoil self-noise from aerodynamic
     and geometry parameters.
 - key: tabular.yacht_dynamics
+  status: tutorial
+  status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Yacht Hydrodynamics
   capability: Scalar Regression
   tier: 1
@@ -64,6 +74,8 @@ benchmarks:
   description: Predict residuary resistance per unit weight of sailing yachts from hull geometry
     ratios.
 - key: tabular.superconductor
+  status: ready
+  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: Superconductor Critical Temperature
   capability: Scalar Regression
   tier: 1
@@ -77,6 +89,8 @@ benchmarks:
   description: Predict superconducting critical temperature Tc from chemical/formula-derived
     features.
 - key: tabular.diabetes
+  status: tutorial
+  status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Diabetes Progression
   capability: Scalar Regression
   tier: 1
@@ -90,6 +104,8 @@ benchmarks:
   description: Predict diabetes disease progression one year after baseline from 10 physiological
     variables.
 - key: multioutput.scm20d
+  status: tutorial
+  status_note: "Small multi-output set; plumbing / teaching benchmark"
   name: SCM20d Supply Chain (20 targets)
   capability: Multi-output Regression
   tier: 1
@@ -102,6 +118,8 @@ benchmarks:
   description: Joint prediction of 20 supply-chain management target variables from 61 input
     features.
 - key: tabular.breast_cancer
+  status: tutorial
+  status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Wisconsin Breast Cancer (WDBC)
   capability: Tabular Classification
   tier: 1
@@ -113,6 +131,8 @@ benchmarks:
   threshold: Acc ≥ 0.95
   description: 'Binary classification: malignant vs benign from cytology features.'
 - key: tabular.digits
+  status: tutorial
+  status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Optical Recognition of Handwritten Digits
   capability: Tabular Classification
   tier: 1
@@ -124,6 +144,8 @@ benchmarks:
   threshold: Acc ≥ 0.97
   description: Classify 8×8 grayscale digit images (flattened to 64 features).
 - key: tabular.iris
+  status: tutorial
+  status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Iris (3-class)
   capability: Tabular Classification
   tier: 1
@@ -135,6 +157,8 @@ benchmarks:
   threshold: Acc ≥ 0.95
   description: Classify iris species from sepal and petal measurements.
 - key: tabular.wine
+  status: tutorial
+  status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: UCI Wine (3-class)
   capability: Tabular Classification
   tier: 1
@@ -146,6 +170,8 @@ benchmarks:
   threshold: Acc ≥ 0.90
   description: Classify wine cultivar from chemical analysis.
 - key: classification.covertype
+  status: needs_rerun
+  status_note: "no result on file"
   name: Forest Covertype (7-class)
   capability: Scientific Classification
   tier: 1
@@ -158,6 +184,8 @@ benchmarks:
   threshold_note: Threshold achievable with full 581k; 20k subsample harder
   description: Classify forest cover type from cartographic and terrain variables.
 - key: classification.plasma_stability
+  status: needs_rerun
+  status_note: "no result on file"
   name: Electrical Grid Stability (plasma proxy)
   capability: Scientific Classification
   tier: 2
@@ -169,6 +197,8 @@ benchmarks:
   threshold: Acc ≥ 0.92
   description: Binary classification of power-grid stability from simulated operating points.
 - key: classification.flow_regime
+  status: tutorial
+  status_note: "Small classification set (n < 1,000 effective); plumbing check"
   name: CFD Flow Regime (4-class)
   capability: Scientific Classification
   tier: 0
@@ -180,6 +210,8 @@ benchmarks:
   threshold: Acc ≥ 0.85
   description: Classify CFD-like flow regime from Mach number, log₁₀(Reynolds), angle of attack.
 - key: sequence.lorenz63
+  status: sanity
+  status_note: "fixed-window NRMSE, not Lyapunov-time rollout"
   name: Lorenz-63 Chaotic Forecasting
   capability: Time Series / Forecasting
   tier: 0
@@ -191,6 +223,8 @@ benchmarks:
   threshold: NRMSE ≤ 0.10
   description: Short-horizon prediction on the Lorenz-63 chaotic attractor (σ=10, ρ=28, β=8/3).
 - key: pde.burgers_1d
+  status: sanity
+  status_note: "R² 1.000 at 64 points — too easy as posed vs FNO paper's 1024"
   name: Viscous Burgers 1D (Inline FD Solver)
   capability: 1D PDE Operator
   tier: 1
@@ -202,6 +236,8 @@ benchmarks:
   threshold: NRMSE ≤ 0.10
   description: 'Learn operator u(x,0) → u(x,T) for 1D viscous Burgers: ∂u/∂t + u∂u/∂x = ν∂²u/∂x².'
 - key: vision.mnist
+  status: tutorial
+  status_note: "MNIST is a plumbing check, not a surrogate result"
   name: MNIST Handwritten Digits
   capability: Vision
   tier: 2
@@ -214,6 +250,8 @@ benchmarks:
   threshold_note: 'Published LeNet-5: 99.05%; 98.9% with default epochs'
   description: Classify 28×28 handwritten digits.
 - key: vision.cifar10
+  status: needs_rerun
+  status_note: "best on file 0.285, invalid run"
   name: CIFAR-10 Image Classification
   capability: Vision
   tier: 2
@@ -227,6 +265,8 @@ benchmarks:
     mismatch + no val split. Fixed; re-run needed for official metrics.
   description: Classify 32×32×3 natural images into 10 object categories.
 - key: fusion.m3dc1_sample
+  status: needs_rerun
+  status_note: "on-file result is the synthetic fallback fixture"
   name: M3DC1 Tokamak Equilibrium Surrogate
   capability: Scientific Domain
   tier: 2
@@ -239,6 +279,8 @@ benchmarks:
   description: 'Tokamak MHD equilibrium surrogate: map equilibrium parameters to a stability/growth-rate
     metric.'
 - key: plasma.cmod_density_limit
+  status: needs_rerun
+  status_note: "accuracy on resampled data; field convention is ROC/FPR"
   name: C-Mod Greenwald Density Limit
   capability: Scientific Domain
   tier: 2
@@ -251,10 +293,12 @@ benchmarks:
   description: Predict density-limit disruption precursor (Greenwald limit) from Alcator C-Mod
     plasma signals.
 - key: plasma.constellaration
+  status: needs_rerun
+  status_note: "docs gate 0.85 but code gate 0.50; rerun after fix"
   name: ConStellaration Stellarator Surrogate
   capability: Scientific Domain
   tier: 2
-  citation: Goodman et al. (2025) arXiv:2506.19583 — ConStellaration dataset
+  citation: Cadena et al. (2025) arXiv:2506.19583 — ConStellaration dataset
   url: https://arxiv.org/abs/2506.19583
   shape: 90 → 1
   n: 10k / 26,897
@@ -264,10 +308,12 @@ benchmarks:
   description: 'Stellarator surrogate: VMEC/DESC boundary shape → log₁₀(qi) quasi-isodynamic
     quality.'
 - key: plasma.constellaration_paper
+  status: needs_rerun
+  status_note: "paper protocol, mean R² 0.929 vs paper 0.97 — parity check, honest fail"
   name: ConStellaration Multi-output (Paper Benchmark)
   capability: Scientific Domain
   tier: 2
-  citation: Goodman et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol
+  citation: Cadena et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol
   url: https://arxiv.org/abs/2506.19583
   shape: 90 → 12
   n: 26,897
@@ -276,51 +322,148 @@ benchmarks:
   threshold_note: 12 models (one per metric); score = mean test R². Paper pass ≥ 0.97.
   description: 'Paper protocol: 12 independent 90→1 models, one per stellarator metric.'
 - key: plasma.constellaration_multioutput
+  status: ready
+  status_note: "90→8 equilibrium metrics; run 2026-09-25 mean R² 0.916, QI 0.935"
   name: ConStellaration Joint Multi-output
   capability: Scientific Domain
   tier: 2
-  citation: Goodman et al. (2025) arXiv:2506.19583 — single 90→12 surrogate
+  citation: Cadena et al. (2025) arXiv:2506.19583 — single 90→8 surrogate
   url: https://arxiv.org/abs/2506.19583
-  shape: 90 → 12
+  shape: 90 → 8
   n: 26,897
-  primary_metric: R²
-  threshold: R² ≥ 0.85
-  threshold_note: 'One model, all 12 metrics. Also logged: RMSE, min/max per-metric R², NRMSE.
-    HPO: surge run -b constellaration_multi -m pytorch.residual_mlp --hpo'
-  description: Single joint surrogate predicting all 12 stellarator metrics from boundary
-    shape (alternative to the paper’s 12-model protocol).
-  io_note: 'Joint multi-output benchmark (not the paper’s 12-model protocol). Workflow: examples/constellaration_multioutput_workflow.py'
+  primary_metric: R² (mean, 8 equilibrium metrics)
+  threshold: equilibrium mean R² ≥ 0.85
+  threshold_note: 'Trains and scores only the 8 metrics that require the VMEC++
+    equilibrium solve (test_r2_equilibrium_mean gates the pass/fail). The other
+    4 ConStellaration labels are not trained at all: aspect_ratio, max_elongation
+    and average_triangularity are computed in closed form from the boundary
+    coefficients (surge.benchmarks.loaders.constellaration.geometry_metrics,
+    machine precision) and aspect_ratio_over_edge_rotational_transform follows
+    by dividing that exact aspect_ratio by the (learned) edge ι/n_fp — there is
+    no longer a geometry-sanity row in the gate. Also logged: RMSE, min/max
+    per-metric R², NRMSE. HPO: surge run -b constellaration_multi -m
+    pytorch.residual_mlp --hpo'
+  description: Single joint surrogate predicting the 8 equilibrium-solve stellarator
+    metrics from boundary shape (alternative to the paper’s 12-model protocol).
+  io_note: 'Joint multi-output benchmark (not the paper’s 12-model protocol), trained
+    on equilibrium targets only. Workflow: examples/constellaration_multioutput_workflow.py'
   inputs:
   - name: r_cos[0:44]
     desc: 45 R Fourier cos coefficients (VMEC boundary)
   - name: z_sin[0:44]
     desc: 45 Z Fourier sin coefficients (VMEC boundary)
   outputs:
-  - name: aspect_ratio
-    desc: Plasma aspect ratio
-  - name: aspect_ratio_over_edge_rotational_transform
-    desc: Aspect ratio / edge ι
-  - name: max_elongation
-    desc: Maximum elongation
   - name: axis_rotational_transform_over_n_field_periods
     desc: Axis ι / n_fp
+    kind: equilibrium
   - name: edge_rotational_transform_over_n_field_periods
     desc: Edge ι / n_fp
+    kind: equilibrium
   - name: axis_magnetic_mirror_ratio
     desc: Axis magnetic mirror ratio
+    kind: equilibrium
   - name: edge_magnetic_mirror_ratio
     desc: Edge magnetic mirror ratio
-  - name: average_triangularity
-    desc: Average triangularity
+    kind: equilibrium
   - name: vacuum_well
     desc: Vacuum magnetic well
+    kind: equilibrium
   - name: minimum_normalized_magnetic_gradient_scale_length
     desc: Min normalised |∇B| scale length
+    kind: equilibrium
   - name: flux_compression_in_regions_of_bad_curvature
     desc: Flux compression in bad-curvature regions
+    kind: equilibrium
   - name: log_10_qi
     desc: log₁₀ quasi-isodynamic quality (lower = better QI)
+    kind: equilibrium
+- key: plasma.constellaration_modb
+  status: in_progress
+  status_note: "field surrogates; 500/26,897 equilibria cached"
+  name: ConStellaration |B| Field Surrogate
+  capability: Scientific Domain
+  tier: 2
+  citation: Cadena et al. (2025) arXiv:2506.19583; VMEC — Hirshman & Whitson (1983) Phys.
+    Fluids 26, 3553
+  url: https://arxiv.org/abs/2506.19583
+  shape: 2×64×32 → 64×32
+  n: 500 (of 26,897; grows as the wout download completes)
+  primary_metric: rel-L2 (median)
+  threshold: rel-L2 ≤ 0.05
+  threshold_note: PROVISIONAL — set from the first full-cache leaderboard (not yet run);
+    today's 500-row cache is a smoke test only.
+  description: 'Boundary shape → |B|(θ,φ) on the last closed flux surface: predict the
+    field-strength map on the plasma boundary from the same 90 boundary Fourier coefficients
+    as the scalar ConStellaration benchmarks.'
+  io_note: 'X derived via boundary_grid (theta_ref gauge); y from the wout bmnc via evaluate_modB,
+    re-expressed on the same grid (theta_ref = pi - theta_wout, an exact index permutation
+    for even n_theta) and normalised by its per-sample mean. Also reports test_relative_l2_mean
+    and test_mirror_ratio_mae; extra carries mean-field and POD+ridge baselines. Requires
+    the downloaded VMEC wout subset (surge.benchmarks.loaders.constellaration.download_wout_subset).'
+  inputs:
+  - name: boundary_RZ
+    desc: Boundary (R, Z) on a 64×32 (θ,φ) grid, from the 90 r_cos/z_sin coefficients
+  outputs:
+  - name: modB
+    desc: '|B|(θ,φ) on the LCFS, normalised by its per-sample mean'
+    kind: equilibrium
+- key: plasma.constellaration_surfaces
+  status: in_progress
+  status_note: "field surrogates; 500/26,897 equilibria cached"
+  name: ConStellaration Flux-Surface Field Surrogate
+  capability: Scientific Domain
+  tier: 2
+  citation: Cadena et al. (2025) arXiv:2506.19583; VMEC — Hirshman & Whitson (1983) Phys.
+    Fluids 26, 3553
+  url: https://arxiv.org/abs/2506.19583
+  shape: 2×64×32 → 2×16×64
+  n: 500 (of 26,897; grows as the wout download completes)
+  primary_metric: rel-L2 (median)
+  threshold: rel-L2 ≤ 0.02
+  threshold_note: PROVISIONAL — set from the first full-cache leaderboard (not yet run).
+  description: 'Boundary shape → poloidal cross-sections of the 16 stored flux surfaces
+    at φ=0: the stellarator analogue of a tokamak ψ-map.'
+  io_note: 'Same X as plasma.constellaration_modb; y = R(θ),Z(θ) per surface (surface 0 =
+    magnetic axis, last = boundary) from the wout rmnc/zmns via evaluate_surface, re-expressed
+    on the theta_ref grid. Also reports test_relative_l2_mean and test_axis_position_error
+    (surface-0 centroid displacement / minor radius); extra carries mean-field and POD+ridge
+    baselines. Same wout-subset requirement and canonical split as constellaration_modb.'
+  inputs:
+  - name: boundary_RZ
+    desc: Boundary (R, Z) on a 64×32 (θ,φ) grid, from the 90 r_cos/z_sin coefficients
+  outputs:
+  - name: surfaces_RZ
+    desc: R(θ), Z(θ) at φ=0 for each of the 16 stored flux surfaces
+    kind: equilibrium
+- key: plasma.qlknn10d
+  status: needs_rerun
+  status_note: "strongest result, R² 0.989 in examples/qlknn10d_study.py, no result.json via surge bench yet"
+  name: QLKNN10D QuaLiKiz Training Data
+  capability: Scientific Domain
+  tier: 2
+  citation: van de Plassche et al. (2020) Phys. Plasmas 27, 022310 — QLKNN10D, Zenodo 10.5281/zenodo.3497066
+  url: https://zenodo.org/records/3497066
+  shape: 9 → 1
+  n: 2.4M / 290M
+  primary_metric: R²
+  threshold: R² ≥ 0.95
+  threshold_note: paper-quality gate for the ITG leading flux on unstable points; subset documented in the loader.
+  description: 'Reproduce QLKNN from its own public training data: predict the QuaLiKiz ITG ion heat flux from 9 gyrokinetic parameters.'
+  inputs:
+  - {name: Zeff, desc: Effective charge}
+  - {name: Ati, desc: Normalised ion temperature gradient}
+  - {name: Ate, desc: Normalised electron temperature gradient}
+  - {name: An, desc: Normalised density gradient (electrons = ions)}
+  - {name: q, desc: Safety factor}
+  - {name: smag, desc: Magnetic shear}
+  - {name: x, desc: Normalised minor radius}
+  - {name: Ti_Te, desc: Ion-to-electron temperature ratio}
+  - {name: Nustar, desc: Collisionality}
+  outputs:
+  - {name: efiITG, desc: ITG ion heat flux (leading flux, GyroBohm units)}
 - key: plasma.qlknn_transport
+  status: tutorial
+  status_note: "ground truth is the QLKNN_7_11 network itself"
   name: QLKNN Turbulent Transport Coefficient
   capability: Scientific Domain
   tier: 2

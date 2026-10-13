@@ -203,6 +203,34 @@ _BENCHMARK_MODEL_KWARGS: dict[str, dict] = {
 }
 
 
+def _task_mismatch(model_key: str, task_type: str) -> str | None:
+    """Reason why ``model_key`` cannot serve ``task_type``, else None.
+
+    Only fires when a model is KNOWN to belong to the opposite task — a
+    regressor asked to classify, or vice versa. Models outside the curated
+    lists (neural operators, generative backends, GPs) pass through
+    untouched, so this never blocks a legitimate combination.
+
+    Without this gate an explicit ``--model pytorch.mlp`` on a
+    classification benchmark trains happily and then dies inside sklearn's
+    metric code with "Classification metrics can't handle a mix of
+    multiclass and continuous targets" — a confusing error, several
+    minutes of wasted training, and no persisted record of the attempt.
+    """
+    if task_type not in ("regression", "classification"):
+        return None
+    regression = set(_default_models_for("regression"))
+    classification = set(_default_models_for("classification"))
+    if task_type == "regression" and model_key in classification - regression:
+        return (f"{model_key} is a classifier; "
+                f"'{task_type}' benchmarks need a regression model")
+    if task_type == "classification" and model_key in regression - classification:
+        return (f"{model_key} is a regressor; "
+                f"'{task_type}' benchmarks need a classification model "
+                f"(try {model_key}_classifier)")
+    return None
+
+
 def _default_models_for(task_type: str, benchmark_key: str | None = None) -> list[str]:
     # Per-benchmark override takes precedence.
     if benchmark_key is not None and benchmark_key in _BENCHMARK_MODEL_OVERRIDES:
@@ -422,6 +450,20 @@ def run_leaderboard(
                 print(f"  [skip] {model_key} not in MODEL_REGISTRY", file=sys.stderr)
                 continue
 
+            # Explicit --model/--compare-models bypasses the task filter that
+            # _default_models_for applies; catch the mismatch here instead of
+            # failing later inside the metric computation.
+            mismatch = _task_mismatch(model_key, task_type)
+            if mismatch is not None:
+                res = _skip_result(
+                    key, model_key, reason=mismatch, stage="task_compatibility",
+                )
+                if save_root is not None:
+                    res.save(root=save_root)
+                results[key].append(res)
+                print(f"  [skip] {mismatch}", file=sys.stderr)
+                continue
+
             # Load cached HP when requested.
             cached_hp: dict = {}
             if use_hpo_cache and save_root is not None:
@@ -541,8 +583,16 @@ def _aggregate_seed_results(results: list[BenchmarkResult]) -> BenchmarkResult:
     )
 
 
-def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> BenchmarkResult | None:
-    """Run a benchmark using a pre-instantiated adapter."""
+def _run_with_adapter(
+    benchmark_key: str, adapter: Any, *, seed: int, input_features: str | None = None
+) -> BenchmarkResult | None:
+    """Run a benchmark using a pre-instantiated adapter.
+
+    ``input_features``, if given, names a transform registered in
+    :mod:`surge.benchmarks.features` (e.g. ``"stellarator_geometry"``);
+    it is applied to ``X`` right after loading and before the train/test
+    split. Default ``None`` leaves ``X`` unchanged.
+    """
     import time
 
     import numpy as np
@@ -561,6 +611,18 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
     except Exception as exc:
         print(f"  [error] could not load {benchmark_key}: {exc}", file=sys.stderr)
         return _skip_result(benchmark_key, model_key, reason=str(exc), stage="data_load")
+
+    input_features_meta: dict[str, Any] | None = None
+    if input_features:
+        from .features import apply_input_features
+
+        n_before = X.shape[1]
+        X = apply_input_features(input_features, X, benchmark_key)
+        input_features_meta = {
+            "input_features": input_features,
+            "input_width": int(X.shape[1]),
+            "input_width_before": int(n_before),
+        }
 
     # Vision benchmarks: official train/test split + 10% train holdout for val/early-stop.
     X_val, y_val = None, None
@@ -642,7 +704,19 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
             # Support multi-output: only ravel for 1-D targets.
             y_pred_mo = y_pred.ravel() if y_test.ndim == 1 else y_pred
             metrics = _reg_metrics(y_test, y_pred_mo)
-            mo_metrics, mo_extra = _multioutput_reg_extras(y_test, y_pred_mo)
+
+            from .dataset_io import get_benchmark_io, output_kinds
+
+            io_spec = get_benchmark_io(benchmark_key)
+            mo_names = (
+                [o["name"] for o in io_spec["outputs"]]
+                if io_spec and io_spec.get("outputs")
+                else None
+            )
+            mo_kinds = output_kinds(io_spec) if io_spec else None
+            mo_metrics, mo_extra = _multioutput_reg_extras(
+                y_test, y_pred_mo, names=mo_names, kinds=mo_kinds
+            )
             metrics.update(mo_metrics)
 
         # UQ metrics — computed when the model exposes predict_with_uncertainty.
@@ -676,6 +750,22 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         metrics["gpu_peak_memory_mb"] = gpu_peak
     passed = _check_pass(benchmark_key, metrics)
 
+    message = f"leaderboard run via {model_key}"
+    if benchmark_key == "plasma.constellaration_multioutput":
+        per_by_name = mo_extra.get("per_metric_r2_by_name") or {}
+        name_kinds = mo_extra.get("metric_kinds") or {}
+        bad_geometry = [
+            (name, r2)
+            for name, r2 in per_by_name.items()
+            if name_kinds.get(name) == "geometry" and r2 < 0.99
+        ]
+        if bad_geometry:
+            detail = ", ".join(f"{name} R²={r2:.2f} < 0.99" for name, r2 in bad_geometry)
+            noun = "target" if len(bad_geometry) == 1 else "targets"
+            message += (
+                f" | geometry sanity: {detail} — closed-form {noun} not recovered"
+            )
+
     result_extra: dict[str, Any] = {
         "status": "completed",
         "n_train": len(X_train),
@@ -684,6 +774,8 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         "resources": resource_info,
     }
     result_extra.update(mo_extra)
+    if input_features_meta:
+        result_extra.update(input_features_meta)
 
     return BenchmarkResult(
         benchmark_key=benchmark_key,
@@ -692,7 +784,7 @@ def _run_with_adapter(benchmark_key: str, adapter: Any, *, seed: int) -> Benchma
         task_type=task_type,
         metrics=metrics,
         passed=passed,
-        message=f"leaderboard run via {model_key}",
+        message=message,
         extra=result_extra,
     )
 
@@ -738,8 +830,11 @@ def _load_dataset(benchmark_key: str):
         "fusion.m3dc1_sample":        lambda: _load_fusion_m3dc1_sample(),
         "plasma.cmod_density_limit":  lambda: _load_cmod_density_limit(),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
+        "plasma.qlknn10d":            lambda: _load_qlknn10d(),
         "plasma.constellaration":              lambda: _load_constellaration(),
         "plasma.constellaration_multioutput":  lambda: _load_constellaration_multioutput(),
+        "plasma.constellaration_modb":         lambda: _load_constellaration_modb(),
+        "plasma.constellaration_surfaces":     lambda: _load_constellaration_surfaces(),
         "thewell.gray_scott":         lambda: _load_thewell_gray_scott(),
         # Vision benchmarks
         "vision.cifar10": lambda: _load_cifar10(),
@@ -1251,6 +1346,56 @@ def _load_thewell_gray_scott(*, n_train: int = 500, n_test: int = 100, seed: int
     return X, y
 
 
+
+def _load_qlknn10d(n_rows: int = 2_400_000, seed: int = 42,
+                   h5_path: "Path | None" = None,
+                   cache_path: "Path | None" = None):
+    """QLKNN10D: train on the ACTUAL QuaLiKiz gyrokinetic fluxes.
+
+    The public training data behind QLKNN (van de Plassche et al., Phys.
+    Plasmas 27, 022310 (2020); Zenodo 10.5281/zenodo.3497066, CC-BY 4.0):
+    290,304,000 QuaLiKiz flux calculations on a 9-D input grid
+    (Zeff, Ati, Ate, An, q, smag, x, Ti_Te, Nustar). This benchmark
+    predicts the ITG LEADING flux (ion heat flux efiITG, GyroBohm units,
+    a-normalised) on ITG-unstable points — the task the published QLKNN
+    solves — from a strided subsample of the full table (subset size in
+    the cache; grid coverage via stride sampling).
+
+    Requires data/datasets/benchmarks/plasma/qlknn10d/
+    gen5_9D_nions0_flat_filter10.h5 (13.3 GB, open download).
+    """
+    cache = cache_path or (_bench_data_root() / "plasma" / "qlknn10d_sub.npz")
+    if cache.exists():
+        d = np.load(cache)
+        return d["X"], d["y"]
+
+    import h5py
+
+    h5 = h5_path or (_bench_data_root() / "plasma" / "qlknn10d"
+                     / "gen5_9D_nions0_flat_filter10.h5")
+    if not h5.exists():
+        raise FileNotFoundError(
+            "QLKNN10D file missing — download 13.3 GB from "
+            "https://zenodo.org/records/3497066 into "
+            "data/datasets/benchmarks/plasma/qlknn10d/")
+
+    with h5py.File(h5) as f:
+        N = f["input/block0_values"].shape[0]
+        # ~20% of rows are ITG-unstable; oversample by 5x then filter
+        stride = max(1, N // (5 * n_rows))
+        X = f["input/block0_values"][::stride]
+        efi = f["output/efiITG_GB/block0_values"][::stride][:, 0]
+        itg = f["output/ITG/block0_values"][::stride][:, 0]
+    mask = (itg == 1) & np.isfinite(efi) & (efi > 0)
+    X, y = X[mask].astype(np.float32), efi[mask].astype(np.float32)
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(len(X))[:n_rows]
+    X, y = X[perm], y[perm]
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, X=X, y=y)
+    return X, y
+
+
 def _load_constellaration(n_samples: int = 10_000):
     """ConStellaration: stellarator boundary shape → quasi-isodynamic quality.
 
@@ -1523,9 +1668,51 @@ def constellaration_canonical_split(
 
 
 def _load_constellaration_multioutput():
-    """ConStellaration 90→12: single multi-output model on the paper-filtered cache."""
-    X, Y, _ = _load_constellaration_paper()
-    return X, Y
+    """ConStellaration 90→8: single multi-output model trained on the
+    equilibrium-kind metrics only (the ones that require the VMEC++ solve).
+
+    The on-disk paper-filtered cache still stores all 12 metrics (shared with
+    ``plasma.constellaration_paper``); the 3 geometry + 1 derived columns are
+    dropped here via :func:`surge.benchmarks.dataset_io.output_kinds` so a
+    surrogate is never scored (or trained) on labels that are closed-form
+    functions of the input it already sees.
+    """
+    from .dataset_io import get_benchmark_io, output_kinds
+
+    X, Y, metric_names = _load_constellaration_paper()
+    io_spec = get_benchmark_io("plasma.constellaration_multioutput")
+    kinds = output_kinds(io_spec) if io_spec else {}
+    keep_idx = [j for j, name in enumerate(metric_names) if kinds.get(name) == "equilibrium"]
+    return X, Y[:, keep_idx]
+
+
+def _load_constellaration_modb():
+    """ConStellaration boundary (R,Z) → |B|(θ,φ) on the LCFS, flattened (n, f)/(n, o).
+
+    Thin wrapper around
+    ``surge.benchmarks.loaders.constellaration_fields.constellaration_modb_dataset``
+    for tooling that expects the generic ``(X, y)`` loader shape (dataset
+    preview, characterisation, etc). The actual benchmark run
+    (``surge bench -b constellaration_modb``) uses
+    ``tasks.run_constellaration_modb``, which keeps the un-flattened
+    ``(n, 2, 64, 32)``/``(n, 64, 32)`` shapes so field-aware models
+    (e.g. ``pytorch.fno2d``) see the real grid.
+    """
+    from .loaders.constellaration_fields import constellaration_modb_dataset
+
+    X, y, _ids, _extra = constellaration_modb_dataset()
+    return X.reshape(len(X), -1), y.reshape(len(y), -1)
+
+
+def _load_constellaration_surfaces():
+    """ConStellaration boundary (R,Z) → flux-surface cross-sections, flattened.
+
+    See :func:`_load_constellaration_modb` — same rationale.
+    """
+    from .loaders.constellaration_fields import constellaration_surfaces_dataset
+
+    X, y, _ids, _extra = constellaration_surfaces_dataset()
+    return X.reshape(len(X), -1), y.reshape(len(y), -1)
 
 
 def _run_constellaration_paper_benchmark(
@@ -1689,7 +1876,16 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "thewell.gray_scott": ("test_relative_l2", 0.30),
         # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
         "plasma.constellaration_paper": ("test_r2_mean", 0.97),
-        "plasma.constellaration_multioutput": ("test_r2", 0.85),
+        # Gate on the 8 metrics that need the VMEC++ equilibrium solve. The
+        # geometry (3) and derived (1) ConStellaration labels are no longer
+        # trained at all (they are closed-form functions of the boundary
+        # coefficients the model already sees) — training on them would
+        # otherwise mask a weak surrogate behind an easy R²=1.0.
+        "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
+        # Field benchmarks — PROVISIONAL, set from the 500-row smoke cache;
+        # to be re-set from the first full (26,897-row) leaderboard run.
+        "plasma.constellaration_modb": ("test_relative_l2", 0.05),
+        "plasma.constellaration_surfaces": ("test_relative_l2", 0.02),
     }
     if benchmark_key not in _THRESHOLDS:
         return True

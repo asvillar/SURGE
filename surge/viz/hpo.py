@@ -18,6 +18,53 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 
+def robust_hpo_ylim(
+    values_by_series: List[np.ndarray],
+    higher_is_better: bool,
+    pad_frac: float = 0.08,
+    small_campaign_n: int = 10,
+) -> Tuple[Optional[float], Optional[float], Optional[float], List[np.ndarray]]:
+    """Shared robust-y-limit + diverged-trial logic for HPO score panels.
+
+    One or more series share a single y-axis (per-trial score vs. trial
+    number). A handful of diverged trials (e.g. val_r2 ~ 0 amid 200 healthy
+    trials) must not collapse the axis, so the limits come from the
+    5th-100th percentile (maximize) or 0th-95th percentile (minimize) of
+    the *pooled, finite* values across all series, padded a little.
+
+    "Small campaign" is judged per series (the largest one), not by the
+    pooled trial count — a two-model overlay of two 10-trial runs is still
+    small even though pooled they total 20 points; otherwise a merely
+    low-scoring trial in one series gets misread as "diverged" once
+    another series pads the pool past the threshold.
+
+    Returns ``(lo, hi, pad, diverged_masks)``. ``lo``/``hi``/``pad`` are
+    ``None`` when every series is a small campaign (caller should leave
+    the axis on plain autoscale). ``diverged_masks`` is a list, one
+    boolean mask per input series, flagging finite values that fall
+    outside ``[lo, hi]`` (all-``False`` when limits are ``None``).
+    """
+    arrays = [np.asarray(v, dtype=float) for v in values_by_series]
+    max_n = max((a.size for a in arrays), default=0)
+    if max_n <= small_campaign_n:
+        return None, None, None, [np.zeros_like(a, dtype=bool) for a in arrays]
+
+    pooled = np.concatenate(arrays) if arrays else np.array([])
+    finite = pooled[np.isfinite(pooled)]
+    if finite.size == 0:
+        return None, None, None, [np.zeros_like(a, dtype=bool) for a in arrays]
+
+    lo, hi = np.percentile(finite, [5, 100] if higher_is_better else [0, 95])
+    span = hi - lo
+    pad = span * pad_frac if span > 0 else max(abs(hi), 1.0) * pad_frac
+    masks = []
+    for a in arrays:
+        finite_a = np.isfinite(a)
+        masks.append(finite_a & (a < lo) if higher_is_better
+                     else finite_a & (a > hi))
+    return float(lo), float(hi), float(pad), masks
+
+
 def plot_hpo_convergence(
     hpo_files: Union[str, Path, List[Union[str, Path]]],
     metric: str = "r2",
@@ -64,8 +111,8 @@ def plot_hpo_convergence(
         Dictionary mapping method names to colors.
         Default: {'Random': 'green', 'TPE': 'red', 'BoTorch': 'blue'}
     linestyles : dict, optional
-        Dictionary mapping method names to line styles.
-        Default: {'Random': '-', 'TPE': '-', 'BoTorch': '-'}
+        Dictionary mapping method names to the running-best step line style.
+        Default: {'Random': '--', 'TPE': '--', 'BoTorch': '--'}
         
     Returns
     -------
@@ -123,7 +170,7 @@ def plot_hpo_convergence(
             'BoTorch': 'blue'
         }
     if linestyles is None:
-        linestyles = {name: '-' for name in method_names}
+        linestyles = {name: '--' for name in method_names}
     
     # Determine metric direction
     if metric.lower() == "r2":
@@ -139,74 +186,106 @@ def plot_hpo_convergence(
     
     # Create figure
     fig, ax = plt.subplots(figsize=figsize)
-    
+
     best_values = {}
-    
-    # Plot each method
+
+    # ---- pass 1: extract per-method series ----------------------------
+    series_data = []
     for method_name, hpo_data in zip(method_names, hpo_data_list):
         trials = hpo_data.get('trials', [])
-        
+
         if not trials:
             continue
-        
-        # Extract values and iterations
+
         iterations = []
         values = []
-        
+
         for trial in trials:
             trial_value = trial.get('value')
             if trial_value is not None:
                 iterations.append(trial['number'])
-                
-                # Handle metric conversion if needed
-                if metric.lower() == "r2":
-                    # If value is RMSE, we can't directly convert to R²
-                    # Assume value is already in the desired metric
-                    values.append(float(trial_value))
-                else:
-                    values.append(float(trial_value))
-        
+                values.append(float(trial_value))
+
         if not values:
             continue
-        
+
         iterations = np.array(iterations)
         values = np.array(values)
-        
+
         # Sort by iteration
         sort_idx = np.argsort(iterations)
         iterations_sorted = iterations[sort_idx]
         values_sorted = values[sort_idx]
-        
-        # Get color and linestyle
+
+        running_best = (np.maximum if higher_is_better else np.minimum) \
+            .accumulate(values_sorted)
+
         color = colors.get(method_name, f'C{method_names.index(method_name)}')
-        linestyle = linestyles.get(method_name, '-')
-        
-        # Plot convergence curve
-        ax.plot(
-            iterations_sorted, values_sorted,
-            color=color,
-            linestyle=linestyle,
-            linewidth=2,
-            label=method_name,
-            alpha=0.8
+        series_data.append({
+            'name': method_name,
+            'iterations': iterations_sorted,
+            'values': values_sorted,
+            'running_best': running_best,
+            'color': color,
+        })
+
+    # ---- robust y-limits + diverged-trial masks (shared helper) -------
+    outlier_lo, outlier_hi, outlier_pad, diverged_masks = robust_hpo_ylim(
+        [s['values'] for s in series_data], higher_is_better)
+    if outlier_lo is not None:
+        ax.set_ylim(outlier_lo - outlier_pad, outlier_hi + outlier_pad)
+
+    # ---- pass 2: markers, running-best step, star + axes annotation ---
+    n_diverged_total = 0
+    for i, s in enumerate(series_data):
+        method_name = s['name']
+        color = s['color']
+        iterations_sorted = s['iterations']
+        values_sorted = s['values']
+        running_best = s['running_best']
+        linestyle = linestyles.get(method_name, '--')
+
+        diverged = diverged_masks[i]
+        n_diverged_total += int(diverged.sum())
+
+        # per-trial markers (in-range trials only)
+        ax.scatter(
+            iterations_sorted[~diverged], values_sorted[~diverged],
+            color=color, s=22, alpha=0.75, edgecolors='none',
+            label=method_name, zorder=2,
         )
-        
+        # diverged trials: clamp to the axis edge as small muted triangles
+        if diverged.any():
+            clamp_y = outlier_lo if higher_is_better else outlier_hi
+            marker = 'v' if higher_is_better else '^'
+            ax.scatter(
+                iterations_sorted[diverged],
+                np.full(int(diverged.sum()), clamp_y),
+                marker=marker, color='gray', s=28, alpha=0.8,
+                zorder=2, label=None,
+            )
+
+        # running best: dashed step line
+        ax.step(
+            iterations_sorted, running_best, where='post',
+            color=color, linestyle=linestyle, linewidth=1.8,
+            alpha=0.9, zorder=3, label=None,
+        )
+
         # Find best value
         if higher_is_better:
             best_idx = np.argmax(values_sorted)
-            best_value = values_sorted[best_idx]
         else:
             best_idx = np.argmin(values_sorted)
-            best_value = values_sorted[best_idx]
-        
+        best_value = values_sorted[best_idx]
         best_iteration = iterations_sorted[best_idx]
-        
+
         # Store best values
         best_values[method_name] = {
             'value': float(best_value),
             'iteration': int(best_iteration)
         }
-        
+
         # Mark best point
         if show_best_markers:
             ax.plot(
@@ -219,17 +298,28 @@ def plot_hpo_convergence(
                 zorder=5,
                 label=None
             )
-            # Add dashed line and annotation
-            ax.axvline(best_iteration, color=color, linestyle='--', linewidth=1.5, alpha=0.5)
+            # Annotation lives in axes coordinates (stacked per method,
+            # upper-left) so it never covers the title or the trial cloud.
+            label = (f'{method_name}: R² = {best_value:.4f}'
+                      if metric.lower() == "r2"
+                      else f'{method_name}: {best_value:.4f}')
             ax.text(
-                best_iteration, best_value,
-                f'R² = {best_value:.4f}' if metric.lower() == "r2" else f'{best_value:.4f}',
-                fontsize=10,
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.9),
-                verticalalignment='bottom' if higher_is_better else 'top',
-                horizontalalignment='center'
+                0.02, 0.97 - i * 0.08, label,
+                transform=ax.transAxes, fontsize=8.5,
+                ha='left', va='top',
+                bbox=dict(boxstyle='round', facecolor='white',
+                          edgecolor=color, alpha=0.9),
             )
-    
+
+    if n_diverged_total:
+        # legend proxy (not ax.text) so the muted label sits in the
+        # reserved legend box instead of overlapping the clamped
+        # triangles it describes
+        ax.scatter(
+            [], [], marker='v' if higher_is_better else '^',
+            color='gray', s=28, label=f'{n_diverged_total} diverged',
+        )
+
     # Add reference line
     if reference_value is not None:
         ax.axhline(
@@ -260,7 +350,8 @@ def plot_hpo_convergence(
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
     
     # Legend
-    ax.legend(loc='best', fontsize=10)
+    ax.legend(loc='lower right' if higher_is_better else 'upper right',
+              fontsize=10)
     
     plt.tight_layout()
     

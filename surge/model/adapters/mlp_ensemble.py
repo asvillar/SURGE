@@ -1,6 +1,6 @@
 """Adapter for the MLP ensemble backend (registers pytorch.mlp_ensemble).
 
-Architecture matches Goodman et al. (2025) ConStellaration paper — Appendix A.4:
+Architecture matches Cadena et al. (2025) ConStellaration paper — Appendix A.4:
 10-member MLP ensemble, 3 hidden layers × 256 units, tanh activation, MSE/Adam.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ _ENSEMBLE_INFO = ModelInfo(
         "members. This is the 'deep ensemble' approach of Lakshminarayanan et al. "
         "(2017), which is consistently competitive with Bayesian methods on "
         "well-calibrated UQ benchmarks. Default hyperparameters reproduce the "
-        "surrogate baseline in the ConStellaration paper (Goodman et al. 2025)."
+        "surrogate baseline in the ConStellaration paper (Cadena et al. 2025)."
     ),
     use_cases=[
         "Tabular and scalar regression with calibrated uncertainty estimates",
@@ -46,8 +46,9 @@ _ENSEMBLE_INFO = ModelInfo(
         "Lakshminarayanan, Pritzel & Blundell (2017) 'Simple and Scalable "
         "Predictive Uncertainty Estimation using Deep Ensembles' "
         "NeurIPS 2017. https://arxiv.org/abs/1612.01474",
-        "Goodman et al. (2025) 'ConStellaration: A Multi-Objective Stellarator "
-        "Surrogate Dataset' arXiv:2506.19583. §Appendix A.4.",
+        "Cadena et al. (2025) 'ConStellaration: a dataset of QI-like "
+        "stellarator plasma boundaries and optimization benchmarks' "
+        "arXiv:2506.19583. §Appendix A.4.",
     ],
 )
 
@@ -56,7 +57,7 @@ class MLPEnsembleAdapter(BaseModelAdapter):
     """Ensemble of *n_ensembles* independent PyTorch MLPs.
 
     Default hyper-parameters reproduce the surrogate baseline reported in the
-    ConStellaration paper (Goodman et al. 2025, arXiv:2506.19583):
+    ConStellaration paper (Cadena et al. 2025, arXiv:2506.19583):
 
     * ``n_ensembles=10``
     * ``hidden_dim=256``

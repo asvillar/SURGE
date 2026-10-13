@@ -2,6 +2,10 @@
 
 Subcommands
 -----------
+surge init              — interactive wizard: inspect data, write a
+                          commented spec.yaml (also non-interactive via
+                          --data/--target/--goal/--budget --yes)
+surge validate <spec>   — schema-check a spec without running it
 surge run <spec.yaml>   — execute a surrogate workflow from a YAML spec
 surge bench …           — benchmark runner (train + evaluate on benchmarks)
 surge list              — list available benchmarks
@@ -112,6 +116,27 @@ def main(argv: list[str] | None = None) -> int:
     if sub in ("version", "--version", "-V"):
         from surge import __version__
         print(f"surge-ml {__version__}")
+        return 0
+
+    if sub == "init":
+        from surge.wizard import main as wizard_main
+        return wizard_main(rest)
+
+    if sub == "validate":
+        import argparse as _ap
+        p = _ap.ArgumentParser(prog="surge validate",
+                               description="Schema-check a workflow spec "
+                                           "without running it.")
+        p.add_argument("spec", help="path to a spec YAML")
+        a = p.parse_args(rest)
+        from surge.workflow.schema import validate_file
+        errors = validate_file(a.spec)
+        if errors:
+            print(f"INVALID — {len(errors)} problem(s):", file=sys.stderr)
+            for e in errors:
+                print(f"  - {e}", file=sys.stderr)
+            return 2
+        print(f"OK — {a.spec} is a valid SURGE workflow spec")
         return 0
 
     if sub == "run":

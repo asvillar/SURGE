@@ -11,7 +11,7 @@ Verified confusions, with evidence:
 
 1. **One dataset, three opaque keys.** `plasma.constellaration`,
    `plasma.constellaration_paper`, `plasma.constellaration_multioutput` are
-   the SAME dataset (ConStellaration, Goodman et al. 2025; 26,897 samples,
+   the SAME dataset (ConStellaration, Cadena et al. 2025; 26,897 samples,
    canonical split NPZ) under three *protocols* (10k-subsample 90→1 quick
    check; the paper's §A.4 twelve-independent-models protocol; joint
    90→12). Nothing in the key or `--list` output says so; the paper-protocol
@@ -52,7 +52,7 @@ dataset:
   description: >-
     Map 90 VMEC boundary Fourier coefficients to ideal-MHD equilibrium
     metrics for quasi-isodynamic stellarator design.
-  citation: {text: "Goodman et al. (2025) arXiv:2506.19583",
+  citation: {text: "Cadena et al. (2025) arXiv:2506.19583",
              doi: 10.48550/arXiv.2506.19583}
   source: {loader: huggingface, name: proxima-fusion/constellaration,
            sha256: <content digest>, size: 210MB, license: CC-BY-4.0}
@@ -66,7 +66,7 @@ protocols:
                  basis: "SURGE baseline"}}
   paper:        {task: regression, style: one-model-per-output,
                  metrics: [r2_mean, r2_min], gate: {metric: r2_mean,
-                 ">=": 0.97, basis: "Goodman et al. §A.4"}}
+                 ">=": 0.97, basis: "Cadena et al. §A.4"}}
   multioutput:  {task: regression, style: joint,
                  metrics: [r2_mean, nrmse_mean], gate: {metric: r2_mean,
                  ">=": 0.85, basis: "SURGE baseline"}}

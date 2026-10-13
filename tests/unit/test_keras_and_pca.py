@@ -102,3 +102,33 @@ def test_keras_custom_build_fn():
                               validation_fraction=0.0)
     adapter.fit(X, y)
     assert adapter.predict(X).shape == y.shape
+
+
+def test_pod_roundtrip_and_shapes():
+    """Full-rank POD reconstructs exactly; truncation degrades gracefully."""
+    import numpy as np
+
+    from surge.preprocessing import pod_fit, pod_inverse, pod_transform
+
+    rng = np.random.default_rng(0)
+    # rank-5 fields + noise, 40 samples x 60 dof
+    U = rng.standard_normal((40, 5))
+    V = rng.standard_normal((5, 60))
+    F = U @ V + 0.01 * rng.standard_normal((40, 60))
+
+    full = pod_fit(F, n_modes=39)
+    rec = pod_inverse(full, pod_transform(full, F))
+    assert np.allclose(rec, F, atol=1e-8)
+
+    b16 = pod_fit(F, n_modes=16)
+    assert b16["components"].shape == (16, 60)
+    coeffs = pod_transform(b16, F)
+    assert coeffs.shape == (40, 16)
+    err16 = np.linalg.norm(pod_inverse(b16, coeffs) - F)
+    b2 = pod_fit(F, n_modes=2)
+    err2 = np.linalg.norm(pod_inverse(b2, pod_transform(b2, F)) - F)
+    assert err16 < err2                       # more modes -> better recon
+    assert b16["explained_variance_ratio"][:5].sum() > 0.95
+
+    with __import__("pytest").raises(ValueError):
+        pod_fit(F, n_modes=0)

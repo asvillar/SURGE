@@ -612,3 +612,94 @@ def test_ft_transformer_benchmark_smoke():
     )
     assert result is not None
     assert "test_r2" in result.metrics
+
+
+def test_fno2d_multichannel_output():
+    """FNO-2D with C-channel targets returns (B, C, H, W), not a crash."""
+    pytest.importorskip("torch")
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((12, 2, 16, 16)).astype("float32")
+    y = np.roll(X, 1, axis=-1)
+    adapter = MODEL_REGISTRY.create(
+        "pytorch.fno2d", n_epochs=2, n_modes=4, hidden_channels=8,
+        n_layers=1, batch_size=4)
+    adapter.fit(X, y)
+    pred = np.asarray(adapter.predict(X[:3]))
+    assert pred.shape == (3, 2, 16, 16)
+    assert np.isfinite(pred).all()
+
+
+# ── Simformer (all-in-one SBI) ────────────────────────────────────────────────
+
+
+def test_simformer_registered():
+    pytest.importorskip("torch")
+    assert "pytorch.simformer" in MODEL_REGISTRY
+
+
+def test_simformer_posterior_likelihood_joint():
+    """Joint model supports posterior/likelihood/joint sampling + regression."""
+    pytest.importorskip("torch")
+    rng = np.random.default_rng(0)
+    theta = rng.standard_normal((600, 2)).astype("float32")
+    A = np.array([[1.0, 0.5], [-0.5, 1.0]], dtype="float32")
+    x = theta @ A.T + 0.1 * rng.standard_normal((600, 2)).astype("float32")
+
+    adapter = MODEL_REGISTRY.create(
+        "pytorch.simformer", n_epochs=30, d_model=32, n_layers=2,
+        n_heads=2, batch_size=128, n_posterior_samples=32,
+        n_sample_steps=32)
+    adapter.fit(x, theta)
+
+    post = adapter.sample_posterior(x[0], n_samples=16)
+    assert post.shape == (16, 2)
+    lik = adapter.sample_likelihood(theta[0], n_samples=16)
+    assert lik.shape == (16, 2)
+    joint = adapter._model.sample_joint(16)
+    assert joint.shape == (16, 4)
+    assert np.isfinite(joint).all()
+
+    mean, std = adapter.predict_with_uncertainty(x[:5])
+    assert mean.shape == (5, 2)
+    assert std.shape == (5, 2)
+    assert (std > 0).all()
+
+
+def test_convnext_unet_registered():
+    pytest.importorskip("torch")
+    assert "pytorch.convnext_unet" in MODEL_REGISTRY
+
+
+def test_convnext_unet_fit_predict_multichannel():
+    """ConvNeXt U-Net: (B, C, H, W) in/out on non-square grids."""
+    pytest.importorskip("torch")
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((10, 3, 16, 24)).astype("float32")
+    y = np.roll(X[:, :2], 1, axis=-1)
+    adapter = MODEL_REGISTRY.create(
+        "pytorch.convnext_unet", n_epochs=2, base_channels=8, depth=2,
+        blocks_per_stage=1, batch_size=4)
+    adapter.fit(X, y)
+    pred = np.asarray(adapter.predict(X[:3]))
+    assert pred.shape == (3, 2, 16, 24)
+    assert np.isfinite(pred).all()
+
+
+def test_convnext_unet_fit_from_loader():
+    """Streaming path: train from a DataLoader, RAM-independent."""
+    pytest.importorskip("torch")
+    import torch
+    from torch.utils.data import DataLoader, TensorDataset
+
+    from surge.model.backends.convnext_unet import ConvNeXtUNetModel
+
+    rng = np.random.default_rng(0)
+    X = torch.from_numpy(rng.standard_normal((12, 3, 16, 24)).astype("f4"))
+    y = X[:, :2]
+    loader = DataLoader(TensorDataset(X, y), batch_size=4, shuffle=True)
+    m = ConvNeXtUNetModel(n_epochs=2, base_channels=8, depth=2,
+                          blocks_per_stage=1, device="cpu")
+    m.fit_from_loader(loader, in_channels=3, out_channels=2)
+    pred = m.predict(np.asarray(X[:3]))
+    assert pred.shape == (3, 2, 16, 24)
+    assert np.isfinite(pred).all()

@@ -30,6 +30,8 @@ from .tasks import (
     run_classification_covertype,
     run_classification_flow_regime,
     run_classification_plasma_stability,
+    run_constellaration_modb,
+    run_constellaration_surfaces,
     run_fusion_m3dc1_sample,
     run_multioutput_scm20d,
     run_pde_burgers_1d,
@@ -251,6 +253,14 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "van de Plassche et al. Nuclear Fusion 2020. "
         "[requires: pip install fusion_surrogates]",
     ),
+    "plasma.qlknn10d": (
+        None, "plasma", "regression", "9→1 (2.4M subsample of 290M)",
+        "Train on the ACTUAL QuaLiKiz gyrokinetic fluxes behind QLKNN: "
+        "predict the ITG leading flux (efiITG, GB units) from the 9-D "
+        "input grid (Zeff, Ati, Ate, An, q, smag, x, Ti_Te, Nustar). "
+        "van de Plassche et al. PoP 27, 022310 (2020); Zenodo "
+        "10.5281/zenodo.3497066 (CC-BY 4.0). [13.3 GB open download]",
+    ),
     "plasma.constellaration": (
         None, "plasma", "regression", "90→1 (10k subsample)",
         "ConStellaration boundary → log₁₀(qi). Subsamples 10k from paper-filtered cache (26,897 rows). "
@@ -262,10 +272,23 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "[HF: proxima-fusion/constellaration, pip install datasets]",
     ),
     "plasma.constellaration_multioutput": (
-        None, "plasma", "regression", "90→12 (n=26,897)",
-        "Single residual-MLP-style multi-output model: 90 boundary coeffs → 12 metrics. "
-        "Same filtered cache as constellaration_paper. "
+        None, "plasma", "regression", "90→8 (n=26,897)",
+        "Single residual-MLP-style multi-output model: 90 boundary coeffs → the 8 "
+        "equilibrium metrics (VMEC++ solve required). Same filtered cache as "
+        "constellaration_paper; geometry/derived columns are not trained. "
         "[HF: proxima-fusion/constellaration, pip install datasets]",
+    ),
+    "plasma.constellaration_modb": (
+        run_constellaration_modb, "plasma", "regression", "2×64×32→64×32 (n≤26,897)",
+        "ConStellaration boundary (R,Z) → |B|(θ,φ) on the LCFS, from the VMEC wout subset. "
+        "PROVISIONAL threshold. [requires: downloaded wout subset, see "
+        "surge.benchmarks.loaders.constellaration.download_wout_subset]",
+    ),
+    "plasma.constellaration_surfaces": (
+        run_constellaration_surfaces, "plasma", "regression", "2×64×32→2×16×64 (n≤26,897)",
+        "ConStellaration boundary (R,Z) → poloidal cross-sections (R(θ),Z(θ)) of the 16 stored "
+        "flux surfaces at φ=0, from the VMEC wout subset. PROVISIONAL threshold. "
+        "[requires: downloaded wout subset]",
     ),
 }
 
@@ -309,11 +332,14 @@ _SHORT_ALIASES: dict[str, str] = {
     "lorenz63":             "sequence.lorenz63",
     # plasma
     "qlknn":                "plasma.qlknn_transport",
+    "qlknn10d":             "plasma.qlknn10d",
     "cmod":                 "plasma.cmod_density_limit",
     "constellaration":      "plasma.constellaration",
     "constellaration_paper":"plasma.constellaration_paper",
     "constellaration_multi":"plasma.constellaration_multioutput",
     "constellaration_mimo":"plasma.constellaration_multioutput",
+    "constellaration_modb":"plasma.constellaration_modb",
+    "constellaration_surfaces":"plasma.constellaration_surfaces",
     # multi-output
     "scm20d":               "multioutput.scm20d",
 }
@@ -409,6 +435,16 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "target_shape": "2 classes",
         "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": []},
     },
+    "plasma.qlknn10d": {
+        "dataset_source": "QLKNN10D Zenodo 10.5281/zenodo.3497066",
+        "license": "CC-BY 4.0",
+        "access": "download_cached",
+        "cache_path": "data/datasets/benchmarks/plasma/qlknn10d_sub.npz",
+        "sample_count": 2400000,
+        "feature_shape": "9",
+        "target_shape": "1",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "large", "optional_dependencies": ["h5py"]},
+    },
     "plasma.qlknn_transport": {
         "dataset_source": "Google DeepMind fusion_surrogates QLKNN",
         "license": "upstream package/model terms",
@@ -456,7 +492,27 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "cache_path": "data/datasets/constellaration",
         "sample_count": 26897,
         "feature_shape": "90",
-        "target_shape": "12 (joint model)",
+        "target_shape": "8 (joint model, equilibrium-only)",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
+    },
+    "plasma.constellaration_modb": {
+        "dataset_source": "proxima-fusion/constellaration vmecpp_wout config on HuggingFace",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/constellaration/wout_nfp3_subset_parts",
+        "sample_count": 500,
+        "feature_shape": "2×64×32",
+        "target_shape": "64×32",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
+    },
+    "plasma.constellaration_surfaces": {
+        "dataset_source": "proxima-fusion/constellaration vmecpp_wout config on HuggingFace",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/constellaration/wout_nfp3_subset_parts",
+        "sample_count": 500,
+        "feature_shape": "2×64×32",
+        "target_shape": "2×16×64",
         "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
     },
     "vision.mnist": {
@@ -625,6 +681,19 @@ def run_benchmark(key: str, **kwargs: Any) -> BenchmarkResult:
         Passed to the underlying task (e.g. ``seed=``, ``model_key=``).
     """
     key = resolve_benchmark_key(key)
+
+    # Fail fast on a regressor asked to classify (or vice versa): otherwise
+    # the model trains to completion and dies inside the metric computation
+    # with an opaque sklearn error.
+    requested_model = kwargs.get("model_key")
+    if requested_model:
+        from .leaderboard import _task_mismatch
+
+        mismatch = _task_mismatch(requested_model,
+                                  benchmark_info(key)["task_type"])
+        if mismatch is not None:
+            raise ValueError(mismatch)
+
     runner = REGISTRY.get(key)
     if runner is None:
         # Generic adapter-based path (CTR-23, plasma, vision via leaderboard).

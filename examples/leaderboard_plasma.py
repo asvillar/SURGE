@@ -29,7 +29,7 @@ plasma.qlknn_transport
 plasma.constellaration
     ConStellaration stellarator boundary shape → quasi-isodynamic quality.
     90-dimensional shape → QI metric (R² target > 0.97).
-    Reference: Goodman et al. (2025) arXiv:2506.19583.
+    Reference: Cadena et al. (2025) arXiv:2506.19583.
     Requires: pip install datasets
 
 plasma.constellaration_paper
