@@ -45,6 +45,7 @@ def test_default_models_for_classification():
 
 
 def test_task_mismatch_flags_regressor_on_classification():
+    pytest.importorskip("torch")  # references pytorch.mlp; skip on the no-torch job
     reason = _task_mismatch("pytorch.mlp", "classification")
     assert reason is not None
     assert "regressor" in reason
@@ -72,6 +73,7 @@ def test_task_mismatch_passes_through_unknown_models():
 
 
 def test_run_benchmark_rejects_mismatched_model():
+    pytest.importorskip("torch")  # references pytorch.mlp; skip on the no-torch job
     """The gate must fire BEFORE training, not inside metric computation."""
     from surge.benchmarks.registry import run_benchmark
 
