@@ -30,6 +30,8 @@ from .tasks import (
     run_classification_covertype,
     run_classification_flow_regime,
     run_classification_plasma_stability,
+    run_constellaration_modb,
+    run_constellaration_surfaces,
     run_fusion_m3dc1_sample,
     run_multioutput_scm20d,
     run_pde_burgers_1d,
@@ -270,10 +272,23 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "[HF: proxima-fusion/constellaration, pip install datasets]",
     ),
     "plasma.constellaration_multioutput": (
-        None, "plasma", "regression", "90→12 (n=26,897)",
-        "Single residual-MLP-style multi-output model: 90 boundary coeffs → 12 metrics. "
-        "Same filtered cache as constellaration_paper. "
+        None, "plasma", "regression", "90→8 (n=26,897)",
+        "Single residual-MLP-style multi-output model: 90 boundary coeffs → the 8 "
+        "equilibrium metrics (VMEC++ solve required). Same filtered cache as "
+        "constellaration_paper; geometry/derived columns are not trained. "
         "[HF: proxima-fusion/constellaration, pip install datasets]",
+    ),
+    "plasma.constellaration_modb": (
+        run_constellaration_modb, "plasma", "regression", "2×64×32→64×32 (n≤26,897)",
+        "ConStellaration boundary (R,Z) → |B|(θ,φ) on the LCFS, from the VMEC wout subset. "
+        "PROVISIONAL threshold. [requires: downloaded wout subset, see "
+        "surge.benchmarks.loaders.constellaration.download_wout_subset]",
+    ),
+    "plasma.constellaration_surfaces": (
+        run_constellaration_surfaces, "plasma", "regression", "2×64×32→2×16×64 (n≤26,897)",
+        "ConStellaration boundary (R,Z) → poloidal cross-sections (R(θ),Z(θ)) of the 16 stored "
+        "flux surfaces at φ=0, from the VMEC wout subset. PROVISIONAL threshold. "
+        "[requires: downloaded wout subset]",
     ),
 }
 
@@ -323,6 +338,8 @@ _SHORT_ALIASES: dict[str, str] = {
     "constellaration_paper":"plasma.constellaration_paper",
     "constellaration_multi":"plasma.constellaration_multioutput",
     "constellaration_mimo":"plasma.constellaration_multioutput",
+    "constellaration_modb":"plasma.constellaration_modb",
+    "constellaration_surfaces":"plasma.constellaration_surfaces",
     # multi-output
     "scm20d":               "multioutput.scm20d",
 }
@@ -475,7 +492,27 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "cache_path": "data/datasets/constellaration",
         "sample_count": 26897,
         "feature_shape": "90",
-        "target_shape": "12 (joint model)",
+        "target_shape": "8 (joint model, equilibrium-only)",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
+    },
+    "plasma.constellaration_modb": {
+        "dataset_source": "proxima-fusion/constellaration vmecpp_wout config on HuggingFace",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/constellaration/wout_nfp3_subset_parts",
+        "sample_count": 500,
+        "feature_shape": "2×64×32",
+        "target_shape": "64×32",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
+    },
+    "plasma.constellaration_surfaces": {
+        "dataset_source": "proxima-fusion/constellaration vmecpp_wout config on HuggingFace",
+        "license": "upstream dataset terms",
+        "access": "download_cached",
+        "cache_path": "data/datasets/constellaration/wout_nfp3_subset_parts",
+        "sample_count": 500,
+        "feature_shape": "2×64×32",
+        "target_shape": "2×16×64",
         "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["datasets"]},
     },
     "vision.mnist": {

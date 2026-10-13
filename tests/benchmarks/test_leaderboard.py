@@ -418,6 +418,50 @@ def test_multioutput_reg_extras_without_names_or_kinds_unchanged():
     assert set(metrics) == {"min_r2", "max_r2", "test_nrmse"}
 
 
+def test_constellaration_multioutput_loader_returns_8_equilibrium_columns():
+    """The joint benchmark loader must select only the 8 equilibrium-kind
+    columns (dataset_io.CONSTELLARATION_MULTIOUTPUT_IO), in spec order —
+    the paper-filtered cache on disk still has all 12."""
+    from surge.benchmarks.dataset_io import get_benchmark_io
+    from surge.benchmarks.leaderboard import (
+        _load_constellaration_multioutput,
+        _load_constellaration_paper,
+    )
+
+    try:
+        X_paper, Y_paper, metric_names = _load_constellaration_paper()
+    except Exception as exc:
+        pytest.skip(f"constellaration paper cache unavailable: {exc}")
+
+    X, Y = _load_constellaration_multioutput()
+    io_spec = get_benchmark_io("plasma.constellaration_multioutput")
+    expected_names = [o["name"] for o in io_spec["outputs"]]
+
+    assert X.shape == X_paper.shape
+    assert Y.shape == (X_paper.shape[0], 8)
+    assert len(expected_names) == 8
+
+    # Column-by-column: each selected column must match the corresponding
+    # equilibrium column of the full 12-column paper cache.
+    for j, name in enumerate(expected_names):
+        src = metric_names.index(name)
+        assert (Y[:, j] == Y_paper[:, src]).all()
+
+
+def test_constellaration_paper_spec_still_has_12_outputs():
+    """plasma.constellaration_paper is untouched (paper parity) — only the
+    joint constellaration_multioutput benchmark drops to equilibrium-only."""
+    from surge.benchmarks.leaderboard import _load_constellaration_paper
+
+    try:
+        _X, Y, metric_names = _load_constellaration_paper()
+    except Exception as exc:
+        pytest.skip(f"constellaration paper cache unavailable: {exc}")
+
+    assert Y.shape[1] == 12
+    assert len(metric_names) == 12
+
+
 def test_check_pass_constellaration_multioutput_uses_equilibrium_mean():
     from surge.benchmarks.leaderboard import _check_pass
 

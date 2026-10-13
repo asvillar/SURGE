@@ -372,14 +372,14 @@ For each benchmark below, a verifier should return:
 | Field | Detail |
 |-------|--------|
 | Citation | Cadena et al. (2025) — [arXiv:2506.19583](https://arxiv.org/abs/2506.19583) |
-| Problem | **Single joint surrogate** predicting all 12 stellarator metrics from boundary shape (alternative to the paper’s 12-model protocol). |
+| Problem | **Single joint surrogate** predicting the 8 equilibrium-solve stellarator metrics from boundary shape (alternative to the paper’s 12-model protocol). |
 | Task | Multi-output regression |
-| I/O | 90 → 12 |
-| n | 26,897 (same filtered cache as paper benchmark) |
+| I/O | 90 → 8 |
+| n | 26,897 (same filtered cache as paper benchmark; the on-disk cache still stores all 12 columns, only 8 are selected at load) |
 | Source | Same as `plasma.constellaration_paper` |
-| Outputs | aspect_ratio, elongation, mirror ratios, triangularity, vacuum_well, log₁₀(qi), etc. — see `surge/benchmarks/dataset_io.py` |
-| Target classes | **equilibrium** (8, need the VMEC++ solve): ι axis/edge, both mirror ratios, vacuum well, min L∇B, flux compression, log₁₀(qi) · **geometry** (3, closed-form from the boundary): aspect_ratio, max_elongation, average_triangularity · **derived** (1, algebraic ratio of two other outputs): aspect_ratio_over_edge_rotational_transform — see `output_kinds()` in `surge/benchmarks/dataset_io.py` |
-| Metric | **Gate is the equilibrium-mean R²** (mean over the 8 equilibrium targets); geometry targets are reported as a sanity check (expected R² ≥ 0.99), not part of the gate; log₁₀(qi) also reported standalone |
+| Outputs | ι axis/edge, both mirror ratios, vacuum_well, min L∇B, flux compression, log₁₀(qi) — see `surge/benchmarks/dataset_io.py` |
+| Not trained | aspect_ratio, max_elongation, average_triangularity are computed in closed form from the boundary coefficients (`surge.benchmarks.loaders.constellaration.geometry_metrics`, machine precision), and aspect_ratio_over_edge_rotational_transform follows by dividing that exact aspect_ratio by the learned edge ι/n_fp — none of the 4 are part of the spec or the gate any more (see `output_kinds()` in `surge/benchmarks/dataset_io.py`) |
+| Metric | **Gate is the mean R² over the 8 equilibrium metrics** (`test_r2_equilibrium_mean`); log₁₀(qi) also reported standalone |
 
 ### `plasma.qlknn_transport`
 

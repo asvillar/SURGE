@@ -191,12 +191,31 @@ def expected_calibration_error(
 def relative_l2(y_true, y_pred) -> float:
     """Relative L2 error: ``||y_pred - y_true||_F / ||y_true||_F``.
 
-    Standard metric for PDE surrogate evaluation (Li et al. 2021).
+    Standard metric for PDE surrogate evaluation (Li et al. 2021). Computed
+    over the *whole* batch as one Frobenius-norm ratio (a few large errors
+    can hide behind many small ones); see :func:`relative_l2_per_sample` for
+    a per-sample breakdown.
     """
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     denom = np.linalg.norm(y_true) + 1e-12
     return float(np.linalg.norm(y_pred - y_true) / denom)
+
+
+def relative_l2_per_sample(y_true, y_pred) -> np.ndarray:
+    """Relative L2 error computed independently for each sample (leading axis).
+
+    ``y_true``/``y_pred`` are ``(n, ...)`` arrays of any trailing shape (e.g.
+    a field benchmark's ``(n, ny, nx)`` grids); each row's own
+    ``||y_pred_i - y_true_i|| / ||y_true_i||`` is returned as an ``(n,)``
+    array. Aggregate with ``np.median``/``np.mean`` for a robustness-aware
+    summary that a single global :func:`relative_l2` (dominated by whichever
+    samples have the largest norm) can hide.
+    """
+    y_true = np.asarray(y_true, dtype=float).reshape(len(y_true), -1)
+    y_pred = np.asarray(y_pred, dtype=float).reshape(len(y_pred), -1)
+    denom = np.linalg.norm(y_true, axis=1) + 1e-12
+    return np.linalg.norm(y_pred - y_true, axis=1) / denom
 
 
 def nrmse(y_true, y_pred) -> float:
@@ -213,6 +232,7 @@ __all__ = [
     "log_loss",
     "nrmse",
     "relative_l2",
+    "relative_l2_per_sample",
     "summarize",
     "top_k_accuracy_score",
 ]

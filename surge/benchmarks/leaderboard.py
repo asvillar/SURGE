@@ -833,6 +833,8 @@ def _load_dataset(benchmark_key: str):
         "plasma.qlknn10d":            lambda: _load_qlknn10d(),
         "plasma.constellaration":              lambda: _load_constellaration(),
         "plasma.constellaration_multioutput":  lambda: _load_constellaration_multioutput(),
+        "plasma.constellaration_modb":         lambda: _load_constellaration_modb(),
+        "plasma.constellaration_surfaces":     lambda: _load_constellaration_surfaces(),
         "thewell.gray_scott":         lambda: _load_thewell_gray_scott(),
         # Vision benchmarks
         "vision.cifar10": lambda: _load_cifar10(),
@@ -1666,9 +1668,51 @@ def constellaration_canonical_split(
 
 
 def _load_constellaration_multioutput():
-    """ConStellaration 90→12: single multi-output model on the paper-filtered cache."""
-    X, Y, _ = _load_constellaration_paper()
-    return X, Y
+    """ConStellaration 90→8: single multi-output model trained on the
+    equilibrium-kind metrics only (the ones that require the VMEC++ solve).
+
+    The on-disk paper-filtered cache still stores all 12 metrics (shared with
+    ``plasma.constellaration_paper``); the 3 geometry + 1 derived columns are
+    dropped here via :func:`surge.benchmarks.dataset_io.output_kinds` so a
+    surrogate is never scored (or trained) on labels that are closed-form
+    functions of the input it already sees.
+    """
+    from .dataset_io import get_benchmark_io, output_kinds
+
+    X, Y, metric_names = _load_constellaration_paper()
+    io_spec = get_benchmark_io("plasma.constellaration_multioutput")
+    kinds = output_kinds(io_spec) if io_spec else {}
+    keep_idx = [j for j, name in enumerate(metric_names) if kinds.get(name) == "equilibrium"]
+    return X, Y[:, keep_idx]
+
+
+def _load_constellaration_modb():
+    """ConStellaration boundary (R,Z) → |B|(θ,φ) on the LCFS, flattened (n, f)/(n, o).
+
+    Thin wrapper around
+    ``surge.benchmarks.loaders.constellaration_fields.constellaration_modb_dataset``
+    for tooling that expects the generic ``(X, y)`` loader shape (dataset
+    preview, characterisation, etc). The actual benchmark run
+    (``surge bench -b constellaration_modb``) uses
+    ``tasks.run_constellaration_modb``, which keeps the un-flattened
+    ``(n, 2, 64, 32)``/``(n, 64, 32)`` shapes so field-aware models
+    (e.g. ``pytorch.fno2d``) see the real grid.
+    """
+    from .loaders.constellaration_fields import constellaration_modb_dataset
+
+    X, y, _ids, _extra = constellaration_modb_dataset()
+    return X.reshape(len(X), -1), y.reshape(len(y), -1)
+
+
+def _load_constellaration_surfaces():
+    """ConStellaration boundary (R,Z) → flux-surface cross-sections, flattened.
+
+    See :func:`_load_constellaration_modb` — same rationale.
+    """
+    from .loaders.constellaration_fields import constellaration_surfaces_dataset
+
+    X, y, _ids, _extra = constellaration_surfaces_dataset()
+    return X.reshape(len(X), -1), y.reshape(len(y), -1)
 
 
 def _run_constellaration_paper_benchmark(
@@ -1832,11 +1876,16 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "thewell.gray_scott": ("test_relative_l2", 0.30),
         # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
         "plasma.constellaration_paper": ("test_r2_mean", 0.97),
-        # Gate on the 8 metrics that need the VMEC++ equilibrium solve — the
-        # geometry (3) and derived (1) targets are reported separately as a
-        # sanity check (see the geometry-sanity warning in the result message)
-        # and would otherwise mask a weak surrogate with an easy R²=1.0.
+        # Gate on the 8 metrics that need the VMEC++ equilibrium solve. The
+        # geometry (3) and derived (1) ConStellaration labels are no longer
+        # trained at all (they are closed-form functions of the boundary
+        # coefficients the model already sees) — training on them would
+        # otherwise mask a weak surrogate behind an easy R²=1.0.
         "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
+        # Field benchmarks — PROVISIONAL, set from the 500-row smoke cache;
+        # to be re-set from the first full (26,897-row) leaderboard run.
+        "plasma.constellaration_modb": ("test_relative_l2", 0.05),
+        "plasma.constellaration_surfaces": ("test_relative_l2", 0.02),
     }
     if benchmark_key not in _THRESHOLDS:
         return True

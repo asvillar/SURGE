@@ -47,6 +47,8 @@ _DEFAULTS: dict[str, str] = {
     "plasma.qlknn_transport": "sklearn.random_forest",
     "plasma.cmod_density_limit": "sklearn.random_forest_classifier",
     "thewell.gray_scott": "sklearn.random_forest",
+    "plasma.constellaration_modb": "sklearn.ridge",
+    "plasma.constellaration_surfaces": "sklearn.ridge",
 }
 
 # Which task type each benchmark expects of its model.
@@ -77,6 +79,8 @@ _TASK_TYPE: dict[str, str] = {
     "thewell.gray_scott": "regression",
     "thewell.turbulence_2d": "regression",
     "thewell.mhd": "regression",
+    "plasma.constellaration_modb": "regression",
+    "plasma.constellaration_surfaces": "regression",
 }
 
 
@@ -1578,4 +1582,240 @@ def run_thewell_mhd(*, seed: int = 42, model_key: str | None = None,
         "mhd", "thewell.mhd", model_key,
         seed=seed, model_kwargs=model_kwargs,
         description="TheWell 3D MHD turbulence (Ohana et al. NeurIPS 2024)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase H — ConStellaration field benchmarks (boundary -> |B|, flux surfaces)
+#
+# Requires the downloaded VMEC wout subset cache (see
+# surge.benchmarks.loaders.constellaration.download_wout_subset); works on
+# whatever rows are present (today: 500 in wout_nfp3_subset_parts/) and
+# scales unchanged to the full ~26,897-row dataset once the download
+# finishes.
+# ---------------------------------------------------------------------------
+
+
+def _constellaration_field_split(
+    plasma_config_id: np.ndarray, *, seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Canonical train/test split for the ConStellaration field benchmarks,
+    restricted to whatever rows are present.
+
+    Reuses the *same* paper-protocol 80/20 split
+    (``leaderboard.constellaration_canonical_split``, seed 42) as every
+    other ``plasma.constellaration_*`` benchmark, keyed by each row's
+    ``plasma_config_id`` position in ``paper_filter_ids()`` (which is in the
+    same row order as the cached ``paper_nfp3_clip0.05.npz``), so any given
+    equilibrium gets the same train/test assignment everywhere it appears.
+    Rows whose id isn't found in the paper-filtered set (shouldn't happen
+    for nfp=3 rows) are dropped from both splits.
+    """
+    from surge.benchmarks.leaderboard import constellaration_canonical_split
+    from surge.benchmarks.loaders.constellaration import paper_filter_ids
+
+    paper_ids = paper_filter_ids()["plasma_config_id"]
+    pos = {pcid: i for i, pcid in enumerate(paper_ids)}
+    train_idx_full, _test_idx_full = constellaration_canonical_split(len(paper_ids), seed=seed)
+    train_set = set(train_idx_full.tolist())
+
+    train_local: list[int] = []
+    test_local: list[int] = []
+    for local_i, pcid in enumerate(plasma_config_id):
+        global_i = pos.get(str(pcid))
+        if global_i is None:
+            continue
+        (train_local if global_i in train_set else test_local).append(local_i)
+    return np.array(train_local, dtype=int), np.array(test_local, dtype=int)
+
+
+def _field_baselines(X_train, y_train, X_test, y_test, *, n_pod_modes: int = 16) -> dict[str, Any]:
+    """Mean-field and POD+ridge baselines' median relative-L2 on the test
+    set, for every ConStellaration field benchmark's ``extra`` so any
+    model's number is read against them.
+
+    * mean-field: predict the training-set mean field for every test sample.
+    * POD+ridge: project training fields onto a ``n_pod_modes``-mode POD
+      (PCA) basis (``surge.preprocessing.pod_fit``), fit a ridge regressor
+      from the flattened boundary ``X`` to the POD coefficients, reconstruct
+      via ``pod_inverse``. Best-effort — records the exception instead of
+      failing the benchmark if it errors (e.g. too few training rows).
+    """
+    from surge.metrics import relative_l2_per_sample
+    from surge.preprocessing import pod_fit, pod_inverse, pod_transform
+
+    X_train_flat = np.asarray(X_train, dtype=np.float64).reshape(len(X_train), -1)
+    X_test_flat = np.asarray(X_test, dtype=np.float64).reshape(len(X_test), -1)
+    y_train_flat = np.asarray(y_train, dtype=np.float64).reshape(len(y_train), -1)
+    y_test_flat = np.asarray(y_test, dtype=np.float64).reshape(len(y_test), -1)
+
+    mean_pred = np.broadcast_to(y_train_flat.mean(axis=0), y_test_flat.shape)
+    baselines: dict[str, Any] = {
+        "baseline_mean_field_relative_l2": float(np.median(relative_l2_per_sample(y_test_flat, mean_pred))),
+    }
+    try:
+        from sklearn.linear_model import Ridge
+
+        basis = pod_fit(y_train_flat, n_pod_modes)
+        coeffs_train = pod_transform(basis, y_train_flat)
+        ridge = Ridge(alpha=1.0, random_state=42)
+        ridge.fit(X_train_flat, coeffs_train)
+        coeffs_pred = ridge.predict(X_test_flat)
+        y_pred_pod = pod_inverse(basis, coeffs_pred)
+        baselines["baseline_pod_ridge_relative_l2"] = float(
+            np.median(relative_l2_per_sample(y_test_flat, y_pred_pod))
+        )
+        baselines["baseline_pod_n_modes"] = int(basis["components"].shape[0])
+    except Exception as exc:  # pragma: no cover - defensive, POD baseline is best-effort
+        baselines["baseline_pod_ridge_error"] = str(exc)
+    return baselines
+
+
+def _modb_extra_metrics(y_test, y_pred, extra_data, test_idx) -> dict[str, float]:
+    from surge.benchmarks.loaders.constellaration_fields import mirror_ratio
+
+    mr_true = mirror_ratio(y_test)
+    mr_pred = mirror_ratio(y_pred)
+    return {"test_mirror_ratio_mae": float(np.nanmean(np.abs(mr_pred - mr_true)))}
+
+
+def _surfaces_extra_metrics(y_test, y_pred, extra_data, test_idx) -> dict[str, float]:
+    from surge.benchmarks.loaders.constellaration_fields import axis_position_error
+
+    minor_radius_test = np.asarray(extra_data["minor_radius"])[test_idx]
+    err = axis_position_error(y_test, y_pred, minor_radius_test)
+    return {"test_axis_position_error": float(np.nanmedian(err))}
+
+
+def _run_constellaration_field_benchmark(
+    benchmark_key: str,
+    loader_fn,
+    *,
+    model_key: str | None,
+    seed: int,
+    model_kwargs: dict | None,
+    pass_threshold: float,
+    description: str,
+    extra_metrics_fn,
+) -> "BenchmarkResult":
+    """Shared runner for the ConStellaration field benchmarks — loads the
+    boundary/target arrays, applies the restricted canonical split, fits
+    ``model_key`` (passing full-rank ``(n, C, ny, nx)`` arrays to models that
+    manage their own preprocessing, e.g. ``pytorch.fno2d``, and flattened
+    ``(n, features)`` arrays to plain sklearn regressors), and scores
+    ``test_relative_l2``/``test_relative_l2_mean`` plus the dataset-specific
+    metric from ``extra_metrics_fn`` against the mean-field/POD baselines.
+    """
+    from surge.metrics import relative_l2_per_sample
+
+    X, y, plasma_config_id, extra_data = loader_fn()
+    train_idx, test_idx = _constellaration_field_split(plasma_config_id, seed=seed)
+    if len(train_idx) == 0 or len(test_idx) == 0:
+        raise RuntimeError(
+            f"{benchmark_key}: canonical split produced an empty train ({len(train_idx)}) "
+            f"or test ({len(test_idx)}) set from {len(plasma_config_id)} available row(s) "
+            "-- need more wout parts downloaded."
+        )
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]
+
+    adapter = _resolve_model(model_key, benchmark_key, model_kwargs)
+    flatten = not getattr(adapter, "uses_internal_preprocessing", False)
+    X_fit = X_train.reshape(len(X_train), -1) if flatten else X_train
+    X_pred = X_test.reshape(len(X_test), -1) if flatten else X_test
+    y_fit = y_train.reshape(len(y_train), -1) if flatten else y_train
+
+    t0 = time.perf_counter()
+    adapter.fit(X_fit, y_fit)
+    y_pred = np.asarray(adapter.predict(X_pred)).reshape(y_test.shape)
+    elapsed = time.perf_counter() - t0
+
+    per_sample = relative_l2_per_sample(y_test, y_pred)
+    rel_l2 = float(np.median(per_sample))
+    metrics: dict = {
+        "test_relative_l2": rel_l2,
+        "test_relative_l2_mean": float(np.mean(per_sample)),
+        "runtime_s": elapsed,
+    }
+    metrics.update(extra_metrics_fn(y_test, y_pred, extra_data, test_idx))
+
+    baselines = _field_baselines(X_train, y_train, X_test, y_test)
+
+    return BenchmarkResult(
+        benchmark_key=benchmark_key,
+        model_key=adapter.name,
+        tier="2",
+        task_type="regression",
+        metrics=metrics,
+        passed=rel_l2 < pass_threshold,
+        message=description,
+        extra={"n_train": len(X_train), "n_test": len(X_test), **baselines},
+    )
+
+
+def run_constellaration_modb(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
+    """ConStellaration boundary -> |B|(theta, phi) on the LCFS (Tier 2, requires
+    the downloaded VMEC wout subset — see
+    ``surge.benchmarks.loaders.constellaration.download_wout_subset``).
+
+    X: boundary ``(R, Z)`` on a 64x32 grid over one field period, from the
+    same 90 ``r_cos``/``z_sin`` boundary Fourier coefficients as the scalar
+    ``plasma.constellaration_*`` benchmarks
+    (``surge.benchmarks.loaders.constellaration.boundary_grid``).
+    y: ``|B|`` on the boundary (last closed flux surface), normalised by its
+    own per-sample mean (dimensionless), from the wout ``bmnc``
+    (``...evaluate_modB``); see
+    ``surge.benchmarks.loaders.constellaration_fields`` for the
+    ``theta_ref``/``theta_wout`` gauge alignment this relies on.
+
+    Metrics: ``test_relative_l2`` (median per-sample relative L2, Li et al.
+    2021 convention) is primary; also ``test_relative_l2_mean`` and
+    ``test_mirror_ratio_mae`` (``(|B|max-|B|min)/(|B|max+|B|min)``,
+    predicted vs true). ``extra`` carries a mean-field baseline and a
+    POD+ridge baseline (both median relative-L2).
+
+    Threshold PROVISIONAL: rel-L2 <= 0.05 — set from the first full-cache
+    (26,897-row) leaderboard, not yet run; today's 500-row cache is a smoke
+    test only.
+    """
+    from surge.benchmarks.loaders.constellaration_fields import constellaration_modb_dataset
+
+    return _run_constellaration_field_benchmark(
+        "plasma.constellaration_modb", constellaration_modb_dataset,
+        model_key=model_key, seed=seed, model_kwargs=model_kwargs,
+        pass_threshold=0.05,
+        description="ConStellaration boundary -> |B|(theta,phi) on the LCFS (Cadena et al. 2025)",
+        extra_metrics_fn=_modb_extra_metrics,
+    )
+
+
+def run_constellaration_surfaces(*, seed: int = 42, model_key: str | None = None,
+    model_kwargs: dict | None = None) -> "BenchmarkResult":
+    """ConStellaration boundary -> flux-surface poloidal cross-sections (Tier 2,
+    requires the downloaded VMEC wout subset).
+
+    X: boundary ``(R, Z)`` on a 64x32 grid (same as
+    ``plasma.constellaration_modb``). y: ``R(theta)``, ``Z(theta)`` at
+    ``phi=0`` for each of the (up to 16) stored flux surfaces (surface 0 =
+    magnetic axis, last = boundary) — the stellarator analogue of a tokamak
+    psi-map.
+
+    Metrics: ``test_relative_l2`` (median per-sample relative L2) is
+    primary; also ``test_relative_l2_mean`` and ``test_axis_position_error``
+    (surface-0 centroid displacement, normalised by the boundary minor
+    radius). ``extra`` carries the same mean-field / POD+ridge baselines as
+    ``plasma.constellaration_modb``.
+
+    Threshold PROVISIONAL: rel-L2 <= 0.02 — set from the first full-cache
+    leaderboard, not yet run.
+    """
+    from surge.benchmarks.loaders.constellaration_fields import constellaration_surfaces_dataset
+
+    return _run_constellaration_field_benchmark(
+        "plasma.constellaration_surfaces", constellaration_surfaces_dataset,
+        model_key=model_key, seed=seed, model_kwargs=model_kwargs,
+        pass_threshold=0.02,
+        description="ConStellaration boundary -> flux-surface poloidal cross-sections (Cadena et al. 2025)",
+        extra_metrics_fn=_surfaces_extra_metrics,
     )
