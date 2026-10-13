@@ -25,7 +25,7 @@ Figures (per mode, deterministic PNG/SVG/PDF):
     trio              RF + PyTorch MLP + GP on identical splits
     characterization  dataset EDA panel (distributions, SNR, PCA)
     mission_control   HPO campaign dashboard from run artifacts
-    constellaration   stellarator boundary → 12 equilibrium metrics
+    constellaration   stellarator boundary → 8 equilibrium metrics
 """
 from __future__ import annotations
 
@@ -1531,20 +1531,33 @@ def mission_control_figure(run_dir: Path, mode: str,
 def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
     """Stellarator design surrogate on the ConStellaration dataset
     (Cadena et al. 2025, arXiv:2506.19583, proxima-fusion/constellaration):
-    boundary Fourier coefficients (5×9 r_cos + 5×9 z_sin, n_fp = 3) → 12
-    equilibrium figures of merit. Shows real plasma boundary shapes, the
-    log₁₀(qi) parity, and which metrics are learnable.
+    boundary Fourier coefficients (5×9 r_cos + 5×9 z_sin, n_fp = 3) → the 8
+    equilibrium figures of merit (require the VMEC++ solve). aspect_ratio,
+    max_elongation and average_triangularity are closed-form functions of the
+    boundary and are not trained; the on-disk cache still carries all 12
+    columns, so they remain available here for the 3D shape gallery. Shows
+    real plasma boundary shapes, the log₁₀(qi) parity, and which of the 8
+    equilibrium metrics are learnable.
     """
     npz = _REPO / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz"
     if not npz.exists():
         return None
     from sklearn.metrics import r2_score
 
+    from surge.benchmarks.dataset_io import get_benchmark_io
     from surge.model import MODEL_REGISTRY
 
     d = np.load(npz, allow_pickle=True)
-    X, Y = d["X"], d["Y"]
-    names = [str(s) for s in d["metric_names"]]
+    X, Y_full = d["X"], d["Y"]
+    metric_names = [str(s) for s in d["metric_names"]]
+
+    # Joint benchmark now trains on the 8 equilibrium-kind metrics only
+    # (surge.benchmarks.leaderboard._load_constellaration_multioutput).
+    io_spec = get_benchmark_io("plasma.constellaration_multioutput")
+    names = [o["name"] for o in io_spec["outputs"]]
+    keep_idx = [metric_names.index(n) for n in names]
+    Y = Y_full[:, keep_idx]
+
     split = np.load(_REPO / "data" / "datasets" / "benchmarks" / "plasma"
                     / "constellaration" / "split_n26897_seed42_test0.2.npz")
     tr, te = split["train_idx"], split["test_idx"]
@@ -1604,8 +1617,10 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
                 Z += z_mn[m, jn] * np.sin(ang)
         return R, Z
 
-    # three test-set stellarators spanning the elongation range
-    elong = Yte[:, names.index("max_elongation")]
+    # three test-set stellarators spanning the elongation range (closed-form
+    # geometry metric — not trained, but still on disk in Y_full for picking
+    # representative shapes to render).
+    elong = Y_full[te, metric_names.index("max_elongation")]
     picks = [int(np.argsort(elong)[k]) for k in
              (len(elong) // 20, len(elong) // 2, int(len(elong) * 0.95))]
     phis = np.array([0.0, 0.25, 0.5]) * (2 * np.pi / NFP) / 2
@@ -1697,16 +1712,10 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
         _stat_chip(ax, f"R² = {r2s[qi_j]:.3f}", p, loc=(0.05, 0.94))
 
         # (c) which of the 8 equilibrium figures of merit (need the VMEC++
-        # solve) are learnable from shape alone. Geometry/derived targets
-        # (closed-form functions of the boundary) are omitted.
+        # solve) are learnable from shape alone. Geometry/derived targets are
+        # not trained at all now, so every column here is "equilibrium".
         ax = axes[2]
-        from surge.benchmarks.dataset_io import get_benchmark_io, output_kinds
-
-        io_spec = get_benchmark_io("plasma.constellaration_multioutput")
-        kinds = output_kinds(io_spec) if io_spec else {}
-        eq_order = sorted(
-            (j for j, n in enumerate(names) if kinds.get(n, "equilibrium") == "equilibrium"),
-            key=lambda j: r2s[j])
+        eq_order = sorted(range(len(names)), key=lambda j: r2s[j])
 
         for y, o in enumerate(eq_order):
             ax.barh(y, max(r2s[o], 0.0), height=0.62,
@@ -1720,7 +1729,7 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
                            fontsize=7)
         ax.set_xlim(0, 1.12)
         ax.set_ylim(-0.65, len(eq_order) - 1 + 0.65)
-        ax.set_xlabel("test R²  (one 90 → 12 surrogate;\ngeometry targets omitted)")
+        ax.set_xlabel("test R²  (one 90 → 8 surrogate;\ngeometry targets not trained)")
         ax.set_title("(c) learnability of the 8 equilibrium metrics", fontsize=9,
                      loc="right")
 
