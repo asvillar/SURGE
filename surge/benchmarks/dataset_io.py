@@ -119,22 +119,78 @@ CONSTELLARATION_INPUT_NAMES: list[str] = (
 )
 CONSTELLARATION_OUTPUT_NAMES: list[str] = [f["name"] for f in _CONSTELLARATION_OUTPUT_SPECS]
 
+_CONSTELLARATION_EQUILIBRIUM_OUTPUT_SPECS: list[FeatureSpec] = [
+    spec for spec in _CONSTELLARATION_OUTPUT_SPECS if spec.get("kind") == "equilibrium"
+]
+
 CONSTELLARATION_MULTIOUTPUT_IO: DatasetIOSpec = {
     "inputs": [
         {"name": "r_cos[0:44]", "desc": "45 boundary R Fourier cos coefficients (5×9 VMEC modes)"},
         {"name": "z_sin[0:44]", "desc": "45 boundary Z Fourier sin coefficients (5×9 VMEC modes)"},
     ],
-    "outputs": _CONSTELLARATION_OUTPUT_SPECS,
+    "outputs": _CONSTELLARATION_EQUILIBRIUM_OUTPUT_SPECS,
     "note": (
-        "Single joint model: 90 boundary shape features → 12 stellarator metrics. "
-        "Filtered cache: nfp=3, optimised DESC/VMEC, 0.05% outlier clip (26,897 rows). "
-        "Contrast with plasma.constellaration_paper (12 independent 90→1 models)."
+        "Single joint model: 90 boundary shape features → 8 equilibrium metrics "
+        "(the ones that require the VMEC++ solve). The other 4 ConStellaration "
+        "labels are not trained: aspect_ratio, max_elongation and "
+        "average_triangularity are computed in closed form from the boundary "
+        "coefficients by surge.benchmarks.loaders.constellaration.geometry_metrics, "
+        "and aspect_ratio_over_edge_rotational_transform follows by dividing that "
+        "exact aspect_ratio by the (learned) edge_rotational_transform_over_n_field_periods. "
+        "Filtered cache: nfp=3, optimised DESC/VMEC, 0.05% outlier clip (26,897 rows); "
+        "the on-disk cache still stores all 12 columns (see "
+        "plasma.constellaration_paper), only the 8 equilibrium columns are selected "
+        "at load time. Contrast with plasma.constellaration_paper (12 independent "
+        "90→1 models, paper parity)."
+    ),
+}
+
+CONSTELLARATION_MODB_IO: DatasetIOSpec = {
+    "inputs": [
+        {
+            "name": "boundary_RZ",
+            "desc": "Boundary (R, Z) on a 64 (θ) × 32 (φ) grid over one field period, "
+            "derived from the same 90 r_cos/z_sin Fourier coefficients as the scalar "
+            "constellaration benchmarks (boundary_grid).",
+        },
+    ],
+    "output": {
+        "name": "modB",
+        "desc": "|B|(θ, φ) on the last closed flux surface (from the wout bmnc, evaluate_modB), "
+        "normalised by its per-sample mean (dimensionless).",
+        "kind": "equilibrium",
+    },
+    "note": (
+        "Field-shaped benchmark: X (n, 2, 64, 32), y (n, 64, 32). Requires the downloaded "
+        "VMEC wout subset (surge.benchmarks.loaders.constellaration.download_wout_subset); "
+        "canonical split restricted to whichever plasma_config_id rows are present, reusing "
+        "the paper-protocol 80/20 split (seed 42). Cadena et al. 2025 arXiv:2506.19583; "
+        "VMEC equilibrium representation: Hirshman & Whitson (1983) Phys. Fluids 26, 3553."
+    ),
+}
+
+CONSTELLARATION_SURFACES_IO: DatasetIOSpec = {
+    "inputs": CONSTELLARATION_MODB_IO["inputs"],
+    "output": {
+        "name": "surfaces_RZ",
+        "desc": "R(θ), Z(θ) at φ=0 for each of the (up to 16) stored flux surfaces "
+        "(surface 0 = magnetic axis, last = boundary), from the wout rmnc/zmns "
+        "(evaluate_surface) — the stellarator analogue of a tokamak ψ-map.",
+        "kind": "equilibrium",
+    },
+    "note": (
+        "Field-shaped benchmark: X (n, 2, 64, 32), y (n, 2, 16, 64). Same wout-subset "
+        "requirement and canonical split as plasma.constellaration_modb. "
+        "Cadena et al. 2025 arXiv:2506.19583; VMEC equilibrium representation: "
+        "Hirshman & Whitson (1983) Phys. Fluids 26, 3553."
     ),
 }
 
 _BENCHMARK_IO: dict[str, DatasetIOSpec] = {
     "plasma.qlknn_transport": QLKNN_TRANSPORT_IO,
     "plasma.constellaration_multioutput": CONSTELLARATION_MULTIOUTPUT_IO,
+    "plasma.constellaration_modb": CONSTELLARATION_MODB_IO,
+    "plasma.constellaration_surfaces": CONSTELLARATION_SURFACES_IO,
 }
 
 

@@ -14,17 +14,21 @@ def test_output_kinds_defaults_to_equilibrium_when_unset():
     assert kinds == {"efeITG": "equilibrium"}
 
 
-def test_constellaration_output_kinds_are_3_geometry_1_derived_8_equilibrium():
-    kinds = output_kinds(CONSTELLARATION_MULTIOUTPUT_IO)
-    assert len(kinds) == 12
-    counts: dict[str, int] = {}
-    for kind in kinds.values():
-        counts[kind] = counts.get(kind, 0) + 1
-    assert counts == {"geometry": 3, "derived": 1, "equilibrium": 8}
+def test_constellaration_multioutput_trains_only_the_8_equilibrium_metrics():
+    # The joint benchmark now trains on equilibrium-kind targets only — the
+    # geometry (closed-form) and derived (algebraic) labels are dropped from
+    # the spec entirely, not just reported as a sanity check.
+    outputs = CONSTELLARATION_MULTIOUTPUT_IO["outputs"]
+    assert len(outputs) == 8
 
-    assert kinds["aspect_ratio"] == "geometry"
-    assert kinds["max_elongation"] == "geometry"
-    assert kinds["average_triangularity"] == "geometry"
-    assert kinds["aspect_ratio_over_edge_rotational_transform"] == "derived"
-    assert kinds["log_10_qi"] == "equilibrium"
-    assert kinds["vacuum_well"] == "equilibrium"
+    kinds = output_kinds(CONSTELLARATION_MULTIOUTPUT_IO)
+    assert len(kinds) == 8
+    assert set(kinds.values()) == {"equilibrium"}
+
+    names = {o["name"] for o in outputs}
+    assert "aspect_ratio" not in names
+    assert "max_elongation" not in names
+    assert "average_triangularity" not in names
+    assert "aspect_ratio_over_edge_rotational_transform" not in names
+    assert "log_10_qi" in names
+    assert "vacuum_well" in names
