@@ -102,6 +102,13 @@ _DATASETS: dict[str, dict[str, Any]] = {
         "n_steps_input": 4,
         "n_steps_output": 1,
     },
+    "helmholtz": {
+        "well_name": "helmholtz_staircase",
+        "description": "Helmholtz acoustics over a staircase (2D, ~80 GB)",
+        "shape_hint": "(T, 1024, 256, 2 fields: Re/Im pressure) → next timestep",
+        "n_steps_input": 4,
+        "n_steps_output": 1,
+    },
     "mhd": {
         "well_name": "MHD_64",
         "description": "3D MHD turbulence 64³",

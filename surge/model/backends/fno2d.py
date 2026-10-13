@@ -235,8 +235,8 @@ class FNO2dModel:
             with torch.no_grad():
                 preds.append(self._net(Xt[i:i + self.batch_size].to(self.device)).cpu().numpy())
         out = np.concatenate(preds)
-        # Return flat if output was flat
-        return out.squeeze(1)  # (B, nx, ny)
+        # single-channel: (B, nx, ny); multi-channel output keeps (B, C, nx, ny)
+        return out[:, 0] if out.shape[1] == 1 else out
 
     def save(self, path: str) -> None:
         import joblib

@@ -101,3 +101,22 @@ pytest -q                                    # full suite
 | GPflow models (any platform) | `uv pip install -e ".[gpflow]"` then `uv pip install gpflow --no-deps`. gpflow's published metadata pins `numpy<2` (and the dead `tensorflow-macos` on Apple Silicon), which no modern resolver can satisfy next to TF ≥ 2.21 — but gpflow 2.11 runs fine on NumPy 2.x. The `[gpflow]` extra provides the full TF stack **and** gpflow's pure-Python deps (check_shapes, tabulate, …), so `--no-deps` is safe. Verified: TF 2.21 + GPflow 2.11.1 + NumPy 2.5. |
 | Keras/TensorFlow models absent | Install `.[tensorflow]` (or `.[gpflow]`); `keras.mlp` then appears in `surge models`. |
 | Grouped samples (shots, trajectories) | Splits are random-only today — leakage risk. Track the split-strategy roadmap in `docs/design/ARCHITECTURE_RECOMMENDATIONS.md` (R4). |
+
+
+## Editor autocomplete for spec files
+
+SURGE ships a JSON Schema for workflow specs
+(`surge/workflow/spec.schema.json`). With the YAML language server
+(VS Code "YAML" extension), add this line at the top of any spec to get
+completion, hover docs, and inline validation while you type:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/S-Villar/SURGE/main/surge/workflow/spec.schema.json
+```
+
+Offline check of any spec (unknown keys, typos with suggestions, bad
+types, unknown model keys):
+
+```bash
+surge validate my_spec.yaml
+```

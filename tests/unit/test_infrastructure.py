@@ -316,7 +316,7 @@ def test_constellaration_multioutput_benchmark_metadata():
     assert info["category"] == "plasma"
     assert info["task_type"] == "regression"
     assert "90" in info["shape"]
-    assert "12" in info["shape"]
+    assert "8" in info["shape"]  # equilibrium-only targets since the 90→8 re-scope
 
 
 def test_constellaration_multioutput_run():

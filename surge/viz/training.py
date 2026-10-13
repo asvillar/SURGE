@@ -190,8 +190,11 @@ def plot_training_dashboard(
     else:
         axes[1].text(0.5, 0.5, "No val metric in history", ha="center", va="center")
         axes[1].set_axis_off()
-    axes[1].legend()
-    axes[1].grid(True, alpha=0.3)
+    # legend/grid only when something was plotted — an empty, axis-off panel
+    # otherwise emits "No artists with labels found to put in legend"
+    if axes[1].get_legend_handles_labels()[0]:
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
 
     if any("lr" in h for h in hist):
         axes[2].plot(epochs, [float(h.get("lr", np.nan)) for h in hist], color="C2")
