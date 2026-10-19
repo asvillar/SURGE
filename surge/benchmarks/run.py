@@ -447,6 +447,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="Render the per-benchmark status ledger (metadata.yaml + newest "
                          "results under --save-dir) to PATH "
                          "(default docs/benchmarks/README.md) and exit.")
+    ap.add_argument("--apply-selection", metavar="PATH.json", default=None,
+                    help="Apply a maintainer selection JSON ({'benchmarks':[{key,show,push,note}]}) "
+                         "to metadata.yaml (visible / focus / focus_note) and exit.")
     ap.add_argument("--list-models", action="store_true",
                     help="Print all models available in MODEL_REGISTRY and exit.")
     ap.add_argument(
@@ -484,6 +487,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tier", metavar="TIER", help=argparse.SUPPRESS)
 
     args = ap.parse_args(argv)
+
+    if args.apply_selection:
+        from surge.benchmarks.status import apply_selection
+        res = apply_selection(Path(args.apply_selection))
+        print(f"Selection applied: {res['visible']} visible, {res['focus']} focus"
+              + (f", {len(res['unknown'])} unknown key(s) ignored" if res["unknown"] else ""))
+        return 0
 
     if args.status_md is not None:
         from surge.benchmarks.status import write_status_md

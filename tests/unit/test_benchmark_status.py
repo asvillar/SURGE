@@ -43,3 +43,55 @@ def test_each_benchmark_once_under_its_status(tmp_path):
     row = next(ln for ln in md.splitlines() if ln.startswith("| `fusion.m3dc1_sample`"))
     assert "(synthetic fixture)" in row
     assert md == render_status_md(tmp_path)  # deterministic
+
+
+def _sel(tmp_path, rows):
+    p = tmp_path / "sel.json"
+    p.write_text(json.dumps({"benchmarks": rows}))
+    return p
+
+
+def test_apply_selection_sets_fields_and_leaves_rest(tmp_path, capsys):
+    from surge.benchmarks.status import apply_selection
+
+    src = Path(__file__).resolve().parents[2] / "surge/benchmarks/metadata.yaml"
+    dst = tmp_path / "metadata.yaml"
+    dst.write_text(src.read_text())
+    before = load_metadata(dst)
+    res = apply_selection(_sel(tmp_path, [
+        {"key": "tabular.california_housing", "show": True, "push": True, "note": "headline"},
+        {"key": "pde.burgers_1d", "show": False, "push": False, "note": ""},
+        {"key": "nope.missing", "show": True, "push": True, "note": ""},
+    ]), dst)
+    after = load_metadata(dst)
+    assert res["unknown"] == ["nope.missing"] and res["focus"] == 1
+    assert res["visible"] == len(before) - 1
+    assert "unknown benchmark key" in capsys.readouterr().err
+    ch = after["tabular.california_housing"]
+    assert ch["focus"] is True and ch["visible"] is True and ch["focus_note"] == "headline"
+    assert after["pde.burgers_1d"]["visible"] is False
+    for k, m in before.items():
+        if k not in ("tabular.california_housing", "pde.burgers_1d"):
+            assert after[k] == m
+    assert {k: {f: v for f, v in m.items() if f not in ("visible", "focus", "focus_note")}
+            for k, m in after.items()} == before
+    assert dst.read_text().startswith("# SURGE benchmark metadata")  # comments survive
+    apply_selection(_sel(tmp_path, [{"key": "tabular.california_housing", "show": True,
+                                     "push": False, "note": ""}]), dst)
+    assert "focus_note" not in load_metadata(dst)["tabular.california_housing"]
+
+
+def test_status_ledger_focus_column_and_section(tmp_path):
+    from surge.benchmarks.status import apply_selection
+
+    src = Path(__file__).resolve().parents[2] / "surge/benchmarks/metadata.yaml"
+    dst = tmp_path / "metadata.yaml"
+    dst.write_text(src.read_text())
+    md0 = render_status_md(tmp_path, dst)
+    assert "| visible | focus |" in md0 and "## Focus" not in md0
+    apply_selection(_sel(tmp_path, [{"key": "tabular.california_housing", "show": True,
+                                     "push": True, "note": "key demo"}]), dst)
+    md = render_status_md(tmp_path, dst)
+    assert "## Focus" in md and "- `tabular.california_housing`: key demo" in md
+    row = next(ln for ln in md.splitlines() if ln.startswith("| `tabular.california_housing`"))
+    assert row.endswith("| ✓ | ✓ |")

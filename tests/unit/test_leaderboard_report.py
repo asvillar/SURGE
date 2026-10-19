@@ -155,3 +155,27 @@ def test_budget_drops_mission_control(tmp_path: Path):
     assert full.count("data:video/webm") == 2
     small = build_report(root, tmp_path / "b.html", budget_mb=0.05, **kw).read_text()
     assert small.count("data:video/webm") == 1 and "Mission-control clip dropped" in small
+
+
+def test_hidden_omitted_and_focus_section(tmp_path: Path):
+    from surge.benchmarks.status import apply_selection
+
+    root = _fake_tree(tmp_path)
+    src = Path(__file__).resolve().parents[2] / "surge/benchmarks/metadata.yaml"
+    mp = tmp_path / "metadata.yaml"
+    mp.write_text(src.read_text())
+    sel = tmp_path / "sel.json"
+    sel.write_text(json.dumps({"benchmarks": [
+        {"key": "pde.burgers_1d", "show": False, "push": False, "note": ""},
+        {"key": "tabular.california_housing", "show": True, "push": True,
+         "note": "flagship tabular"}]}))
+    apply_selection(sel, mp)
+    text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
+                        demo_runs={}, metadata_path=mp).read_text()
+    assert 'id="pde.burgers_1d"' not in text
+    assert "1 benchmarks hidden by the maintainer" in text
+    assert "<section class='focus'>" in text and "flagship tabular" in text
+    assert "<span class='badge good'>focus</span>" in text
+    plain = build_report(root, tmp_path / "p.html", video=tmp_path / "none.mp4",
+                         demo_runs={}).read_text()
+    assert "hidden by the maintainer" not in plain and "class='focus'" not in plain
