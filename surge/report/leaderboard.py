@@ -53,8 +53,39 @@ def load_metadata(path: Path | None = None) -> dict[str, dict]:
     return {b["key"]: b for b in doc.get("benchmarks", [])}
 
 
+def _aggregate(runs: list[dict]) -> dict:
+    """Mean/std aggregate over raw result dicts (each carries ``_path``)."""
+    metrics: dict[str, list] = defaultdict(list)
+    for r in runs:
+        for k, v in (r.get("metrics") or {}).items():
+            if isinstance(v, (int, float)) and np.isfinite(v):
+                metrics[k].append(float(v))
+    agg = {}
+    for k, v in metrics.items():
+        mean = statistics.fmean(v)
+        std = statistics.stdev(v) if len(v) > 1 else 0.0
+        if std < 1e-9 * max(1.0, abs(mean)):  # float noise, not spread
+            std = 0.0
+        agg[k] = {"mean": mean, "std": std, "n": len(v)}
+    passed = [bool(r.get("passed")) for r in runs if r.get("passed") is not None]
+    return {
+        "metrics": agg,
+        "n_runs": len(runs),
+        "passed": (sum(passed) / len(passed) >= 0.5) if passed else None,
+        "last": max(r.get("timestamp", "") for r in runs),
+        "synthetic": bool(runs) and all(
+            bool((r.get("extra") or {}).get("synthetic")) for r in runs),
+        "runs": runs,
+    }
+
+
 def load_results(reports_dir: Path) -> dict[str, dict[str, dict]]:
-    """benchmark_key -> model_key -> aggregate over every result.json."""
+    """benchmark_key -> model_key -> aggregate over every result.json.
+
+    Each aggregate keeps its raw ``runs`` (with ``_path`` = result.json path
+    relative to the reports directory's parent) so the newest sweep can be
+    re-aggregated by :func:`newest_sweep`.
+    """
     raw: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
     for rj in sorted(reports_dir.glob("*/*/result.json")):
         try:
@@ -64,33 +95,34 @@ def load_results(reports_dir: Path) -> dict[str, dict[str, dict]]:
         bench, model = d.get("benchmark_key"), d.get("model_key")
         if not bench or not model:
             continue
+        d["_path"] = str(rj.relative_to(reports_dir.parent))
+        d["_ts"] = str(d.get("timestamp") or rj.parent.name)
         raw[bench][model].append(d)
+    return {bench: {m: _aggregate(runs) for m, runs in models.items()}
+            for bench, models in raw.items()}
 
-    out: dict[str, dict[str, dict]] = {}
-    for bench, models in raw.items():
-        out[bench] = {}
-        for model, runs in models.items():
-            metrics: dict[str, list] = defaultdict(list)
-            for r in runs:
-                for k, v in (r.get("metrics") or {}).items():
-                    if isinstance(v, (int, float)) and np.isfinite(v):
-                        metrics[k].append(float(v))
-            agg = {}
-            for k, v in metrics.items():
-                if not v:
-                    continue
-                mean = statistics.fmean(v)
-                std = statistics.stdev(v) if len(v) > 1 else 0.0
-                if std < 1e-9 * max(1.0, abs(mean)):  # float noise, not spread
-                    std = 0.0
-                agg[k] = {"mean": mean, "std": std, "n": len(v)}
-            passed = [bool(r.get("passed")) for r in runs if r.get("passed") is not None]
-            out[bench][model] = {
-                "metrics": agg,
-                "n_runs": len(runs),
-                "passed": (sum(passed) / len(passed) >= 0.5) if passed else None,
-                "last": max(r.get("timestamp", "") for r in runs),
-            }
+
+def newest_sweep(bench_results: dict[str, dict]) -> dict[str, dict]:
+    """Models of the newest sweep only: every run within
+    ``SWEEP_WINDOW_HOURS`` of the newest run of the benchmark (same rule as
+    ``surge.benchmarks.status._newest_results``)."""
+    from datetime import timedelta
+
+    from surge.benchmarks.status import SWEEP_WINDOW_HOURS, _parse_ts
+
+    allruns = [r for m in bench_results.values() for r in m["runs"]]
+    for r in allruns:
+        r.setdefault("_dt", _parse_ts(r.get("_ts", "")))
+    dated = [r for r in allruns if r["_dt"] is not None]
+    if not dated:
+        return bench_results
+    newest = max(r["_dt"] for r in dated)
+    lo = newest - timedelta(hours=SWEEP_WINDOW_HOURS)
+    out = {}
+    for model, agg in bench_results.items():
+        keep = [r for r in agg["runs"] if r["_dt"] is not None and lo <= r["_dt"] <= newest]
+        if keep:
+            out[model] = _aggregate(keep)
     return out
 
 
@@ -206,6 +238,16 @@ def spider_svg(category: str, benches: list[str], results: dict[str, dict[str, d
 # --------------------------------------------------------------------- html
 
 _CSS_TEMPLATE = """
+.badge {{ font-size: 10.5px; padding: 1.5px 8px; border-radius: 99px; font-weight: 600;
+  margin-left: 8px; border: 1px solid var(--line); color: var(--muted); }}
+.badge.good {{ color: var(--good); }} .badge.warn {{ color: var(--warn); border-color: var(--warn); }}
+.chip.syn {{ color: var(--warn); border: 1px solid var(--warn); }}
+.receipts {{ margin-top: 10px; color: var(--muted); font-size: 11.5px; }}
+.receipts a {{ color: var(--muted); }}
+code.path {{ font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; }}
+.tilenote {{ color: var(--muted); font-size: 12px; margin: -4px 0 20px; }}
+details.tail {{ margin-top: 40px; border-top: 1px solid var(--line); padding-top: 14px; }}
+details.tail > summary {{ cursor: pointer; font-size: 16px; font-weight: 600; color: var(--ink2); }}
 :root {{
   --page: {page}; --surface: {surface}; --card: {surface};
   --ink: {ink}; --ink2: {ink2}; --muted: {muted};
@@ -323,17 +365,21 @@ def _fmt_cell(metric: str, agg: dict | None) -> str:
     return f"<td data-v='{agg['mean']:.6g}'>{txt}</td>"
 
 
-def _bench_card(key: str, meta: dict[str, dict],
-                bench_results: dict[str, dict], preview: str = "") -> str:
-    info = meta.get(key, {})
-    pm = primary_metric_key(bench_results)
+_STATUS_COLOR = {"ready": "good", "tutorial": "muted", "in_progress": "warn",
+                 "needs_rerun": "warn", "sanity": "muted"}
+_TAIL = ("in_progress", "needs_rerun", "sanity")
+
+
+def _status_of(info: dict) -> str:
+    return info.get("status") or "ready"
+
+
+def _table(bench_results: dict[str, dict], pm: str | None, cols: list[str]) -> str:
     ranked = rank_models(bench_results, pm) if pm else sorted(bench_results)
-    cols = _metric_columns(bench_results)
     best_pm = None
     if pm and ranked:
         top = bench_results[ranked[0]]["metrics"].get(pm)
         best_pm = top["mean"] if top else None
-
     rows = []
     for i, model in enumerate(ranked):
         r = bench_results[model]
@@ -349,19 +395,59 @@ def _bench_card(key: str, meta: dict[str, dict],
                   f"{bar}{html.escape(model)}</td>")]
         for c in cols:
             cells.append(_fmt_cell(c, r["metrics"].get(c)))
-        chip = ("<span class='chip pass'>PASS</span>" if r["passed"]
-                else "<span class='chip fail'>FAIL</span>" if r["passed"] is not None
-                else "—")
+        if r.get("synthetic"):
+            chip = "<span class='chip syn'>synthetic</span>"
+        else:
+            chip = ("<span class='chip pass'>PASS</span>" if r["passed"]
+                    else "<span class='chip fail'>FAIL</span>" if r["passed"] is not None
+                    else "—")
         cells.append(f"<td data-v='{int(bool(r['passed']))}'>{chip}</td>")
         cells.append(f"<td data-v='{r['n_runs']}'>{r['n_runs']}</td>")
         rows.append(f"<tr class='{'best' if i == 0 else ''}'>{''.join(cells)}</tr>")
+    header = "".join(f"<th>{_LABELS.get(c, c)}</th>" for c in cols)
+    return (f"<table class='sortable'><thead><tr><th>model</th>{header}"
+            f"<th>gate</th><th>runs</th></tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table>")
 
-    header = "".join(
-        f"<th>{_LABELS.get(c, c)}</th>" for c in cols)
+
+def _best_result_path(bench_results: dict[str, dict], pm: str | None) -> str:
+    if not bench_results:
+        return ""
+    ranked = rank_models(bench_results, pm) if pm else sorted(bench_results)
+    runs = bench_results[ranked[0]].get("runs") or []
+    if not runs:
+        return ""
+
+    def sc(r):
+        v = (r.get("metrics") or {}).get(pm)
+        if not isinstance(v, (int, float)):
+            return float("-inf")
+        return -v if _is_lower_better(pm) else v
+    return max(runs, key=lambda r: (sc(r), r.get("_ts", ""))).get("_path", "")
+
+
+def _bench_card(key: str, meta: dict[str, dict],
+                bench_results: dict[str, dict], preview: str = "",
+                history: dict[str, dict] | None = None) -> str:
+    """``bench_results`` = headline (newest sweep); ``history`` = every run."""
+    info = meta.get(key, {})
+    status = _status_of(info)
+    history = history if history is not None else bench_results
+    pm = primary_metric_key(bench_results)
+    cols = _metric_columns(bench_results)
+    synthetic = bool(bench_results) and all(r.get("synthetic") for r in bench_results.values())
+
+    badges = ""
+    if status != "ready":
+        badges += (f"<span class='badge {_STATUS_COLOR.get(status, 'muted')}'>"
+                   f"{html.escape(status.replace('_', ' '))}</span>")
+    if synthetic:
+        badges += "<span class='badge warn'>synthetic fixture</span>"
+
     cite = ""
     if info.get("citation"):
         url = html.escape(info.get("url") or "#")
-        cite = f" · <a href='{url}'>{html.escape(info['citation'])}</a>"
+        cite = f"<a href='{url}'>{html.escape(info['citation'])}</a>"
     io_block = ""
     feats = (info.get("inputs") or []) + (info.get("outputs") or [])
     if feats or info.get("io_note"):
@@ -372,10 +458,33 @@ def _bench_card(key: str, meta: dict[str, dict],
         io_block = (f"<details class='io'><summary>Inputs & outputs "
                     f"({len(feats)} documented)</summary>{note}<ul>{items}</ul></details>")
 
+    n_hist = sum(r["n_runs"] for r in history.values())
+    hist_block = ""
+    if n_hist > sum(r["n_runs"] for r in bench_results.values()):
+        hist_block = (f"<details class='io'><summary>run history (all {n_hist} results)"
+                      f"</summary>{_table(history, primary_metric_key(history), _metric_columns(history))}"
+                      "</details>")
+
+    rec = []
+    src = info.get("source") or info.get("data_source")
+    lic = info.get("license")
+    if src or lic:
+        rec.append(f"data: {html.escape(str(src or '—'))} · license: {html.escape(str(lic or '—'))}")
+    if info.get("threshold") or cite:
+        rec.append(f"gate: {html.escape(info.get('threshold') or '—')}"
+                   + (f" ({cite})" if cite else ""))
+    if info.get("status_note"):
+        rec.append(f"status: {html.escape(str(info['status_note']))}")
+    path = _best_result_path(bench_results, pm)
+    if path:
+        rec.append(f"<code class='path'>{html.escape(path)}</code>")
+    receipts = (f"<div class='receipts'>{''.join(f'<div>{x}</div>' for x in rec)}</div>"
+                if rec else "")
+
     tier = info.get("tier")
     return f"""
 <section class="bench" id="{html.escape(key)}">
-  <h3>{html.escape(info.get('name', key))}
+  <h3>{html.escape(info.get('name', key))} {badges}
     <span class="pills">
       {f"<span class='pill tier'>tier {tier}</span>" if tier is not None else ""}
       <span class="pill">{html.escape(info.get('shape', ''))}</span>
@@ -386,85 +495,149 @@ def _bench_card(key: str, meta: dict[str, dict],
   <div class="bench-top">
     <div class="bench-info">
       <p class="desc">{html.escape(info.get('description', ''))}</p>
-      <p class="meta"><code>{html.escape(key)}</code>{cite}</p>
+      <p class="meta"><code>{html.escape(key)}</code></p>
     </div>
     {f'<figure class="preview">{preview}<figcaption>sample of the data</figcaption></figure>' if preview else ''}
   </div>
-  <table class="sortable">
-    <thead><tr><th>model</th>{header}<th>gate</th><th>runs</th></tr></thead>
-    <tbody>{''.join(rows)}</tbody>
-  </table>
+  {_table(bench_results, pm, cols)}
+  {hist_block}
   {io_block}
+  {receipts}
 </section>"""
 
 
-def build_report(reports_dir: Path, out_path: Path, mode: str = "dark") -> Path:
-    meta = load_metadata()
-    results = load_results(reports_dir)
-    if not results:
-        raise SystemExit(f"no result.json files under {reports_dir}")
-
-    categories: dict[str, list[str]] = defaultdict(list)
-    for key in sorted(results):
+def _group(keys: list[str], meta: dict, results: dict) -> dict[str, list[str]]:
+    cats: dict[str, list[str]] = defaultdict(list)
+    for key in sorted(keys):
         cap = meta.get(key, {}).get("capability") or key.split(".")[0].title()
-        categories[cap].append(key)
+        cats[cap].append(key)
+    return cats
 
-    n_bench = len(results)
-    n_models = len({m for b in results.values() for m in b})
-    n_runs = sum(r["n_runs"] for b in results.values() for r in b.values())
-    n_pass = sum(1 for b in results.values() for r in b.values() if r["passed"])
-    n_gated = sum(1 for b in results.values() for r in b.values()
-                  if r["passed"] is not None)
-    snapshot = max((r["last"] for b in results.values() for r in b.values()),
-                   default="")[:10]
 
-    p = PALETTES[mode]
-    css = _CSS_TEMPLATE.format(accent=p["series"][0], **p)
-
-    sections = []
-    for cap in sorted(categories):
-        keys = categories[cap]
+def _category_blocks(cats: dict[str, list[str]], heads: dict, results: dict, meta: dict,
+                     mode: str, first: str | None = None) -> str:
+    order = sorted(cats, key=lambda c: (c != first, c))
+    out = []
+    for cap in order:
+        keys = cats[cap]
         try:
-            svg = spider_svg(cap, keys, results, meta, mode=mode)
+            svg = spider_svg(cap, keys, heads, meta, mode=mode)
         except Exception:  # noqa: BLE001 - a chart bug must not kill the report
             svg = ""
         cards = "\n".join(
-            _bench_card(k, meta, results[k], preview=preview_svg(k, mode))
+            _bench_card(k, meta, heads[k], preview=preview_svg(k, mode), history=results[k])
             for k in keys)
-        sections.append(f"""
+        out.append(f"""
 <h2 class="cat">{html.escape(cap)}</h2>
 <p class="cat-sub">{len(keys)} benchmark{'s' if len(keys) != 1 else ''}</p>
 <div class="catgrid">
   {f"<div class='spider'>{svg}</div>" if svg else ""}
   {cards}
 </div>""")
+    return "".join(out)
 
-    doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+
+def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
+                 video: Path | None = None, demo_runs: dict[str, str] | None = None,
+                 anim_dir: Path | None = None, budget_mb: float = 12.0) -> Path:
+    from surge.report import demo
+
+    meta = load_metadata()
+    results = load_results(reports_dir)
+    if not results:
+        raise SystemExit(f"no result.json files under {reports_dir}")
+    heads = {k: newest_sweep(v) for k, v in results.items()}
+
+    status = {k: _status_of(meta.get(k, {})) for k in results}
+    ready = [k for k in results if status[k] == "ready"]
+    tutorial = [k for k in results if status[k] == "tutorial"]
+    tail = [k for k in results if status[k] not in ("ready", "tutorial")]
+
+    def models(keys):
+        return {m for k in keys for m in heads[k]}
+
+    n_models = len(models(ready))
+    n_runs = sum(r["n_runs"] for k in ready for r in heads[k].values())
+    real = [r for k in ready for r in heads[k].values() if not r.get("synthetic")]
+    n_pass = sum(1 for r in real if r["passed"])
+    n_gated = sum(1 for r in real if r["passed"] is not None)
+    n_total_runs = sum(r["n_runs"] for b in results.values() for r in b.values())
+    snapshot = max((r["last"] for b in results.values() for r in b.values()),
+                   default="")[:10]
+
+    p = PALETTES[mode]
+    css = _CSS_TEMPLATE.format(accent=p["series"][0], **p) + demo.CSS
+
+    ready_cats = _group(ready, meta, results)
+    first = "Scientific Domain" if "Scientific Domain" in ready_cats else None
+    ready_html = _category_blocks(ready_cats, heads, results, meta, mode, first=first)
+    tut_html = ""
+    if tutorial:
+        tut_html = ("<h2 class='cat'>Tutorial / plumbing</h2>"
+                    "<p class='cat-sub'>Small public datasets that exercise the pipeline.</p>"
+                    + _category_blocks(_group(tutorial, meta, results), heads, results,
+                                       meta, mode))
+    tail_html = ""
+    if tail:
+        tail_html = (f"<details class='tail'><summary>In progress · needs rerun · sanity "
+                     f"checks ({len(tail)})</summary>"
+                     + _category_blocks(_group(tail, meta, results), heads, results,
+                                        meta, mode) + "</details>")
+
+    names = {k: meta.get(k, {}).get("name", k) for k in results}
+    demo_runs = (demo.DEFAULT_DEMO_RUNS if demo_runs is None else demo_runs)
+    anim_dir = Path(anim_dir) if anim_dir else demo.DEFAULT_ANIM_DIR
+    video = demo.DEFAULT_VIDEO if video is None else Path(video)
+    notes = []
+
+    def assemble(include_mission: bool) -> str:
+        demo_html = demo.video_section(video) + demo.replay_panels(
+            demo_runs, mode, anim_dir, names, include_mission=include_mission)
+        extra = (" ".join(notes))
+        return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SURGE benchmark leaderboard</title><style>{css}</style></head>
 <body><main>
 <header>
   <h1>SURGE Benchmark Leaderboard</h1>
   <div class="sub">Scientific surrogate evaluation · generated from
-    {n_runs} result artifacts · latest run {html.escape(snapshot)}</div>
+    {n_total_runs} result artifacts · latest run {html.escape(snapshot)}</div>
   <div class="accentbar"></div>
 </header>
+{demo_html}
 <div class="tiles">
-  <div class="tile"><b>{n_bench}</b><span>benchmarks with results</span></div>
+  <div class="tile"><b>{len(ready)}</b><span>ready benchmarks</span></div>
   <div class="tile"><b>{n_models}</b><span>models evaluated</span></div>
   <div class="tile"><b>{n_pass} / {n_gated}</b><span>pass published threshold</span></div>
-  <div class="tile"><b>{len(categories)}</b><span>capability domains</span></div>
+  <div class="tile"><b>{len(ready_cats)}</b><span>capability domains</span></div>
 </div>
-{''.join(sections)}
+<p class="tilenote">+{len(tutorial)} tutorial, +{len(tail)} in progress/rerun/sanity
+ · {n_runs} newest-sweep results behind the tiles; synthetic fixtures excluded from pass counts.</p>
+{ready_html}
+{tut_html}
+{tail_html}
 <footer>Generated by <code>surge.report.leaderboard</code> from
 <code>benchmark_reports/**/result.json</code> +
 <code>surge/benchmarks/metadata.yaml</code>. Click column headers to sort.
-Values are mean ± std over repeated runs where available.</footer>
-</main><script>{_SORT_JS}</script></body></html>"""
+Headline tables show the newest sweep only (runs within
+{_sweep_hours():g} h of the newest run of each benchmark); the full
+mean ± std over every result is under "run history". {extra}</footer>
+</main><script>{_SORT_JS}{demo.JS}</script></body></html>"""
+
+    doc = assemble(True)
+    if len(doc.encode()) > budget_mb * 1024 * 1024:
+        notes.append("Mission-control clip dropped to stay under the "
+                     f"{budget_mb:g} MB size budget.")
+        doc = assemble(False)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(doc)
     return out_path
+
+
+def _sweep_hours() -> float:
+    from surge.benchmarks.status import SWEEP_WINDOW_HOURS
+    return SWEEP_WINDOW_HOURS
 
 
 def main() -> None:
@@ -472,8 +645,15 @@ def main() -> None:
     ap.add_argument("--reports", default="benchmark_reports")
     ap.add_argument("--out", default="surge_leaderboard.html")
     ap.add_argument("--mode", choices=("dark", "light"), default="dark")
+    ap.add_argument("--video", default=None, help="mp4 embedded under the header")
+    ap.add_argument("--demo-run", action="append", default=[], metavar="KEY=RUN_DIR",
+                    help="HPO campaign replay for a benchmark (repeatable)")
+    ap.add_argument("--anim-dir", default=None, help="pre-rendered *_<mode>.webm clips")
     args = ap.parse_args()
-    out = build_report(Path(args.reports), Path(args.out), mode=args.mode)
+    demo_runs = dict(kv.split("=", 1) for kv in args.demo_run) or None
+    out = build_report(Path(args.reports), Path(args.out), mode=args.mode,
+                       video=Path(args.video) if args.video else None,
+                       demo_runs=demo_runs, anim_dir=args.anim_dir)
     print(f"wrote {out}")
 
 
