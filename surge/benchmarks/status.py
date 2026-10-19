@@ -35,6 +35,71 @@ _LOWER_IS_BETTER = ("test_rel_l2", "test_nrmse", "test_nrmse_mean", "test_rmse")
 def _is_lower_better(metric_key: str) -> bool:
     return metric_key in _LOWER_IS_BETTER
 DEFAULT_OUT = Path("docs/benchmarks/README.md")
+_SEL_FIELDS = ("visible", "focus", "focus_note")
+
+
+def is_visible(meta: dict) -> bool:
+    return meta.get("visible", True) is not False
+
+
+def is_focus(meta: dict) -> bool:
+    return meta.get("focus", False) is True
+
+
+def focus_lines(meta: dict[str, dict]) -> list[str]:
+    """Markdown bullets for visible focus benchmarks (empty if none)."""
+    out = []
+    for k in sorted(meta):
+        m = meta[k]
+        if is_focus(m) and is_visible(m):
+            note = m.get("focus_note")
+            out.append(f"- `{k}`" + (f": {note}" if note else ""))
+    return out
+
+
+def apply_selection(selection_path: Path, metadata_path: Path | None = None) -> dict:
+    """Set ``visible`` / ``focus`` / ``focus_note`` in metadata.yaml from a picker JSON.
+
+    Input: ``{"benchmarks": [{"key", "show", "push", "note"}]}``. The YAML is
+    edited textually (only those three keys inside matching entries), so
+    comments, order and formatting elsewhere are preserved. Unknown keys warn.
+    Returns ``{"visible": n, "focus": n, "unknown": [...]}``.
+    """
+    import re
+    import sys
+
+    path = Path(metadata_path) if metadata_path else (
+        Path(__file__).resolve().parent / "metadata.yaml")
+    sel = json.loads(Path(selection_path).read_text(encoding="utf-8"))
+    rows = {b["key"]: b for b in sel.get("benchmarks", []) if "key" in b}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    starts = [i for i, ln in enumerate(lines) if re.match(r"- key:\s*", ln)]
+    ends = starts[1:] + [len(lines)]
+    known = {lines[i].split(":", 1)[1].strip().strip("'\""): (i, e)
+             for i, e in zip(starts, ends)}
+    unknown = [k for k in rows if k not in known]
+    for k in unknown:
+        print(f"warning: unknown benchmark key in selection: {k}", file=sys.stderr)
+    # edit bottom-up so indices stay valid
+    for k, (a, b) in sorted(known.items(), key=lambda kv: -kv[1][0]):
+        if k not in rows:
+            continue
+        row = rows[k]
+        body = [ln for ln in lines[a:b]
+                if not re.match(r"  (visible|focus|focus_note):", ln)]
+        while body and not body[-1].strip():
+            body.pop()
+        new = [f"  visible: {'true' if row.get('show', True) else 'false'}",
+               f"  focus: {'true' if row.get('push', False) else 'false'}"]
+        note = (row.get("note") or "").strip()
+        if note:
+            new.append(f"  focus_note: {json.dumps(note, ensure_ascii=False)}")
+        lines[a:b] = body + new
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    meta = load_metadata(path)
+    return {"visible": sum(is_visible(m) for m in meta.values()),
+            "focus": sum(is_focus(m) for m in meta.values()),
+            "unknown": unknown}
 
 
 def _ts(d: dict, path: Path) -> str:
@@ -147,18 +212,22 @@ def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> st
     lines += [f"- **{STATUS_TITLES[s]}** (`{s}`): {STATUS_DOC[s]}" for s in STATUS_ORDER]
     lines += ["", "The on-file result is the best model of the newest sweep (runs within 3 h of the newest one); older runs are ignored even if better; "
               "a green check/cross reflects the benchmark gate at that run."]
+    focus = focus_lines(meta)
+    if focus:
+        lines += ["", "## Focus", ""] + focus
     for st in STATUS_ORDER:
         keys = sorted(k for k, m in meta.items() if (m.get("status") or "tutorial") == st)
         lines += ["", f"## {STATUS_TITLES[st]}", ""]
         if not keys:
             lines.append("_None._")
             continue
-        lines += ["| benchmark | task shape | data source + license | best on-file result (model, date) | gate | note |",
-                  "|---|---|---|---|---|---|"]
+        lines += ["| benchmark | task shape | data source + license | best on-file result (model, date) | gate | note | visible | focus |",
+                  "|---|---|---|---|---|---|---|---|"]
         for k in keys:
             m, r = meta[k], results.get(k)
             row = [f"`{k}`", m.get("shape", ""), _source(m, r), _fmt_result(r),
-                   m.get("threshold", ""), m.get("status_note", "")]
+                   m.get("threshold", ""), m.get("status_note", ""),
+                   "✓" if is_visible(m) else "—", "✓" if is_focus(m) else "—"]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")
     return "\n".join(lines) + "\n"
 
