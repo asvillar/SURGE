@@ -164,11 +164,12 @@ def _print_list_models() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _persist(result, *, save_root: Path | None, no_save: bool) -> Path | None:
+def _persist(result, *, save_root: Path | None, no_save: bool,
+             no_predictions: bool = False) -> Path | None:
     if no_save or save_root is None:
         return None
     try:
-        path = result.save(root=save_root)
+        path = result.save(root=save_root, predictions=not no_predictions)
         print(f"       Saved  → {path}", file=sys.stderr)
         return path
     except Exception as exc:
@@ -316,6 +317,8 @@ def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
                "--save-dir", str(args.save_dir)]
         if args.use_hpo_cache:
             cmd.append("--use-hpo-cache")
+        if args.no_predictions:
+            cmd.append("--no-predictions")
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
         # exit 1 = ran but below the pass gate; still a completed job
         if proc.returncode in (0, 1):
@@ -474,6 +477,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="Root directory for auto-saved results. Default: benchmark_reports/")
     ap.add_argument("--no-save", action="store_true",
                     help="Disable automatic result saving.")
+    ap.add_argument("--no-predictions", action="store_true",
+                    help="Do not write predictions.npz (held-out y_true/y_pred) "
+                         "next to result.json.")
 
     # ── MLflow ────────────────────────────────────────────────────────────────
     ap.add_argument("--mlflow", action="store_true",
@@ -682,7 +688,8 @@ def main(argv: list[str] | None = None) -> int:
                 r = run_benchmark(k, seed=args.seed, model_key=args.model)
                 results.append(r)
                 _print_result_banner(r)
-                rp = _persist(r, save_root=args.save_dir, no_save=args.no_save)
+                rp = _persist(r, save_root=args.save_dir, no_save=args.no_save,
+                     no_predictions=args.no_predictions)
                 if args.mlflow:
                     _mlflow_log(r, result_path=rp,
                                 experiment=args.mlflow_experiment,
@@ -719,7 +726,8 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 r = run_benchmark(bk, seed=args.seed, model_key=args.model)
                 _print_result_banner(r)
-                _persist(r, save_root=args.save_dir, no_save=args.no_save)
+                _persist(r, save_root=args.save_dir, no_save=args.no_save,
+                     no_predictions=args.no_predictions)
                 results.append(r)
                 if not r.passed:
                     any_failed = True
@@ -762,7 +770,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     _print_result_banner(result)
-    rp = _persist(result, save_root=args.save_dir, no_save=args.no_save)
+    rp = _persist(result, save_root=args.save_dir, no_save=args.no_save,
+         no_predictions=args.no_predictions)
 
     if args.mlflow:
         _mlflow_log(result, result_path=rp,

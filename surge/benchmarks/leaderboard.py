@@ -1872,7 +1872,8 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         # DOE fusion plasma benchmarks
         "plasma.cmod_density_limit": ("test_accuracy", 0.85),
         "plasma.qlknn_transport": ("test_r2", 0.90),
-        "plasma.constellaration": ("test_r2", 0.50),
+        "plasma.qlknn10d": ("test_r2", 0.95),
+        "plasma.constellaration": ("test_r2", 0.85),
         "thewell.gray_scott": ("test_relative_l2", 0.30),
         # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
         "plasma.constellaration_paper": ("test_r2_mean", 0.97),
