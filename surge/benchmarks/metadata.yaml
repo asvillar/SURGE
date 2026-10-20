@@ -19,6 +19,30 @@ benchmarks:
   threshold: R² ≥ 0.75
   description: Predict median house value in California census block groups from socioeconomic
     and geographic features (1990 US Census aggregates).
+  task_explainer: "Eight census-block-group aggregates (income, house age, rooms, occupancy, population, latitude/longitude) are mapped to the block group's median house value. A good surrogate replaces a hedonic-pricing model of the 1990 California market. R² is the fraction of price variance explained on held-out blocks."
+  published_in: "Pace & Barry, Stat. & Prob. Letters 33 (1997); distributed via scikit-learn / StatLib (CMU)"
+  sota:
+    value: null
+    metric: "R²"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: null
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; Pace & Barry OLS ~0.60, community gradient-boosting baselines ~0.83-0.85, no canonical paper number"
+  inputs:
+  - {name: "MedInc", desc: "Median block-group income (tens of k$)"}
+  - {name: "HouseAge", desc: "Median house age (years)"}
+  - {name: "AveRooms", desc: "Average rooms per household"}
+  - {name: "AveBedrms", desc: "Average bedrooms per household"}
+  - {name: "Population", desc: "Block-group population"}
+  - {name: "AveOccup", desc: "Average household occupancy"}
+  - {name: "Latitude", desc: "Block-group latitude (deg)"}
+  - {name: "Longitude", desc: "Block-group longitude (deg)"}
+  outputs:
+  - {name: "MedHouseVal", desc: "Median house value (units of 100k$)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.concrete_strength
   status: ready
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
@@ -32,6 +56,30 @@ benchmarks:
   primary_metric: R²
   threshold: R² ≥ 0.80
   description: Predict concrete compressive strength (MPa) from mixture composition and age.
+  task_explainer: "Mixture proportions of cement, slag, fly ash, water, admixtures and aggregates plus curing age are mapped to 28-day-style compressive strength. A surrogate replaces slow, destructive lab crush tests when screening mixes. R² measures how much of the strength variance across mixes is captured."
+  published_in: "Yeh, Cement & Concrete Research 28(12) (1998); UCI ML Repository (Concrete Compressive Strength)"
+  sota:
+    value: 0.94
+    metric: "R²"
+    model: "CatBoost"
+    source: "SOTA review: 2025 boosting study (specific paper not pinned); stacking ensembles ~0.987"
+    url: null
+    protocol_match: "different"
+    note: "splits vary across studies and are not SURGE's seed=42 80/20; stacking ensembles report ~0.987"
+  inputs:
+  - {name: "cement", desc: "Cement (kg/m³)"}
+  - {name: "blast_furnace_slag", desc: "Blast furnace slag (kg/m³)"}
+  - {name: "fly_ash", desc: "Fly ash (kg/m³)"}
+  - {name: "water", desc: "Water (kg/m³)"}
+  - {name: "superplasticizer", desc: "Superplasticizer (kg/m³)"}
+  - {name: "coarse_aggregate", desc: "Coarse aggregate (kg/m³)"}
+  - {name: "fine_aggregate", desc: "Fine aggregate (kg/m³)"}
+  - {name: "age", desc: "Curing age (days)"}
+  outputs:
+  - {name: "compressive_strength", desc: "Concrete compressive strength (MPa)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.energy_efficiency
   status: ready
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
@@ -45,6 +93,30 @@ benchmarks:
   primary_metric: R²
   threshold: R² ≥ 0.90
   description: Predict building heating load from envelope, geometry, and HVAC features.
+  task_explainer: "Eight geometric and glazing descriptors of simulated residential buildings are mapped to the annual heating load. A surrogate replaces an energy-simulation run (Ecotect) during early design. R² says how much heating-load variance across building shapes is explained; only the heating-load target (Y1) is modelled."
+  published_in: "Tsanas & Xifara, Energy and Buildings 49 (2012); UCI ML Repository (Energy Efficiency)"
+  sota:
+    value: 0.99
+    metric: "R²"
+    model: "RF / ensemble models"
+    source: "SOTA review: later RF/ensemble studies; Tsanas & Xifara 2012 original ~0.90"
+    url: "https://doi.org/10.1016/j.enbuild.2012.03.003"
+    protocol_match: "unknown"
+    note: "review gives 'routinely >0.99' without a pinned paper; SURGE models Y1 (heating load) only, as the original paper's cited variant"
+  inputs:
+  - {name: "X1", desc: "Relative compactness"}
+  - {name: "X2", desc: "Surface area (m²)"}
+  - {name: "X3", desc: "Wall area (m²)"}
+  - {name: "X4", desc: "Roof area (m²)"}
+  - {name: "X5", desc: "Overall height (m)"}
+  - {name: "X6", desc: "Orientation (categorical 2-5)"}
+  - {name: "X7", desc: "Glazing area (fraction of floor area)"}
+  - {name: "X8", desc: "Glazing area distribution (categorical 0-5)"}
+  outputs:
+  - {name: "Y1", desc: "Heating load (kWh/m², a.u. as tabulated)"}
+  visible: true
+  focus: false
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.airfoil_noise
   status: ready
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
@@ -59,6 +131,27 @@ benchmarks:
   threshold: R² ≥ 0.85
   description: Predict scaled sound pressure level of airfoil self-noise from aerodynamic
     and geometry parameters.
+  task_explainer: "Five wind-tunnel settings (frequency, angle of attack, chord, flow speed, boundary-layer thickness) are mapped to the scaled sound pressure level of NACA 0012 airfoil self-noise. A surrogate replaces repeated anechoic wind-tunnel measurements. R² is variance explained of the noise level in dB."
+  published_in: "Brooks, Pope & Marcolini, NASA TM 100514 (1989); UCI ML Repository (Airfoil Self-Noise)"
+  sota:
+    value: 0.963
+    metric: "R²"
+    model: "Bayesian-optimised XGBoost / GBM"
+    source: "SOTA review: 2025 study (specific paper not pinned)"
+    url: null
+    protocol_match: "unknown"
+    note: "comparable 5->1 task; split not verified"
+  inputs:
+  - {name: "frequency", desc: "Frequency (Hz)"}
+  - {name: "angle_of_attack", desc: "Angle of attack (deg)"}
+  - {name: "chord_length", desc: "Chord length (m)"}
+  - {name: "free_stream_velocity", desc: "Free-stream velocity (m/s)"}
+  - {name: "suction_side_displacement_thickness", desc: "Suction-side displacement thickness (m)"}
+  outputs:
+  - {name: "scaled_sound_pressure_level", desc: "Scaled sound pressure level (dB)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.yacht_dynamics
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -73,6 +166,27 @@ benchmarks:
   threshold: R² ≥ 0.95
   description: Predict residuary resistance per unit weight of sailing yachts from hull geometry
     ratios.
+  task_explainer: "Six hull-form ratios and the Froude number are mapped to the residuary resistance per unit weight of displacement of a sailing yacht. A surrogate replaces towing-tank resistance tests. With only 308 rows it is a teaching benchmark; R² measures variance explained of the resistance coefficient."
+  published_in: "Gerritsma, Onnink & Versluis, Delft Univ. of Technology (1981); UCI ML Repository (Yacht Hydrodynamics)"
+  sota:
+    value: 0.99
+    metric: "R²"
+    model: "neural network (TMPNN-type)"
+    source: "SOTA review: NN/TMPNN studies on held-out splits"
+    url: null
+    protocol_match: "unknown"
+    note: "comparable task; splits differ and n=308 gives high variance"
+  inputs:
+  - {name: "longitudinal_position_cb", desc: "Longitudinal position of the centre of buoyancy (dimensionless)"}
+  - {name: "prismatic_coefficient", desc: "Prismatic coefficient"}
+  - {name: "length_displacement_ratio", desc: "Length-displacement ratio"}
+  - {name: "beam_draught_ratio", desc: "Beam-draught ratio"}
+  - {name: "length_beam_ratio", desc: "Length-beam ratio"}
+  - {name: "froude_number", desc: "Froude number"}
+  outputs:
+  - {name: "residuary_resistance", desc: "Residuary resistance per unit weight of displacement (dimensionless)"}
+  visible: true
+  focus: false
 - key: tabular.superconductor
   status: ready
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
@@ -88,6 +202,24 @@ benchmarks:
   threshold_note: Key materials-science surrogate benchmark
   description: Predict superconducting critical temperature Tc from chemical/formula-derived
     features.
+  task_explainer: "Eighty-one statistics (mean, weighted mean, range, std, ...) of elemental properties of a compound's formula plus the element count are mapped to its superconducting critical temperature. A surrogate screens candidate materials without synthesis. R² measures variance explained of Tc in kelvin."
+  published_in: "Hamidieh, Computational Materials Science 154 (2018); UCI ML Repository (Superconductivty Data)"
+  sota:
+    value: 0.92
+    metric: "R²"
+    model: "Random forest / XGBoost"
+    source: "Hamidieh, Comput. Mater. Sci. 154, 346 (2018)"
+    url: "https://doi.org/10.1016/j.commatsci.2018.07.052"
+    protocol_match: "unknown"
+    note: "improved XGBoost studies ~0.924; comparable 81->1 feature set, split not verified"
+  inputs:
+  - {name: "elemental_statistics[0:80]", desc: "Mean/weighted/geometric/entropy/range/std of 8 elemental properties (atomic mass, ionization energy, atomic radius, density, electron affinity, fusion heat, thermal conductivity, valence)"}
+  - {name: "number_of_elements", desc: "Number of distinct elements in the formula"}
+  outputs:
+  - {name: "critical_temp", desc: "Superconducting critical temperature (K)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.diabetes
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -103,6 +235,31 @@ benchmarks:
   threshold_note: Inherently noisy; low R² expected
   description: Predict diabetes disease progression one year after baseline from 10 physiological
     variables.
+  task_explainer: "Ten baseline physiological variables (age, sex, BMI, blood pressure, six serum measurements) are mapped to a quantitative index of diabetes progression one year later. It is a heavily noisy clinical target, so R² is expected to saturate near 0.5. Used here as a teaching benchmark for the noise floor."
+  published_in: "Efron, Hastie, Johnstone & Tibshirani, Annals of Statistics 32(2) (2004); bundled with scikit-learn"
+  sota:
+    value: 0.5
+    metric: "R²"
+    model: "Ridge / Lasso baselines (noise ceiling)"
+    source: "SOTA review: sklearn tutorial baselines, ~0.45-0.50 widely cited ceiling"
+    url: null
+    protocol_match: "unknown"
+    note: "no model is expected to beat the label-noise ceiling; n=442"
+  inputs:
+  - {name: "age", desc: "Age (mean-centred, scaled)"}
+  - {name: "sex", desc: "Sex (scaled)"}
+  - {name: "bmi", desc: "Body-mass index (scaled)"}
+  - {name: "bp", desc: "Mean arterial pressure (scaled)"}
+  - {name: "s1", desc: "Total serum cholesterol (scaled)"}
+  - {name: "s2", desc: "LDL cholesterol (scaled)"}
+  - {name: "s3", desc: "HDL cholesterol (scaled)"}
+  - {name: "s4", desc: "Total / HDL cholesterol (scaled)"}
+  - {name: "s5", desc: "Log serum triglycerides (scaled)"}
+  - {name: "s6", desc: "Blood sugar level (scaled)"}
+  outputs:
+  - {name: "progression", desc: "Disease progression one year after baseline (a.u. index)"}
+  visible: true
+  focus: false
 - key: multioutput.scm20d
   status: tutorial
   status_note: "Small multi-output set; plumbing / teaching benchmark"
@@ -117,6 +274,22 @@ benchmarks:
   threshold: avg R² ≥ 0.60
   description: Joint prediction of 20 supply-chain management target variables from 61 input
     features.
+  task_explainer: "Sixty-one features from a supply-chain simulation (product prices and time-lagged market variables) are mapped jointly to twenty future price/ demand targets. A multi-output surrogate replaces separate per-target forecasters. The metric is R² averaged over targets."
+  published_in: "Spyromitros-Xioufis et al., Machine Learning 104 (2016); MULAN / Mulan multi-target regression repository"
+  sota:
+    value: null
+    metric: "R²"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: "https://doi.org/10.1007/s10994-016-5546-z"
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; the paper reports aRRMSE not R², and SURGE's shape/n (61->20, 8,966) disagrees with registry.py (61->16, 9,803)"
+  inputs:
+  - {name: "features[0:61]", desc: "Product-price and lagged market features of the TAC SCM simulation (a.u.)"}
+  outputs:
+  - {name: "targets[0:20]", desc: "Future average-price targets at several look-ahead horizons (a.u.)"}
+  visible: true
+  focus: false
 - key: tabular.breast_cancer
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -130,6 +303,23 @@ benchmarks:
   primary_metric: Accuracy
   threshold: Acc ≥ 0.95
   description: 'Binary classification: malignant vs benign from cytology features.'
+  task_explainer: "Thirty cell-nucleus measurements (mean, standard error, worst value of ten shape/texture features) from a digitised fine-needle aspirate are mapped to benign or malignant. A surrogate replaces manual cytology grading. The metric is accuracy on held-out patients."
+  published_in: "Mangasarian & Wolberg, Univ. of Wisconsin (1990); UCI ML Repository (WDBC); bundled with scikit-learn"
+  sota:
+    value: 0.99
+    metric: "Accuracy"
+    model: "SVM / ensembles"
+    source: "SOTA review: WDBC literature commonly 0.97-0.99"
+    url: null
+    protocol_match: "unknown"
+    note: "n=569; single-split accuracy has ~1-2% variance"
+  inputs:
+  - {name: "radius, texture, perimeter, area, smoothness, compactness, concavity, concave_points, symmetry, fractal_dimension", desc: "Ten nuclear features, each as mean / standard error / worst = 30 columns (image-derived, a.u.)"}
+  outputs:
+  - {name: "diagnosis", desc: "Class: malignant (0) or benign (1)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.digits
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -143,6 +333,23 @@ benchmarks:
   primary_metric: Accuracy
   threshold: Acc ≥ 0.97
   description: Classify 8×8 grayscale digit images (flattened to 64 features).
+  task_explainer: "An 8x8 greyscale bitmap of a handwritten digit (64 intensities, 0-16) is mapped to one of ten digit classes. It stands in for any small image-recognition surrogate. The metric is classification accuracy on held-out digits."
+  published_in: "Alpaydin & Kaynak, UCI ML Repository (Optical Recognition of Handwritten Digits, 1998); bundled with scikit-learn"
+  sota:
+    value: 0.99
+    metric: "Accuracy"
+    model: "SVM / kNN"
+    source: "SOTA review: sklearn digits commonly 0.97-0.99"
+    url: null
+    protocol_match: "unknown"
+    note: "comparable split; near-ceiling task"
+  inputs:
+  - {name: "pixel_0_0 ... pixel_7_7", desc: "64 pixel intensities of an 8x8 image (integers 0-16)"}
+  outputs:
+  - {name: "digit", desc: "Digit class 0-9"}
+  visible: true
+  focus: false
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.iris
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -156,6 +363,26 @@ benchmarks:
   primary_metric: Accuracy
   threshold: Acc ≥ 0.95
   description: Classify iris species from sepal and petal measurements.
+  task_explainer: "Four flower measurements (sepal and petal length/width) are mapped to one of three iris species. It is the minimal classification sanity check for the pipeline. With 150 samples a single split is noisy, so accuracy differences of a few percent are not meaningful."
+  published_in: "Fisher, Annals of Eugenics 7 (1936); UCI ML Repository (Iris); bundled with scikit-learn"
+  sota:
+    value: 1.0
+    metric: "Accuracy"
+    model: "many classifiers"
+    source: "SOTA review: Iris routinely 0.96-1.00"
+    url: null
+    protocol_match: "unknown"
+    note: "n=150 so test-split variance dominates"
+  inputs:
+  - {name: "sepal_length", desc: "Sepal length (cm)"}
+  - {name: "sepal_width", desc: "Sepal width (cm)"}
+  - {name: "petal_length", desc: "Petal length (cm)"}
+  - {name: "petal_width", desc: "Petal width (cm)"}
+  outputs:
+  - {name: "species", desc: "Species: setosa / versicolor / virginica"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.wine
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -169,9 +396,26 @@ benchmarks:
   primary_metric: Accuracy
   threshold: Acc ≥ 0.90
   description: Classify wine cultivar from chemical analysis.
+  task_explainer: "Thirteen chemical-analysis measurements of wine (alcohol, phenols, colour intensity, proline, ...) are mapped to one of three Italian cultivars. It is a near-ceiling classification sanity check. Accuracy is measured on held-out samples."
+  published_in: "Forina et al., PARVUS (1991); UCI ML Repository (Wine); bundled with scikit-learn"
+  sota:
+    value: 1.0
+    metric: "Accuracy"
+    model: "many classifiers"
+    source: "SOTA review: Wine commonly 0.97-1.00"
+    url: null
+    protocol_match: "unknown"
+    note: "n=178; a perfect score is already reachable"
+  inputs:
+  - {name: "chemical_analysis[0:13]", desc: "Alcohol, malic acid, ash, alcalinity, magnesium, phenols, flavanoids, nonflavanoid phenols, proanthocyanins, colour intensity, hue, OD280/OD315, proline"}
+  outputs:
+  - {name: "cultivar", desc: "Cultivar class 0-2"}
+  visible: true
+  focus: false
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: classification.covertype
   status: needs_rerun
-  status_note: "no result on file"
+  status_note: "run 2026-10-20 gradient boosting acc 0.760 FAIL on 20k subsample; full 581k not yet tried"
   name: Forest Covertype (7-class)
   capability: Scientific Classification
   tier: 1
@@ -181,11 +425,29 @@ benchmarks:
   n: 20k (subsample of 581k)
   primary_metric: Accuracy
   threshold: Acc ≥ 0.85
-  threshold_note: Threshold achievable with full 581k; 20k subsample harder
+  threshold_note: Runs on a 20k subsample (full set is 581k rows); threshold is achievable with the full 581k, the 20k subsample is harder
   description: Classify forest cover type from cartographic and terrain variables.
+  task_explainer: "Fifty-four cartographic variables (elevation, slope, distances to water/roads, hillshade, wilderness area and soil-type indicators) of a 30 m forest cell are mapped to one of seven forest cover types. SURGE uses a 20k stratified subsample, which is harder than the full 581k rows. The metric is multi-class accuracy."
+  published_in: "Blackard & Dean, Computers and Electronics in Agriculture 24 (1999); UCI ML Repository (Covertype); US Forest Service / Roosevelt NF data"
+  sota:
+    value: 0.95
+    metric: "Accuracy"
+    model: "Random forest (full 581k rows)"
+    source: "SOTA review: full-data RF studies commonly 0.94-0.96"
+    url: null
+    protocol_match: "different"
+    note: "SURGE trains on a 20k stratified subsample, intrinsically harder than the full-data regime"
+  inputs:
+  - {name: "elevation, aspect, slope, distances, hillshade", desc: "10 quantitative terrain features"}
+  - {name: "wilderness_area[0:4]", desc: "One-hot wilderness area"}
+  - {name: "soil_type[0:40]", desc: "One-hot soil type"}
+  outputs:
+  - {name: "cover_type", desc: "Forest cover type, 7 classes"}
+  visible: false
+  focus: true
 - key: classification.plasma_stability
-  status: needs_rerun
-  status_note: "no result on file"
+  status: ready
+  status_note: "run 2026-10-20 sklearn.gradient_boosting_classifier acc 0.936 (PASS)"
   name: Electrical Grid Stability (plasma proxy)
   capability: Scientific Classification
   tier: 2
@@ -196,6 +458,25 @@ benchmarks:
   primary_metric: Accuracy
   threshold: Acc ≥ 0.92
   description: Binary classification of power-grid stability from simulated operating points.
+  task_explainer: "Twelve parameters of a four-node decentralised smart-grid model (reaction times, power balances, price elasticities) are mapped to stable or unstable. Despite the 'plasma' label it is simulated power-grid data, not fusion plasma; it demonstrates stability-classification surrogates. The metric is accuracy."
+  published_in: "Arzamasov, Bohm & Rauber, ICSEE/Smart Grid conf. (2018); UCI ML Repository (Electrical Grid Stability Simulated Data)"
+  sota:
+    value: 0.978
+    metric: "Accuracy"
+    model: "Random forest"
+    source: "tasks.py:1076 docstring citing Arzamasov et al. 2018; SOTA review notes literature spread 0.96-0.999"
+    url: "https://archive.ics.uci.edu/dataset/471/electrical+grid+stability+simulated+data"
+    protocol_match: "unknown"
+    note: "wide literature spread depending on study and split"
+  inputs:
+  - {name: "tau1-tau4", desc: "Reaction time of each grid participant (s)"}
+  - {name: "p1-p4", desc: "Nominal power produced (+) / consumed (-) (a.u.)"}
+  - {name: "g1-g4", desc: "Price elasticity coefficient of each participant"}
+  outputs:
+  - {name: "stabf", desc: "Grid stability class: stable / unstable"}
+  visible: false
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: classification.flow_regime
   status: tutorial
   status_note: "Small classification set (n < 1,000 effective); plumbing check"
@@ -209,6 +490,24 @@ benchmarks:
   primary_metric: Accuracy
   threshold: Acc ≥ 0.85
   description: Classify CFD-like flow regime from Mach number, log₁₀(Reynolds), angle of attack.
+  task_explainer: "Mach number, log10 Reynolds number and angle of attack are mapped to one of four flow regimes (subsonic laminar/turbulent, transonic, supersonic) using a rule-based synthetic labelling with overlap noise. It is a Tier-0 fixture that runs without downloads and is a CI smoke test, not a scientific result. Accuracy checks the pipeline end to end."
+  published_in: "Synthetic SURGE fixture (surge.benchmarks.tasks); no external dataset"
+  sota:
+    value: null
+    metric: "Accuracy"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: null
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; fully synthetic fixture with no literature target"
+  inputs:
+  - {name: "mach", desc: "Mach number (0.1-3.0)"}
+  - {name: "log10_re", desc: "log10 Reynolds number (4-8)"}
+  - {name: "aoa", desc: "Angle of attack (deg, -5 to 25)"}
+  outputs:
+  - {name: "regime", desc: "0 subsonic laminar, 1 subsonic turbulent, 2 transonic, 3 supersonic"}
+  visible: true
+  focus: false
 - key: sequence.lorenz63
   status: sanity
   status_note: "fixed-window NRMSE, not Lyapunov-time rollout"
@@ -222,6 +521,23 @@ benchmarks:
   primary_metric: NRMSE
   threshold: NRMSE ≤ 0.10
   description: Short-horizon prediction on the Lorenz-63 chaotic attractor (σ=10, ρ=28, β=8/3).
+  task_explainer: "The last 20 states (x, y, z) of a Lorenz-63 trajectory are mapped to the next 20 states. Chaotic dynamics make long forecasts diverge exponentially, so this tests whether a surrogate captures the attractor's local dynamics. The metric is normalised RMSE over a fixed 20-step window, not valid prediction time."
+  published_in: "Lorenz, J. Atmospheric Sciences 20 (1963); generated in-repo (sigma=10, rho=28, beta=8/3)"
+  sota:
+    value: null
+    metric: "valid prediction time (Lyapunov times)"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: null
+    protocol_match: "different"
+    note: "no verified published number for this exact split/protocol; the field reports valid prediction time (13-105 Lyapunov times in 2025-2026 ESN/hybrid work), not fixed-window NRMSE"
+  inputs:
+  - {name: "history", desc: "Previous 20 steps of (x, y, z), 3x20 (dimensionless)"}
+  outputs:
+  - {name: "future", desc: "Next 20 steps of (x, y, z), 3x20 (dimensionless)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: pde.burgers_1d
   status: sanity
   status_note: "R² 1.000 at 64 points — too easy as posed vs FNO paper's 1024"
@@ -235,6 +551,23 @@ benchmarks:
   primary_metric: NRMSE
   threshold: NRMSE ≤ 0.10
   description: 'Learn operator u(x,0) → u(x,T) for 1D viscous Burgers: ∂u/∂t + u∂u/∂x = ν∂²u/∂x².'
+  task_explainer: "The initial velocity profile u(x,0) on 64 grid points is mapped to the field u(x,T) of the viscous Burgers equation, i.e. a neural operator learns the solution map of a PDE. A good surrogate replaces the finite-difference solver. The metric is the error normalised by the field's size, so 0 is perfect."
+  published_in: "Li et al. (FNO), ICLR 2021 arXiv:2010.08895; solver: Burgers (1948); data generated in-repo"
+  sota:
+    value: 0.0068
+    metric: "rel-L2"
+    model: "FNO-1d"
+    source: "Li et al., ICLR 2021 (FNO paper)"
+    url: "https://arxiv.org/abs/2010.08895"
+    protocol_match: "different"
+    note: "SURGE's inline solver uses n_x=64, 16x coarser than the FNO paper's n_x=1024; numbers are not comparable"
+  inputs:
+  - {name: "u0", desc: "Initial velocity profile u(x,0) on 64 grid points (a.u.)"}
+  outputs:
+  - {name: "uT", desc: "Velocity profile u(x,T) on 64 grid points (a.u.)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: vision.mnist
   status: tutorial
   status_note: "MNIST is a plumbing check, not a surrogate result"
@@ -249,6 +582,22 @@ benchmarks:
   threshold: Acc ≥ 0.99
   threshold_note: 'Published LeNet-5: 99.05%; 98.9% with default epochs'
   description: Classify 28×28 handwritten digits.
+  task_explainer: "A 28x28 greyscale image of a handwritten digit is mapped to one of ten classes. It is the canonical image-classification check for the vision backends. Accuracy is measured on the standard 10k test images."
+  published_in: "LeCun, Bottou, Bengio & Haffner, Proc. IEEE 86 (1998); MNIST (yann.lecun.com, mirrored by torchvision)"
+  sota:
+    value: 0.998
+    metric: "Accuracy"
+    model: "CNN ensembles"
+    source: "SOTA review: modern CNN ensembles >99.7-99.8%; LeNet-5 (1998) 99.05%"
+    url: null
+    protocol_match: "same"
+    note: "standard 60k/10k split"
+  inputs:
+  - {name: "image", desc: "28x28 greyscale pixels (0-255)"}
+  outputs:
+  - {name: "digit", desc: "Digit class 0-9"}
+  visible: true
+  focus: false
 - key: vision.cifar10
   status: needs_rerun
   status_note: "best on file 0.285, invalid run"
@@ -264,6 +613,23 @@ benchmarks:
   threshold_note: Prior ResNet-20 run (28% acc) was invalid — train/predict normalization
     mismatch + no val split. Fixed; re-run needed for official metrics.
   description: Classify 32×32×3 natural images into 10 object categories.
+  task_explainer: "A 32x32 RGB natural image is mapped to one of ten object classes (airplane, car, bird, ...). It stresses the convolutional backends on real image statistics. The metric is top-1 accuracy on the standard 10k test images."
+  published_in: "Krizhevsky, Learning Multiple Layers of Features from Tiny Images (2009); University of Toronto CIFAR-10"
+  sota:
+    value: 0.9125
+    metric: "Accuracy"
+    model: "ResNet-20"
+    source: "He et al., CVPR 2016 (Deep Residual Learning)"
+    url: "https://arxiv.org/abs/1512.03385"
+    protocol_match: "same"
+    note: "ResNet-20 is the small-model reference; 2024-2026 large models exceed 99%. No valid SURGE run exists yet"
+  inputs:
+  - {name: "image", desc: "32x32x3 RGB pixels (0-255)"}
+  outputs:
+  - {name: "class", desc: "Object class: airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: fusion.m3dc1_sample
   status: needs_rerun
   status_note: "on-file result is the synthetic fallback fixture"
@@ -278,6 +644,22 @@ benchmarks:
   threshold: R² ≥ 0.85
   description: 'Tokamak MHD equilibrium surrogate: map equilibrium parameters to a stability/growth-rate
     metric.'
+  task_explainer: "Thirteen normalised MHD equilibrium parameters are mapped to a single stability metric of a tokamak plasma computed by the M3D-C1 extended-MHD code. A surrogate would replace expensive 3D MHD runs. If the real HDF5 file is absent a synthetic linear fixture is used instead, so check the 'synthetic fixture' badge before trusting R²."
+  published_in: "M3D-C1 group, PPPL (NSTX-U-related sample); local HDF5 data/datasets/M3DC1/m3dc1_sample.hdf5, otherwise synthetic fallback"
+  sota:
+    value: null
+    metric: "R²"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: "https://m3dc1.pppl.gov"
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; no published ML benchmark exists for this surrogate task"
+  inputs:
+  - {name: "equilibrium_params[0:13]", desc: "Normalised MHD equilibrium parameters (a.u.)"}
+  outputs:
+  - {name: "stability_metric", desc: "Stability / growth-rate metric (a.u.)"}
+  visible: false
+  focus: false
 - key: plasma.cmod_density_limit
   status: needs_rerun
   status_note: "accuracy on resampled data; field convention is ROC/FPR"
@@ -292,9 +674,26 @@ benchmarks:
   threshold: Acc ≥ 0.90
   description: Predict density-limit disruption precursor (Greenwald limit) from Alcator C-Mod
     plasma signals.
+  task_explainer: "Alcator C-Mod plasma signals (density relative to the Greenwald limit, current, field, and related quantities) are mapped to whether the discharge is near a density-limit disruption. A surrogate gives a real-time disruption-risk flag. SURGE reports accuracy on a re-balanced set, whereas the field reports ROC operating points on the natural ~1.4% positive rate."
+  published_in: "Greenwald et al., Plasma Phys. Control. Fusion 44 (2002); Montes et al., Nucl. Fusion (2019); MIT C-Mod database, local cache"
+  sota:
+    value: null
+    metric: "ROC / FPR at fixed TPR"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: null
+    protocol_match: "different"
+    note: "no verified published number for this exact split/protocol; Montes et al. 2019 report e.g. 2.3% FPR at 95% TPR on the natural class imbalance, not accuracy on a resampled set"
+  inputs:
+  - {name: "plasma_signals[0:~10]", desc: "C-Mod discharge signals incl. Greenwald fraction n/n_G (a.u.)"}
+  outputs:
+  - {name: "density_limit_flag", desc: "Class: approaching density limit (1) / stable (0)"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.constellaration
   status: needs_rerun
-  status_note: "docs gate 0.85 but code gate 0.50; rerun after fix"
+  status_note: "code gate fixed to 0.85 (was 0.50); rerun in progress 2026-10-20"
   name: ConStellaration Stellarator Surrogate
   capability: Scientific Domain
   tier: 2
@@ -307,6 +706,23 @@ benchmarks:
   threshold_note: log₁₀(qi) only; random 10k subsample from the paper-filtered NPZ when cached.
   description: 'Stellarator surrogate: VMEC/DESC boundary shape → log₁₀(qi) quasi-isodynamic
     quality.'
+  task_explainer: "Ninety Fourier coefficients of a stellarator's boundary shape (R cos and Z sin terms) are mapped to log10 of its quasi-isodynamic (QI) residual, a figure of merit for confinement. A surrogate replaces a VMEC equilibrium solve plus QI evaluation. R² measures how well the optimiser-relevant QI quality is predicted."
+  published_in: "Cadena et al., ConStellaration, arXiv:2506.19583 (2025); dataset on Hugging Face (proxima-fusion/constellaration)"
+  sota:
+    value: 0.982
+    metric: "R²"
+    model: "10-MLP ensemble"
+    source: "Cadena et al. 2025, arXiv:2506.19583 §A.4"
+    url: "https://arxiv.org/abs/2506.19583"
+    protocol_match: "different"
+    note: "paper uses the full 26,897-row filtered set and a 10-model ensemble; SURGE uses a 10k subsample and a single model"
+  inputs:
+  - {name: "r_cos[0:44]", desc: "45 R Fourier cos coefficients of the VMEC boundary"}
+  - {name: "z_sin[0:44]", desc: "45 Z Fourier sin coefficients of the VMEC boundary"}
+  outputs:
+  - {name: "log_10_qi", desc: "log10 quasi-isodynamic residual (lower = better QI)"}
+  visible: false
+  focus: true
 - key: plasma.constellaration_paper
   status: needs_rerun
   status_note: "paper protocol, mean R² 0.929 vs paper 0.97 — parity check, honest fail"
@@ -321,7 +737,26 @@ benchmarks:
   threshold: mean R² ≥ 0.85
   threshold_note: 12 models (one per metric); score = mean test R². Paper pass ≥ 0.97.
   description: 'Paper protocol: 12 independent 90→1 models, one per stellarator metric.'
+  task_explainer: "The same 90 boundary Fourier coefficients are used to train twelve independent surrogates, one for each stellarator figure of merit (rotational transform, mirror ratio, vacuum well, elongation, ...). This reproduces the paper's own evaluation protocol. The metric is the mean test R² over the 12 targets."
+  published_in: "Cadena et al., ConStellaration, arXiv:2506.19583 (2025) §A.4; dataset on Hugging Face (proxima-fusion/constellaration)"
+  sota:
+    value: 0.99
+    metric: "R² (mean)"
+    model: "10-MLP ensemble per metric"
+    source: "Cadena et al. 2025, arXiv:2506.19583 §A.4"
+    url: "https://arxiv.org/abs/2506.19583"
+    protocol_match: "different"
+    note: "paper per-metric R² spans 0.974-0.998 (mean ~0.99); same task/split, but SURGE trains single models, not 10-model ensembles"
+  inputs:
+  - {name: "r_cos[0:44]", desc: "45 R Fourier cos coefficients of the VMEC boundary"}
+  - {name: "z_sin[0:44]", desc: "45 Z Fourier sin coefficients of the VMEC boundary"}
+  outputs:
+  - {name: "metrics[0:12]", desc: "8 equilibrium metrics (iota, mirror ratios, vacuum well, gradient scale length, flux compression, log10 QI) + aspect ratio, max elongation, average triangularity, aspect-ratio / edge iota"}
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.constellaration_multioutput
+  definition_date: 2026-09-25  # re-scoped to the 8 equilibrium targets
   status: ready
   status_note: "90→8 equilibrium metrics; run 2026-09-25 mean R² 0.916, QI 0.935"
   name: ConStellaration Joint Multi-output
@@ -377,6 +812,19 @@ benchmarks:
   - name: log_10_qi
     desc: log₁₀ quasi-isodynamic quality (lower = better QI)
     kind: equilibrium
+  task_explainer: "One joint surrogate predicts the eight equilibrium-dependent stellarator metrics from the 90 boundary coefficients; the four geometric metrics are computed in closed form instead. It replaces a VMEC++ equilibrium solve. The metric is the mean test R² over the eight equilibrium targets."
+  published_in: "Cadena et al., ConStellaration, arXiv:2506.19583 (2025); dataset on Hugging Face (proxima-fusion/constellaration)"
+  sota:
+    value: 0.99
+    metric: "R² (mean)"
+    model: "10-MLP ensemble per metric"
+    source: "Cadena et al. 2025, arXiv:2506.19583 §A.4"
+    url: "https://arxiv.org/abs/2506.19583"
+    protocol_match: "different"
+    note: "paper range 0.974-0.998 is over all 12 metrics with one ensemble per metric, not a joint 8-output model"
+  visible: true
+  focus: true
+  focus_note: "MAybe look at the one its publsished already in the website?"
 - key: plasma.constellaration_modb
   status: in_progress
   status_note: "field surrogates; 500/26,897 equilibria cached"
@@ -407,6 +855,19 @@ benchmarks:
   - name: modB
     desc: '|B|(θ,φ) on the LCFS, normalised by its per-sample mean'
     kind: equilibrium
+  task_explainer: "The plasma boundary (R, Z on a 64x32 poloidal/toroidal grid) is mapped to the magnetic-field-strength map |B| on the boundary surface, normalised by its mean. It replaces a full VMEC equilibrium for field-line-based quantities such as the mirror ratio. The metric is median relative L2 error of the map."
+  published_in: "Cadena et al., arXiv:2506.19583 (2025) dataset; VMEC: Hirshman & Whitson, Phys. Fluids 26 (1983); wout files from Hugging Face"
+  sota:
+    value: null
+    metric: "rel-L2 (median)"
+    model: null
+    source: "not covered by BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: null
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; benchmark is SURGE-defined and not in the SOTA review"
+  visible: false
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.constellaration_surfaces
   status: in_progress
   status_note: "field surrogates; 500/26,897 equilibria cached"
@@ -435,9 +896,22 @@ benchmarks:
   - name: surfaces_RZ
     desc: R(θ), Z(θ) at φ=0 for each of the 16 stored flux surfaces
     kind: equilibrium
+  task_explainer: "The plasma boundary (R, Z on a 64x32 grid) is mapped to the R(theta), Z(theta) cross-sections of 16 nested flux surfaces at phi=0, the stellarator analogue of a tokamak psi-map. It replaces a VMEC equilibrium solve for the interior geometry. The metric is median relative L2 error of the surfaces."
+  published_in: "Cadena et al., arXiv:2506.19583 (2025) dataset; VMEC: Hirshman & Whitson, Phys. Fluids 26 (1983); wout files from Hugging Face"
+  sota:
+    value: null
+    metric: "rel-L2 (median)"
+    model: null
+    source: "not covered by BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: null
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; benchmark is SURGE-defined and not in the SOTA review"
+  visible: false
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.qlknn10d
   status: needs_rerun
-  status_note: "strongest result, R² 0.989 in examples/qlknn10d_study.py, no result.json via surge bench yet"
+  status_note: "gate R2>=0.95 added to code; surge bench rerun in progress 2026-10-20"
   name: QLKNN10D QuaLiKiz Training Data
   capability: Scientific Domain
   tier: 2
@@ -461,6 +935,19 @@ benchmarks:
   - {name: Nustar, desc: Collisionality}
   outputs:
   - {name: efiITG, desc: ITG ion heat flux (leading flux, GyroBohm units)}
+  task_explainer: "Nine local gyrokinetic plasma parameters (gradients, safety factor, shear, collisionality, ...) are mapped to the ion-temperature-gradient (ITG) ion heat flux computed by the QuaLiKiz code. A surrogate makes turbulent transport fast enough for tokamak integrated modelling. R² is variance explained of the flux on unstable points."
+  published_in: "van de Plassche et al., Phys. Plasmas 27, 022310 (2020); QLKNN10D dataset on Zenodo (10.5281/zenodo.3497066)"
+  sota:
+    value: null
+    metric: "R²"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: "https://doi.org/10.1063/1.5134126"
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; the paper describes 1-15% flux discrepancy vs QuaLiKiz qualitatively, per-flux R² not found"
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.qlknn_transport
   status: tutorial
   status_note: "ground truth is the QLKNN_7_11 network itself"
@@ -501,3 +988,16 @@ benchmarks:
   outputs:
   - name: efeITG
     desc: Electron heat flux from the ITG mode (gyroBohm-normalised units)
+  task_explainer: "Ten normalised plasma parameters are mapped to the electron ITG heat flux. The ground truth is the QLKNN_7_11 neural network itself (not QuaLiKiz), so this is a surrogate-of-a-surrogate and a methods tutorial rather than physics validation. R² measures how well the network's output is emulated."
+  published_in: "van de Plassche et al., Phys. Plasmas 27, 022310 (2020); QLKNN_7_11 via fusion_surrogates"
+  sota:
+    value: null
+    metric: "R²"
+    model: null
+    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    url: "https://doi.org/10.1063/1.5134126"
+    protocol_match: "unknown"
+    note: "no verified published number for this exact split/protocol; ground truth is the QLKNN network itself, so no literature reference exists"
+  visible: true
+  focus: true
+  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"

@@ -122,18 +122,25 @@ def _parse_ts(ts: str):
     return None
 
 
-def _newest_results(reports_dir: Path) -> dict[str, dict]:
-    """benchmark_key -> best model of the NEWEST SWEEP.
+def newest_run_per_model(runs: list[dict], definition_date: str | None = None) -> list[dict]:
+    """For a list of result dicts (any models), keep each model's newest run,
+    dropping runs dated before ``definition_date`` (ISO ``YYYY-MM-DD``)."""
+    best: dict[str, dict] = {}
+    for r in runs:
+        ts = str(r.get("_ts") or r.get("timestamp") or "")
+        if definition_date and ts[:10] < str(definition_date)[:10]:
+            continue
+        m = str(r.get("model_key"))
+        if m not in best or ts > str(best[m].get("_ts") or best[m].get("timestamp") or ""):
+            best[m] = r
+    return list(best.values())
 
-    A sweep is the newest result plus every result within
-    ``SWEEP_WINDOW_HOURS`` before it (``surge bench -m all`` writes one
-    ``result.json`` per model, seconds apart). Within that sweep the best
-    score wins; runs older than the window are ignored even if better, so
-    a benchmark whose definition changed (e.g. a re-scope of its targets)
-    is reported by its current definition only.
-    """
-    from datetime import timedelta
 
+def _newest_results(reports_dir: Path, meta: dict | None = None) -> dict[str, dict]:
+    """benchmark_key -> best model among each model's NEWEST run, ignoring runs
+    dated before the benchmark's ``definition_date`` (metadata). A one-model
+    rerun therefore never hides an older full sweep, while a re-scoped
+    benchmark reports its current definition only."""
     runs: dict[str, list[dict]] = {}
     for rj in sorted(reports_dir.glob("*/*/result.json")):
         try:
@@ -144,7 +151,6 @@ def _newest_results(reports_dir: Path) -> dict[str, dict]:
         if not key:
             continue
         d["_ts"] = _ts(d, rj)
-        d["_dt"] = _parse_ts(d["_ts"])
         runs.setdefault(key, []).append(d)
 
     def score(r):
@@ -157,12 +163,8 @@ def _newest_results(reports_dir: Path) -> dict[str, dict]:
 
     out: dict[str, dict] = {}
     for key, rs in runs.items():
-        newest = max(rs, key=lambda r: (r["_dt"] or _parse_ts("1970-01-01"), r["_ts"]))
-        if newest["_dt"] is None:
-            cand = [r for r in rs if r["_ts"][:10] == newest["_ts"][:10]]
-        else:
-            lo = newest["_dt"] - timedelta(hours=SWEEP_WINDOW_HOURS)
-            cand = [r for r in rs if r["_dt"] is not None and lo <= r["_dt"] <= newest["_dt"]]
+        ddate = (meta or {}).get(key, {}).get("definition_date")
+        cand = newest_run_per_model(rs, ddate) or rs
         out[key] = max(cand, key=lambda r: (score(r), r["_ts"]))
     return out
 
@@ -189,13 +191,22 @@ def _source(meta: dict, r: dict | None) -> str:
     return f"{src}; {lic}" if lic else str(src)
 
 
+def _sota_cell(meta: dict) -> str:
+    """Published state-of-the-art value + protocol flag (same / diff / ?), or an em dash."""
+    sota = meta.get("sota")
+    if not isinstance(sota, dict) or sota.get("value") is None:
+        return "—"
+    flag = {"same": "same", "different": "diff"}.get(sota.get("protocol_match"), "?")
+    return f"{sota['value']:g} {sota.get('metric') or ''} [{flag}]".replace("  ", " ")
+
+
 def _cell(s) -> str:
     return str(s).replace("|", "\\|").replace("\n", " ")
 
 
 def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> str:
     meta = load_metadata(metadata_path)
-    results = _newest_results(Path(reports_dir))
+    results = _newest_results(Path(reports_dir), meta)
     lines = [
         "# SURGE benchmark ledger",
         "",
@@ -210,7 +221,7 @@ def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> st
         "",
     ]
     lines += [f"- **{STATUS_TITLES[s]}** (`{s}`): {STATUS_DOC[s]}" for s in STATUS_ORDER]
-    lines += ["", "The on-file result is the best model of the newest sweep (runs within 3 h of the newest one); older runs are ignored even if better; "
+    lines += ["", "The on-file result is the best of each model's newest run on or after the benchmark's definition date (older runs are ignored even if better); "
               "a green check/cross reflects the benchmark gate at that run."]
     focus = focus_lines(meta)
     if focus:
@@ -221,12 +232,12 @@ def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> st
         if not keys:
             lines.append("_None._")
             continue
-        lines += ["| benchmark | task shape | data source + license | best on-file result (model, date) | gate | note | visible | focus |",
-                  "|---|---|---|---|---|---|---|---|"]
+        lines += ["| benchmark | task shape | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |",
+                  "|---|---|---|---|---|---|---|---|---|"]
         for k in keys:
             m, r = meta[k], results.get(k)
             row = [f"`{k}`", m.get("shape", ""), _source(m, r), _fmt_result(r),
-                   m.get("threshold", ""), m.get("status_note", ""),
+                   m.get("threshold", ""), _sota_cell(m), m.get("status_note", ""),
                    "✓" if is_visible(m) else "—", "✓" if is_focus(m) else "—"]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")
     return "\n".join(lines) + "\n"

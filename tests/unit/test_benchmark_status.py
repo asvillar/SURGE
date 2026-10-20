@@ -35,7 +35,7 @@ def test_each_benchmark_once_under_its_status(tmp_path):
             sections[cur] = []
         elif cur and line.startswith("| `"):
             sections[cur].append(line.split("`")[1])
-    assert set(sections) == {STATUS_TITLES[s] for s in STATUS_ORDER}
+    assert set(sections) - {"Focus"} == {STATUS_TITLES[s] for s in STATUS_ORDER}
     for key, m in meta.items():
         homes = [s for s, ks in sections.items() if key in ks]
         assert homes == [STATUS_TITLES[m["status"]]], key
@@ -64,8 +64,12 @@ def test_apply_selection_sets_fields_and_leaves_rest(tmp_path, capsys):
         {"key": "nope.missing", "show": True, "push": True, "note": ""},
     ]), dst)
     after = load_metadata(dst)
-    assert res["unknown"] == ["nope.missing"] and res["focus"] == 1
-    assert res["visible"] == len(before) - 1
+    import yaml
+    doc = yaml.safe_load(dst.read_text())
+    entries = doc.get("benchmarks", doc) if isinstance(doc, dict) else doc
+    assert res["unknown"] == ["nope.missing"]
+    assert res["focus"] == sum(1 for m in entries if m.get("focus") is True)
+    assert res["visible"] == sum(1 for m in entries if m.get("visible", True) is not False)
     assert "unknown benchmark key" in capsys.readouterr().err
     ch = after["tabular.california_housing"]
     assert ch["focus"] is True and ch["visible"] is True and ch["focus_note"] == "headline"
@@ -73,8 +77,8 @@ def test_apply_selection_sets_fields_and_leaves_rest(tmp_path, capsys):
     for k, m in before.items():
         if k not in ("tabular.california_housing", "pde.burgers_1d"):
             assert after[k] == m
-    assert {k: {f: v for f, v in m.items() if f not in ("visible", "focus", "focus_note")}
-            for k, m in after.items()} == before
+    strip = lambda m: {f: v for f, v in m.items() if f not in ("visible", "focus", "focus_note")}
+    assert {k: strip(m) for k, m in after.items()} == {k: strip(m) for k, m in before.items()}
     assert dst.read_text().startswith("# SURGE benchmark metadata")  # comments survive
     apply_selection(_sel(tmp_path, [{"key": "tabular.california_housing", "show": True,
                                      "push": False, "note": ""}]), dst)
@@ -88,7 +92,7 @@ def test_status_ledger_focus_column_and_section(tmp_path):
     dst = tmp_path / "metadata.yaml"
     dst.write_text(src.read_text())
     md0 = render_status_md(tmp_path, dst)
-    assert "| visible | focus |" in md0 and "## Focus" not in md0
+    assert "| visible | focus |" in md0
     apply_selection(_sel(tmp_path, [{"key": "tabular.california_housing", "show": True,
                                      "push": True, "note": "key demo"}]), dst)
     md = render_status_md(tmp_path, dst)

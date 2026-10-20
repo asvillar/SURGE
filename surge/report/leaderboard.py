@@ -102,25 +102,21 @@ def load_results(reports_dir: Path) -> dict[str, dict[str, dict]]:
             for bench, models in raw.items()}
 
 
-def newest_sweep(bench_results: dict[str, dict]) -> dict[str, dict]:
-    """Models of the newest sweep only: every run within
-    ``SWEEP_WINDOW_HOURS`` of the newest run of the benchmark (same rule as
-    ``surge.benchmarks.status._newest_results``)."""
-    from datetime import timedelta
+def newest_sweep(bench_results: dict[str, dict],
+                 definition_date: str | None = None) -> dict[str, dict]:
+    """Headline runs per model: each model's NEWEST run, ignoring runs older
+    than the benchmark's current ``definition_date`` (metadata, ISO date).
 
-    from surge.benchmarks.status import SWEEP_WINDOW_HOURS, _parse_ts
+    Rationale: a single-model rerun must not hide an earlier full sweep, but a
+    run that predates a change of the benchmark definition (targets, split,
+    gate) must never be averaged with the current one. Same rule as
+    ``surge.benchmarks.status.newest_run_per_model``.
+    """
+    from surge.benchmarks.status import newest_run_per_model
 
-    allruns = [r for m in bench_results.values() for r in m["runs"]]
-    for r in allruns:
-        r.setdefault("_dt", _parse_ts(r.get("_ts", "")))
-    dated = [r for r in allruns if r["_dt"] is not None]
-    if not dated:
-        return bench_results
-    newest = max(r["_dt"] for r in dated)
-    lo = newest - timedelta(hours=SWEEP_WINDOW_HOURS)
     out = {}
     for model, agg in bench_results.items():
-        keep = [r for r in agg["runs"] if r["_dt"] is not None and lo <= r["_dt"] <= newest]
+        keep = newest_run_per_model(agg["runs"], definition_date)
         if keep:
             out[model] = _aggregate(keep)
     return out
@@ -306,6 +302,15 @@ td.model {{ font-weight: 550; }}
 .chip {{ font-size: 10.5px; padding: 1.5px 8px; border-radius: 99px; font-weight: 600; }}
 .chip.pass {{ color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 55%, transparent); }}
 .chip.fail {{ color: var(--bad);  border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent); }}
+.bartrack {{ position: relative; display: inline-block; width: 66px; height: 9px; margin-right: 8px; vertical-align: middle; }}
+.bartrack .bar {{ margin-right: 0; vertical-align: top; position: absolute; left: 0; top: 2px; }}
+.sota-mark {{ position: absolute; top: -1px; height: 11px; border-left: 2px dashed var(--warn, #e0a030); }}
+.about {{ margin: 10px 0 6px; font-size: 13px; color: var(--ink2); max-width: 90ch; }}
+.about h4 {{ margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }}
+.about p {{ margin: 4px 0; }}
+p.sota a, .about a, .focus a {{ color: var(--accent); }}
+p.sota {{ margin: 8px 0; font-size: 12.5px; color: var(--ink2); }}
+.sota-note {{ color: var(--muted); }}
 .bar {{ display: inline-block; height: 5px; border-radius: 3px;
   background: var(--accent); vertical-align: middle; margin-right: 7px; }}
 details.io {{ margin-top: 10px; font-size: 12.5px; color: var(--ink2); }}
@@ -374,21 +379,97 @@ def _status_of(info: dict) -> str:
     return info.get("status") or "ready"
 
 
-def _table(bench_results: dict[str, dict], pm: str | None, cols: list[str]) -> str:
+
+def _sota_text(info: dict) -> str:
+    """Plain-text SOTA summary ("model value metric (source, protocol: x)") or ''."""
+    sota = info.get("sota")
+    if not isinstance(sota, dict):
+        return ""
+    if sota.get("value") is None:
+        return "no verified published number for this exact split/protocol"
+    who = sota.get("model") or "published"
+    return (f"{who} {sota['value']:g} {sota.get('metric') or ''} "
+            f"({sota.get('source') or 'source n/a'}, "
+            f"protocol: {sota.get('protocol_match') or 'unknown'})")
+
+
+def _sota_marker_applies(info: dict, pm: str | None) -> bool:
+    sota = info.get("sota")
+    if not isinstance(sota, dict) or not isinstance(sota.get("value"), (int, float)) or not pm:
+        return False
+
+    def norm(x: str) -> str:
+        return "".join(ch for ch in x.lower().replace("test_", "") if ch.isalnum())
+    want = norm(str(info.get("primary_metric") or ""))
+    got = norm(str(sota.get("metric") or ""))
+    pmn = norm(pm)
+    return bool(got) and (got == want or got == pmn or (got.startswith(pmn) and pmn))
+
+
+def _about_block(info: dict) -> str:
+    if not (info.get("task_explainer") or info.get("published_in") or info.get("sota")):
+        return ""
+    parts = []
+    if info.get("task_explainer"):
+        parts.append(f"<p>{html.escape(info['task_explainer'])}</p>")
+    ins, outs = info.get("inputs") or [], info.get("outputs") or []
+    if ins or outs:
+        def names(fs):
+            ns = [f["name"] for f in fs[:6]]
+            return ", ".join(ns) + (f", … (+{len(fs) - 6})" if len(fs) > 6 else "")
+        parts.append("<p class='io-sum'><b>Predicts</b> "
+                     f"<code>{html.escape(names(outs))}</code> <b>from</b> "
+                     f"<code>{html.escape(names(ins))}</code></p>")
+    if info.get("published_in"):
+        url = info.get("url")
+        pub = html.escape(info["published_in"])
+        link = f" <a href='{html.escape(url)}'>[link]</a>" if url else ""
+        parts.append(f"<p><b>Published in</b> {pub}{link}</p>")
+    return f"<div class='about'><h4>About this task</h4>{''.join(parts)}</div>"
+
+
+def _sota_line(info: dict) -> str:
+    text = _sota_text(info)
+    if not text:
+        return ""
+    sota = info.get("sota") or {}
+    link = (f" <a href='{html.escape(sota['url'])}'>[source]</a>" if sota.get("url") else "")
+    note = (f"<span class='sota-note'> — {html.escape(sota['note'])}</span>"
+            if sota.get("note") else "")
+    return f"<p class='sota'><b>state of the art</b> {html.escape(text)}{link}{note}</p>"
+
+
+def _table(bench_results: dict[str, dict], pm: str | None, cols: list[str],
+           info: dict | None = None) -> str:
     ranked = rank_models(bench_results, pm) if pm else sorted(bench_results)
     best_pm = None
     if pm and ranked:
         top = bench_results[ranked[0]]["metrics"].get(pm)
         best_pm = top["mean"] if top else None
+    sota_v = None
+    if info and _sota_marker_applies(info, pm):
+        sota_v = float(info["sota"]["value"])
+    lower = bool(pm) and _is_lower_better(pm)
+
+    def score(v: float) -> float:
+        return (1.0 / v if v else 0.0) if lower else v
+    denoms = [score(best_pm)] if best_pm else []
+    if sota_v is not None and sota_v > 0:
+        denoms.append(score(sota_v))
+    denom = max(denoms) if denoms else 0.0
     rows = []
     for i, model in enumerate(ranked):
         r = bench_results[model]
         pm_agg = r["metrics"].get(pm) if pm else None
-        if pm_agg is not None and best_pm:
-            rel = max(0.0, min(1.0, (pm_agg["mean"] / best_pm)
-                               if not _is_lower_better(pm)
-                               else (best_pm / pm_agg["mean"] if pm_agg["mean"] else 0)))
-            bar = f"<span class='bar' style='width:{6 + 54 * rel:.0f}px'></span>"
+        if pm_agg is not None and denom and pm_agg["mean"] > 0:
+            rel = max(0.0, min(1.0, score(pm_agg["mean"]) / denom))
+            mark = ""
+            if sota_v is not None and sota_v > 0:
+                mx = 6 + 54 * max(0.0, min(1.0, score(sota_v) / denom))
+                mark = (f"<i class='sota-mark' style='left:{mx:.0f}px' "
+                        f"title='SOTA {sota_v:g}'></i>")
+            bar = (f"<span class='bartrack'><span class='bar' style='width:{6 + 54 * rel:.0f}px'>"
+                   f"</span>{mark}</span>")
         else:
             bar = ""
         cells = [(f"<td class='model' data-v='{html.escape(model)}'>"
@@ -408,6 +489,13 @@ def _table(bench_results: dict[str, dict], pm: str | None, cols: list[str]) -> s
     return (f"<table class='sortable'><thead><tr><th>model</th>{header}"
             f"<th>gate</th><th>runs</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>")
+
+
+def _prediction_figure(bench_results, pm, info) -> str:
+    """Best-model prediction thumbnail (empty for runs without predictions.npz)."""
+    from surge.report.prediction_viz import prediction_figure_html
+
+    return prediction_figure_html(bench_results, pm, info.get("task_type", "regression"))
 
 
 def _best_result_path(bench_results: dict[str, dict], pm: str | None) -> str:
@@ -464,7 +552,7 @@ def _bench_card(key: str, meta: dict[str, dict],
     hist_block = ""
     if n_hist > sum(r["n_runs"] for r in bench_results.values()):
         hist_block = (f"<details class='io'><summary>run history (all {n_hist} results)"
-                      f"</summary>{_table(history, primary_metric_key(history), _metric_columns(history))}"
+                      f"</summary>{_table(history, primary_metric_key(history), _metric_columns(history), info)}"
                       "</details>")
 
     rec = []
@@ -500,8 +588,11 @@ def _bench_card(key: str, meta: dict[str, dict],
       <p class="meta"><code>{html.escape(key)}</code></p>
     </div>
     {f'<figure class="preview">{preview}<figcaption>sample of the data</figcaption></figure>' if preview else ''}
+    {_prediction_figure(bench_results, pm, info)}
   </div>
-  {_table(bench_results, pm, cols)}
+  {_about_block(info)}
+  {_sota_line(info)}
+  {_table(bench_results, pm, cols, info)}
   {hist_block}
   {io_block}
   {receipts}
@@ -542,16 +633,21 @@ def _category_blocks(cats: dict[str, list[str]], heads: dict, results: dict, met
 def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
                  video: Path | None = None, demo_runs: dict[str, str] | None = None,
                  anim_dir: Path | None = None, budget_mb: float = 12.0,
-                 metadata_path: Path | None = None) -> Path:
+                 metadata_path: Path | None = None, maintainer: bool = False) -> Path:
+    """Build the single-file leaderboard. ``maintainer=True`` also prints the
+    maintainer's focus notes (internal working notes) in the Focus section;
+    the default public page lists focus benchmarks by name only."""
     from surge.report import demo
 
     meta = load_metadata(metadata_path)
     results = load_results(reports_dir)
+    from surge.report import prediction_viz
+    prediction_viz.CONTEXT.update(base=reports_dir.parent, mode=mode)
     hidden = [k for k in results if meta.get(k, {}).get("visible", True) is False]
     results = {k: v for k, v in results.items() if k not in hidden}
     if not results:
         raise SystemExit(f"no result.json files under {reports_dir}")
-    heads = {k: newest_sweep(v) for k, v in results.items()}
+    heads = {k: newest_sweep(v, meta.get(k, {}).get('definition_date')) for k, v in results.items()}
 
     status = {k: _status_of(meta.get(k, {})) for k in results}
     ready = [k for k in results if status[k] == "ready"]
@@ -595,9 +691,11 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
         items = "".join(
             f"<li><a href='#{html.escape(k)}'>{html.escape(meta[k].get('name', k))}</a>"
             + (f" &mdash; {html.escape(str(meta[k]['focus_note']))}"
-               if meta[k].get("focus_note") else "") + "</li>"
+               if maintainer and meta[k].get("focus_note") else "") + "</li>"
             for k in focus_keys)
-        focus_html = f"<section class='focus'><h2 class='cat'>Focus</h2><ul>{items}</ul></section>"
+        focus_html = ("<section class='focus'><h2 class='cat'>Focus</h2>"
+                      "<p class='tilenote'>benchmarks the maintainers are actively pushing further</p>"
+                      f"<ul>{items}</ul></section>")
     hidden_html = (f"<p class='tilenote'>{len(hidden)} benchmarks hidden by the maintainer</p>"
                    if hidden else "")
 
@@ -668,11 +766,14 @@ def main() -> None:
     ap.add_argument("--demo-run", action="append", default=[], metavar="KEY=RUN_DIR",
                     help="HPO campaign replay for a benchmark (repeatable)")
     ap.add_argument("--anim-dir", default=None, help="pre-rendered *_<mode>.webm clips")
+    ap.add_argument("--maintainer", action="store_true",
+                    help="include the maintainer's focus notes (internal view)")
     args = ap.parse_args()
     demo_runs = dict(kv.split("=", 1) for kv in args.demo_run) or None
     out = build_report(Path(args.reports), Path(args.out), mode=args.mode,
                        video=Path(args.video) if args.video else None,
-                       demo_runs=demo_runs, anim_dir=args.anim_dir)
+                       demo_runs=demo_runs, anim_dir=args.anim_dir,
+                       maintainer=args.maintainer)
     print(f"wrote {out}")
 
 

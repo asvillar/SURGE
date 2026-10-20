@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -106,19 +107,30 @@ def test_status_layout_synthetic_and_newest_sweep(tmp_path: Path):
     meta = load_metadata()
     assert meta["pde.burgers_1d"]["status"] == "sanity"
     root = _fake_tree(tmp_path)
+    # a metadata copy whose california_housing definition changed between the
+    # old (better) run and the new one: the old run must leave the headline
+    src = Path(__file__).resolve().parents[2] / "surge/benchmarks/metadata.yaml"
+    mp = tmp_path / "metadata.yaml"
+    mp.write_text(src.read_text().replace("- key: tabular.california_housing\n",
+                                          "- key: tabular.california_housing\n"
+                                          "  definition_date: 2026-01-15\n", 1))
     out = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
-                       demo_runs={})
+                       demo_runs={}, metadata_path=mp)
     text = out.read_text()
     tail_at = text.index("<details class='tail'>")
     assert text.index('id="pde.burgers_1d"') > tail_at          # sanity only in tail
     assert 'id="pde.burgers_1d"' not in text[:tail_at]
     assert "synthetic fixture" in text
-    # headline excludes the older, better run; history table keeps it
+    # headline excludes the run that predates the definition date; history keeps it
     head = text[text.index('id="tabular.california_housing"'):]
     first_table = head[:head.index("</table>")]
     assert "new.model" in first_table and "old.model" not in first_table
     assert "run history (all 2 results)" in head
-    assert "newest sweep only" in text
+    # without a definition date, each model's newest run is kept (old.model stays)
+    plain = build_report(root, tmp_path / "lb2.html", video=tmp_path / "none.mp4",
+                         demo_runs={}).read_text()
+    head2 = plain[plain.index('id="tabular.california_housing"'):]
+    assert "old.model" in head2[:head2.index("</table>")]
     assert len(text.encode()) < 1_000_000
 
 
@@ -126,8 +138,9 @@ def test_synthetic_excluded_from_pass_count(tmp_path: Path):
     root = _fake_tree(tmp_path)
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
                         demo_runs={}).read_text()
-    # fusion.m3dc1_sample is not ready/real: tiles count only ready real runs
-    assert "<b>1 / 1</b>" in text
+    # fusion.m3dc1_sample is not ready/real: tiles count only ready real runs;
+    # both california models (old + new, no definition date) count, both pass
+    assert "<b>2 / 2</b>" in text
 
 
 def test_demo_section_embeds_video_when_present(tmp_path: Path):
@@ -170,12 +183,77 @@ def test_hidden_omitted_and_focus_section(tmp_path: Path):
         {"key": "tabular.california_housing", "show": True, "push": True,
          "note": "flagship tabular"}]}))
     apply_selection(sel, mp)
+    import yaml
+    doc = yaml.safe_load(mp.read_text())
+    entries = doc.get("benchmarks", doc) if isinstance(doc, dict) else doc
+    n_hidden = sum(1 for m in entries if m.get("visible") is False
+                   and (root / m["key"]).exists())
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
                         demo_runs={}, metadata_path=mp).read_text()
     assert 'id="pde.burgers_1d"' not in text
-    assert "1 benchmarks hidden by the maintainer" in text
-    assert "<section class='focus'>" in text and "flagship tabular" in text
+    assert f"{n_hidden} benchmarks hidden by the maintainer" in text
+    assert "<section class='focus'>" in text
+    assert "flagship tabular" not in text          # notes are internal by default
     assert "<span class='badge good'>focus</span>" in text
+    internal = build_report(root, tmp_path / "lbm.html", video=tmp_path / "none.mp4",
+                            demo_runs={}, metadata_path=mp, maintainer=True).read_text()
+    assert "flagship tabular" in internal
+    # a metadata file with no selection applied shows neither
+    pristine = tmp_path / "pristine.yaml"
+    pristine.write_text(re.sub(r"\n  (visible|focus|focus_note):[^\n]*", "", src.read_text()))
     plain = build_report(root, tmp_path / "p.html", video=tmp_path / "none.mp4",
-                         demo_runs={}).read_text()
+                         demo_runs={}, metadata_path=pristine).read_text()
     assert "hidden by the maintainer" not in plain and "class='focus'" not in plain
+
+
+SOTA_KEYS = {"value", "metric", "model", "source", "url", "protocol_match", "note"}
+
+
+def test_metadata_schema_explainer_sota_io():
+    from surge.report.leaderboard import load_metadata
+
+    meta = load_metadata()
+    assert len(meta) >= 28
+    for key, m in meta.items():
+        assert str(m.get("task_explainer") or "").strip(), key
+        assert str(m.get("published_in") or "").strip(), key
+        assert isinstance(m.get("sota"), dict) and set(m["sota"]) == SOTA_KEYS, key
+        assert m["sota"]["protocol_match"] in {"same", "different", "unknown"}, key
+        if m["sota"]["value"] is None:
+            assert "no verified published number" in m["sota"]["note"], key
+        assert m.get("inputs") and m.get("outputs"), key
+        for f in m["inputs"] + m["outputs"]:
+            assert f.get("name") and f.get("desc"), key
+
+
+def _fake_meta(tmp_path: Path) -> Path:
+    import yaml
+
+    mp = tmp_path / "meta.yaml"
+    mp.write_text(yaml.safe_dump({"benchmarks": [{
+        "key": "tabular.california_housing", "name": "Fake", "status": "ready",
+        "primary_metric": "R²", "shape": "2 → 1", "n": "10",
+        "task_explainer": "Maps widgets to gizmos for testing.",
+        "published_in": "Journal of Tests (2020)", "url": "https://example.org/p",
+        "inputs": [{"name": "widget", "desc": "w"}], "outputs": [{"name": "gizmo", "desc": "g"}],
+        "sota": {"value": 0.95, "metric": "R²", "model": "FakeNet", "source": "Doe 2020",
+                 "url": "https://example.org/s", "protocol_match": "different", "note": "n"},
+    }]}))
+    return mp
+
+
+def test_report_renders_about_and_sota(tmp_path: Path):
+    root = _fake_tree(tmp_path)
+    text = build_report(root, tmp_path / "s.html", video=tmp_path / "none.mp4",
+                        demo_runs={}, metadata_path=_fake_meta(tmp_path)).read_text()
+    assert "About this task" in text and "Maps widgets to gizmos" in text
+    assert "Journal of Tests (2020)" in text
+    assert "FakeNet 0.95 R² (Doe 2020, protocol: different)" in text
+    assert "class='sota-mark'" in text  # dashed reference marker drawn in the bar
+
+
+def test_ledger_has_sota_column(tmp_path: Path):
+    from surge.benchmarks.status import render_status_md
+
+    md = render_status_md(_fake_tree(tmp_path), _fake_meta(tmp_path))
+    assert "| SOTA |" in md and "0.95 R² [diff]" in md

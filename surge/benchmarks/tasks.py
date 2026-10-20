@@ -17,7 +17,7 @@ try:
 except AttributeError:
     pass
 
-from .base import BenchmarkResult
+from .base import BenchmarkResult, capture_predictions
 
 # Default model keys per benchmark (used when the caller passes no model_key).
 _DEFAULTS: dict[str, str] = {
@@ -132,6 +132,8 @@ def _fit_predict_classification(adapter: Any, X_train, y_train, X_test):
 def _clf_metrics(y_test, y_pred, y_prob) -> dict[str, float]:
     from sklearn.metrics import accuracy_score, f1_score
 
+    capture_predictions(y_test, y_pred, y_prob if hasattr(y_prob, "ndim") else None)
+
     metrics: dict[str, float] = {
         "test_accuracy": float(accuracy_score(y_test, y_pred)),
         "test_f1_macro": float(f1_score(y_test, y_pred, average="macro", zero_division=0)),
@@ -156,6 +158,7 @@ def _clf_metrics(y_test, y_pred, y_prob) -> dict[str, float]:
 def _reg_metrics(y_test, y_pred) -> dict[str, float]:
     from sklearn.metrics import mean_squared_error, r2_score
 
+    capture_predictions(y_test, y_pred)
     r2 = float(r2_score(y_test, y_pred))
     rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
     return {"test_r2": r2, "test_rmse": rmse}
@@ -1730,6 +1733,7 @@ def _run_constellaration_field_benchmark(
     y_pred = np.asarray(adapter.predict(X_pred)).reshape(y_test.shape)
     elapsed = time.perf_counter() - t0
 
+    capture_predictions(y_test, y_pred)
     per_sample = relative_l2_per_sample(y_test, y_pred)
     rel_l2 = float(np.median(per_sample))
     metrics: dict = {
