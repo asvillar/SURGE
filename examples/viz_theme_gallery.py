@@ -19,6 +19,7 @@ Figures (per mode, deterministic PNG/SVG/PDF):
     leaderboard       score ± std vs published threshold + runtime panel
     classification    ROC / PR / confusion / reliability (with ECE)
     field_operator    Burgers' operator learning: truth · prediction · error
+    lorenz63_rollout  Lorenz-63 10-λ rollout: attractor butterfly, error growth, VPT bars
     field2d           FNO-2D on the periodic Poisson problem (2D fields)
     uncertainty       GP surrogate with 95% credible band and coverage
     ensemble          deep-ensemble UQ with raw vs calibrated coverage
@@ -837,6 +838,134 @@ def field_operator_figure(mode: str, seed: int = 0):
             f"Burgers' 1D operator learning · {model_name} · "
             f"{len(tr):,} train / {len(te):,} test",
             fontsize=11, fontweight="bold")
+        return fig
+
+
+def _latest_lorenz63_results(reports_dir: Path) -> dict[str, dict]:
+    """Latest *upgraded-protocol* ``sequence.lorenz63`` result per model key.
+
+    Reads only ``benchmark_reports/sequence.lorenz63/**/result.json`` (never
+    re-trains); pre-upgrade results (no ``test_vpt_median``) are skipped so a
+    stale fixed-window-NRMSE run never sneaks into the rollout figure.
+    """
+    bench_dir = reports_dir / "sequence.lorenz63"
+    if not bench_dir.exists():
+        return {}
+    latest: dict[str, tuple[str, dict]] = {}
+    for run_dir in sorted(bench_dir.iterdir()):
+        rj = run_dir / "result.json"
+        if not rj.exists():
+            continue
+        try:
+            data = json.loads(rj.read_text())
+        except Exception:
+            continue
+        if "test_vpt_median" not in data.get("metrics", {}):
+            continue
+        model_key = data.get("model_key") or run_dir.name
+        ts = data.get("timestamp", run_dir.name)
+        if model_key not in latest or ts > latest[model_key][0]:
+            latest[model_key] = (ts, data)
+    return {k: v[1] for k, v in latest.items()}
+
+
+def lorenz63_rollout_figure(mode: str, reports_dir: Path | None = None):
+    """Lorenz-63 Lyapunov-time rollout diagnostic (10-λ VPT protocol).
+
+    Reads every finished ``sequence.lorenz63`` run from ``benchmark_reports/``
+    (never re-trains — ``surge.benchmarks.tasks.run_sequence_lorenz63`` stashes
+    the diagnostics this figure needs in ``BenchmarkResult.extra``):
+    (a) x–z butterfly — a long reference trajectory as attractor backdrop,
+    truth vs. the best finished model's 10-λ rollout for one representative
+    (median-VPT) held-out IC; (b) median normalised rollout error vs.
+    λ-time per model (log y, VPT threshold line, VPT marks); (c) VPT bars
+    (median, p25–p75) per model.
+    """
+    reports_dir = reports_dir or (_REPO / "benchmark_reports")
+    results = _latest_lorenz63_results(reports_dir)
+    if not results:
+        return None
+
+    model_order = sorted(results, key=lambda k: -results[k]["metrics"]["test_vpt_median"])
+    best_key = model_order[0]
+    best_extra = results[best_key]["extra"]
+    threshold = best_extra["vpt_threshold"]
+
+    sample_truth = np.array(best_extra["sample_truth_xyz"])  # (n_steps+1, 3)
+    sample_pred = np.array(best_extra["sample_pred_xyz"])    # (n_steps+1, 3)
+
+    # Long reference trajectory purely as attractor backdrop — integrated
+    # with the benchmark's own RK-4 kernel, not a re-implementation of it.
+    from surge.benchmarks.tasks import _lorenz_rk4_step
+    rng = np.random.default_rng(0)
+    state = rng.uniform(-10.0, 10.0, size=3)
+    for _ in range(1000):
+        state = _lorenz_rk4_step(state, 0.01)
+    backdrop = np.empty((6000, 3))
+    for t in range(6000):
+        backdrop[t] = state
+        state = _lorenz_rk4_step(state, 0.01)
+
+    with surge_theme(mode) as p:
+        fig = plt.figure(figsize=(12.0, 4.6))
+        gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 1.0, 0.85])
+
+        # (a) butterfly — attractor backdrop, truth vs. best model's rollout
+        ax = fig.add_subplot(gs[0, 0])
+        ax.plot(backdrop[:, 0], backdrop[:, 2], color=p["muted"], lw=0.5,
+                alpha=0.35, zorder=1, label="attractor (reference)")
+        ax.plot(sample_truth[:, 0], sample_truth[:, 2], color=p["series"][0],
+                lw=1.7, zorder=2, label="truth (held-out IC)")
+        ax.plot(sample_pred[:, 0], sample_pred[:, 2], color=p["series"][1],
+                lw=1.3, ls=(0, (4, 2)), zorder=3, label=f"{best_key} rollout")
+        ax.scatter([sample_truth[0, 0]], [sample_truth[0, 2]], color=p["ink"],
+                  s=24, zorder=4, label="IC")
+        ax.set_xlabel("x"); ax.set_ylabel("z")
+        ax.set_title("(a) attractor · 10-λ rollout vs truth", fontsize=9.5)
+        ax.legend(loc="upper right", fontsize=6.5, frameon=False)
+
+        # (b) median normalised rollout error vs lambda-time, per model
+        ax2 = fig.add_subplot(gs[0, 1])
+        for i, key in enumerate(model_order):
+            r = results[key]
+            err = np.array(r["extra"]["median_error_curve"])
+            dtl = r["extra"]["dt_lyapunov"]
+            lam = np.arange(1, len(err) + 1) * dtl
+            color = p["series"][i % 8]
+            ax2.plot(lam, np.maximum(err, 1e-6), color=color, lw=1.5, label=key)
+            ax2.axvline(r["metrics"]["test_vpt_median"], color=color, lw=0.9,
+                       ls=(0, (1, 1)), alpha=0.7)
+        ax2.axhline(threshold, color=p["critical"], lw=1.1, ls=(0, (3, 2)),
+                   label=f"VPT threshold ({threshold:g})")
+        ax2.set_yscale("log")
+        ax2.set_xlabel("rollout horizon [λ-time]")
+        ax2.set_ylabel("median normalised error")
+        ax2.set_title("(b) error growth vs λ-time", fontsize=9.5)
+        ax2.legend(loc="lower right", fontsize=6.5, frameon=False)
+
+        # (c) VPT bars: median with p25-p75 whiskers
+        ax3 = fig.add_subplot(gs[0, 2])
+        xs = np.arange(len(model_order))
+        medians = np.array([results[k]["metrics"]["test_vpt_median"] for k in model_order])
+        p25 = np.array([results[k]["metrics"]["test_vpt_p25"] for k in model_order])
+        p75 = np.array([results[k]["metrics"]["test_vpt_p75"] for k in model_order])
+        colors = [p["series"][i % 8] for i in range(len(model_order))]
+        ax3.bar(xs, medians, color=colors, width=0.6, zorder=2)
+        ax3.errorbar(xs, medians, yerr=[medians - p25, p75 - medians],
+                    fmt="none", ecolor=p["ink2"], capsize=3, zorder=3, lw=1.1)
+        ax3.axhline(2.0, color=p["critical"], lw=1.1, ls=(0, (3, 2)), zorder=1,
+                   label="pass threshold (2.0 λ)")
+        ax3.set_xticks(xs)
+        ax3.set_xticklabels(model_order, rotation=28, ha="right", fontsize=7)
+        ax3.set_ylabel("VPT [λ-time]")
+        ax3.set_title("(c) VPT median [p25, p75]", fontsize=9.5)
+        ax3.legend(loc="upper right", fontsize=6.5, frameon=False)
+
+        fig.suptitle(
+            "Lorenz-63 — 10-λ autoregressive rollout VPT "
+            f"(best finished: {best_key}, {medians[0]:.2f} λ)",
+            fontsize=11, fontweight="bold")
+        fig.tight_layout(rect=(0, 0, 1, 0.93))
         return fig
 
 
@@ -1843,6 +1972,7 @@ def main():
             threshold=_benchmark_threshold(args.benchmark)),
         "classification": classification_figure,
         "field_operator": field_operator_figure,
+        "lorenz63_rollout": lambda m: lorenz63_rollout_figure(m),
         "uncertainty": uncertainty_figure,
         "characterization": characterization_figure,
         "ensemble": ensemble_figure,

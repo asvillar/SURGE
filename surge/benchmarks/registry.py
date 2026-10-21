@@ -198,9 +198,10 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
 
     # ── Sequence / windowed prediction (tabular interface) ────────────────────
     "sequence.lorenz63": (
-        run_sequence_lorenz63, "tabular", "regression", "60→60 (n=1,200)",
-        "Lorenz-63 RK-4 short-horizon prediction — windowed 20-step input/output, "
-        "inline ODE solver (no download)",
+        run_sequence_lorenz63, "tabular", "regression",
+        "3→3 (one step; scored as 10-λ rollout, n=1,200)",
+        "Lorenz-63 one-step surrogate scored by autoregressive rollout valid "
+        "prediction time — inline RK-4 ODE solver (no download)",
     ),
 
     # ── Field (discretised function/field → function/field) ───────────────────
@@ -391,8 +392,8 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "access": "generated_cached",
         "cache_path": "data/datasets/benchmarks/sequence/lorenz63.npz",
         "sample_count": 1200,
-        "feature_shape": "60",
-        "target_shape": "60",
+        "feature_shape": "3",
+        "target_shape": "3",
         "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
     },
     "pde.burgers_1d": {
