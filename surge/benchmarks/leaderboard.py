@@ -901,12 +901,17 @@ def _load_concrete_strength():
 
 
 def _load_lorenz63():
+    """One-step ``x(t) -> x(t + dt)`` pairs, shape ``(1200, 3) -> (1200, 3)``.
+
+    Matches :func:`surge.benchmarks.tasks.run_sequence_lorenz63`'s training
+    contract (Lyapunov-time rollout protocol, definition_date 2026-10-21).
+    """
     cache = _bench_data_root() / "sequence" / "lorenz63.npz"
     if cache.exists():
         d = np.load(cache)
         return d["X"], d["y"]
     from .tasks import _generate_lorenz_trajectories
-    X, y = _generate_lorenz_trajectories(n_trajectories=1200, T_in=20, T_out=20, dt=0.01, warmup=500, seed=42)
+    X, y = _generate_lorenz_trajectories(n_trajectories=1200, dt=0.01, seed=42)
     cache.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(cache, X=X, y=y)
     return X, y
@@ -1864,7 +1869,7 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
         "tabular.breast_cancer": ("test_accuracy", 0.93),
         "tabular.wine": ("test_accuracy", 0.90),
         "tabular.digits": ("test_accuracy", 0.95),
-        "sequence.lorenz63": ("test_nrmse", 0.30),  # lower is better
+        "sequence.lorenz63": ("test_vpt_median", 2.0),  # higher is better (Lyapunov times)
         "pde.burgers_1d": ("test_relative_l2", 0.10),  # lower is better
         "classification.flow_regime": ("test_accuracy", 0.85),
         "tabular.airfoil_noise": ("test_r2", 0.80),

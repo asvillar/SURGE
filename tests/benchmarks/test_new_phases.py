@@ -78,12 +78,22 @@ def test_lorenz63_benchmark_registered():
 
 
 def test_lorenz63_benchmark_runs():
+    """Smoke-sized run of the upgraded Lyapunov-time rollout protocol."""
     from surge.benchmarks.registry import run_benchmark
 
-    result = run_benchmark("sequence.lorenz63", seed=42, model_key="sklearn.random_forest")
+    result = run_benchmark(
+        "sequence.lorenz63", seed=42, model_key="sklearn.ridge",
+        n_trajectories=80, n_eval_ics=5, rollout_lyapunov_times=1.0,
+    )
     assert result.benchmark_key == "sequence.lorenz63"
     assert "test_nrmse" in result.metrics
     assert result.metrics["test_nrmse"] < 1.0
+    for key in ("test_vpt_median", "test_vpt_p25", "test_vpt_p75", "test_climate_error"):
+        assert key in result.metrics
+    assert 0.0 <= result.metrics["test_vpt_median"] <= 1.0  # rollout_lyapunov_times=1.0
+    assert result.metrics["test_climate_error"] >= 0.0
+    assert len(result.extra["per_ic_vpt"]) == 5
+    assert result.extra["n_rollout_steps"] > 0
 
 
 def test_lorenz_rk4_integrator():

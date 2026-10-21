@@ -509,19 +509,21 @@ benchmarks:
   visible: true
   focus: false
 - key: sequence.lorenz63
-  status: sanity
-  status_note: "fixed-window NRMSE, not Lyapunov-time rollout"
+  definition_date: 2026-10-21
+  status: in_progress
+  status_note: "protocol upgraded to Lyapunov-time rollout; sweep underway"
   name: Lorenz-63 Chaotic Forecasting
   capability: Time Series / Forecasting
   tier: 0
   citation: Lorenz (1963) J. Atmospheric Sciences
   url: https://doi.org/10.1175/1520-0469(1963)020<0130:DNF>2.0.CO;2
-  shape: 3×20 → 3×20 (rollout)
+  shape: "3 → 3 (one step; scored as 10-λ rollout)"
   n: 1,200 trajectories
-  primary_metric: NRMSE
-  threshold: NRMSE ≤ 0.10
-  description: Short-horizon prediction on the Lorenz-63 chaotic attractor (σ=10, ρ=28, β=8/3).
-  task_explainer: "The last 20 states (x, y, z) of a Lorenz-63 trajectory are mapped to the next 20 states. Chaotic dynamics make long forecasts diverge exponentially, so this tests whether a surrogate captures the attractor's local dynamics. The metric is normalised RMSE over a fixed 20-step window, not valid prediction time."
+  primary_metric: VPT (median, Lyapunov times)
+  threshold: VPT ≥ 2.0 λ
+  threshold_note: "Reservoir-computing/ESN architectures report ~5-10 Lyapunov times on this attractor (Pathak et al. 2018, Phys. Rev. Lett. 120, 024102) — a different architecture class from the generic sklearn/MLP/KAN surrogates swept here, so that range is context, not the bar; VPT ≥ 2.0 λ is this benchmark's pass threshold."
+  description: One-step prediction on the Lorenz-63 chaotic attractor (σ=10, ρ=28, β=8/3), scored by how long an autoregressive rollout tracks the true trajectory.
+  task_explainer: "A surrogate learns the single-step map x(t) -> x(t + dt) (dt=0.01) from attractor samples (a 10-time-unit transient is dropped so every training pair is already on the attractor). It is scored by rolling its own predictions forward autoregressively for 10 Lyapunov times (~1,104 steps) from 100 held-out initial conditions: the valid prediction time (VPT) is how long, in Lyapunov times, the climate-normalised error ||x̂-x||/sqrt(mean||x||²) stays below 0.4 before chaotic divergence takes over. This replaces the earlier fixed 20-step-window NRMSE, which a random forest saturated (0.026) without needing to track the attractor's dynamics at all."
   published_in: "Lorenz, J. Atmospheric Sciences 20 (1963); generated in-repo (sigma=10, rho=28, beta=8/3)"
   sota:
     value: null
@@ -530,11 +532,11 @@ benchmarks:
     source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
     url: null
     protocol_match: "different"
-    note: "no verified published number for this exact split/protocol; the field reports valid prediction time (13-105 Lyapunov times in 2025-2026 ESN/hybrid work), not fixed-window NRMSE"
+    note: "no verified published number for this exact one-step-surrogate / 10-λ-rollout protocol; reservoir-computing/ESN work reports 13-105 Lyapunov times (2025-2026 hybrid work), but that is a purpose-built architecture class, not a like-for-like comparison with the generic surrogates swept here"
   inputs:
-  - {name: "history", desc: "Previous 20 steps of (x, y, z), 3x20 (dimensionless)"}
+  - {name: "state", desc: "Lorenz-63 state (x, y, z) at time t (dimensionless)"}
   outputs:
-  - {name: "future", desc: "Next 20 steps of (x, y, z), 3x20 (dimensionless)"}
+  - {name: "next_state", desc: "Lorenz-63 state (x, y, z) at time t + dt=0.01 (dimensionless)"}
   visible: true
   focus: true
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"

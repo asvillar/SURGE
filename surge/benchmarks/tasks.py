@@ -614,86 +614,194 @@ def _lorenz_rk4_step(state: np.ndarray, dt: float, sigma: float = 10.0, rho: flo
     return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
 
+# Lyapunov-time convention for σ=10, ρ=28, β=8/3 (Lorenz 1963): the largest
+# Lyapunov exponent is λ_max ≈ 0.9056, so one Lyapunov time ≈ 1/0.9056 ≈
+# 1.104 time units ≈ 110 RK-4 steps at dt=0.01. Used to define both the
+# training transient to drop and the rollout horizon/VPT scoring below.
+_LORENZ_LAMBDA_MAX = 0.9056
+_LORENZ_TRANSIENT_TIME_UNITS = 10.0
+_LORENZ_VPT_THRESHOLD = 0.4
+
+
+def _lorenz_lyapunov_time() -> float:
+    """Lyapunov time (time units) for the standard σ=10, ρ=28, β=8/3 attractor."""
+    return 1.0 / _LORENZ_LAMBDA_MAX
+
+
 def _generate_lorenz_trajectories(
     n_trajectories: int,
-    T_in: int,
-    T_out: int,
     dt: float = 0.01,
-    warmup: int = 500,
+    transient_time_units: float = _LORENZ_TRANSIENT_TIME_UNITS,
     seed: int = 42,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Generate ``n_trajectories`` Lorenz-63 windows.
+    """Generate one-step ``x(t) -> x(t + dt)`` pairs sampled from the attractor.
+
+    Each of ``n_trajectories`` independent random initial conditions is
+    integrated with RK-4 past a ``transient_time_units``-long transient
+    (dropped, so every pair sits on the chaotic attractor rather than on the
+    way to it) and contributes exactly one ``(x(t), x(t+dt))`` pair.
 
     Returns
     -------
-    X : (n_trajectories, T_in * 3)  — input windows (flattened)
-    y : (n_trajectories, T_out * 3) — prediction targets (flattened)
+    X, y : ``(n_trajectories, 3)`` arrays — state at ``t`` and at ``t + dt``.
     """
     rng = np.random.default_rng(seed)
-    n_state = 3
-    X_list, y_list = [], []
-    for _ in range(n_trajectories):
-        # Random IC near the attractor.
-        state = rng.uniform(low=-10.0, high=10.0, size=(n_state,))
-        # Warm-up to attract to the chaotic attractor.
+    warmup = int(round(transient_time_units / dt))
+    X = np.empty((n_trajectories, 3))
+    y = np.empty((n_trajectories, 3))
+    for i in range(n_trajectories):
+        state = rng.uniform(low=-10.0, high=10.0, size=(3,))
         for _ in range(warmup):
             state = _lorenz_rk4_step(state, dt)
-        # Collect T_in + T_out steps.
-        total = T_in + T_out
-        traj = np.empty((total, n_state))
-        for t in range(total):
-            traj[t] = state
+        X[i] = state
+        y[i] = _lorenz_rk4_step(state, dt)
+    return X, y
+
+
+def _generate_lorenz_rollout_ics(
+    n_ics: int,
+    n_steps: int,
+    dt: float = 0.01,
+    transient_time_units: float = _LORENZ_TRANSIENT_TIME_UNITS,
+    seed: int = 0,
+) -> np.ndarray:
+    """``n_ics`` on-attractor trajectories of ``n_steps + 1`` RK-4 states.
+
+    Returns ``(n_ics, n_steps + 1, 3)``; index 0 along axis 1 is the
+    post-transient initial condition each trajectory is rolled out from.
+    """
+    rng = np.random.default_rng(seed)
+    warmup = int(round(transient_time_units / dt))
+    out = np.empty((n_ics, n_steps + 1, 3))
+    for i in range(n_ics):
+        state = rng.uniform(low=-10.0, high=10.0, size=(3,))
+        for _ in range(warmup):
             state = _lorenz_rk4_step(state, dt)
-        X_list.append(traj[:T_in].ravel())
-        y_list.append(traj[T_in:].ravel())
-    return np.array(X_list), np.array(y_list)
+        out[i, 0] = state
+        for t in range(1, n_steps + 1):
+            state = _lorenz_rk4_step(state, dt)
+            out[i, t] = state
+    return out
 
 
 def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
-    model_kwargs: dict | None = None) -> "BenchmarkResult":
-    """Lorenz-63 one-step and short-horizon prediction (Tier 0, inline ODE).
+    model_kwargs: dict | None = None, n_trajectories: int = 1200,
+    n_eval_ics: int = 100, rollout_lyapunov_times: float = 10.0) -> "BenchmarkResult":
+    """Lorenz-63 one-step surrogate, scored by Lyapunov-time rollout VPT (Tier 0).
 
-    Data
-    ----
-    1 200 trajectories of the Lorenz-63 attractor integrated with RK-4
-    (dt=0.01).  Input = 20-step window (T_in=20), target = next 20 steps
-    (T_out=20), state dim = 3.  Total feature dim: 60 → 60.
+    Protocol (definition_date 2026-10-21 — see ``metadata.yaml``; replaces the
+    earlier fixed 20-step-window NRMSE, which a random forest saturated at
+    0.026 without needing to track the attractor's dynamics):
 
-    Metric
-    ------
-    ``test_nrmse`` = ||y_pred - y_true||_F / ||y_true||_F  (lower is better).
-    Pass threshold: NRMSE < 0.30 (well above random, reachable by RF).
+    - Train a one-step surrogate ``x(t) -> x(t + dt)`` (dt=0.01) on
+      ``n_trajectories`` attractor samples, each from an independent random
+      IC with a 10-time-unit transient dropped
+      (:func:`_generate_lorenz_trajectories`).
+    - Evaluate on ``n_eval_ics`` held-out attractor ICs, rolled out
+      autoregressively (:func:`surge.inference.rollout.autoregressive_rollout`)
+      for ``rollout_lyapunov_times`` Lyapunov times (λ_max ≈ 0.9056 for
+      σ=10, ρ=28, β=8/3 → 1 λ-time ≈ 1.104 time units ≈ 110 steps at
+      dt=0.01).
+    - Per-IC valid prediction time (VPT,
+      :func:`surge.inference.rollout.valid_prediction_time`): first λ-time at
+      which the climate-normalised error ``||x̂ - x|| / sqrt(mean ||x||²)``
+      exceeds 0.4 (``rollout_lyapunov_times`` if it never does).
+
+    Metrics
+    -------
+    ``test_vpt_median`` (primary, higher better), ``test_vpt_p25``,
+    ``test_vpt_p75``, ``test_climate_error`` (relative error of the rolled-out
+    z-coordinate histogram vs. truth,
+    :func:`surge.inference.rollout.climate_histogram_error`), ``test_nrmse``
+    (one-step, secondary). Pass threshold: ``test_vpt_median >= 2.0``.
     """
     from sklearn.model_selection import train_test_split
 
-    T_in, T_out = 20, 20
-    X, y = _generate_lorenz_trajectories(
-        n_trajectories=1200, T_in=T_in, T_out=T_out, dt=0.01, warmup=500, seed=seed
+    from surge.inference.rollout import (
+        autoregressive_rollout,
+        climate_histogram_error,
+        valid_prediction_time,
     )
+
+    dt = 0.01
+    lyapunov_time = _lorenz_lyapunov_time()
+    dt_lyapunov = dt / lyapunov_time
+    n_rollout_steps = int(round(rollout_lyapunov_times * lyapunov_time / dt))
+
+    X, y = _generate_lorenz_trajectories(n_trajectories=n_trajectories, dt=dt, seed=seed)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    # Climate (attractor) normalisation constant for VPT/rollout error — one
+    # scale shared by every model and every eval IC, not re-derived per run.
+    climate_norm = float(np.sqrt(np.mean(np.sum(np.vstack([X, y]) ** 2, axis=1))))
 
     key = model_key or "sklearn.random_forest"
     from surge.model.registry import MODEL_REGISTRY
-    adapter = MODEL_REGISTRY.create(key)
+    adapter = MODEL_REGISTRY.create(key, **(model_kwargs or {}))
+
+    # z-score normalisation (shared by inputs/outputs — same attractor stats).
+    mean = X_train.mean(axis=0)
+    scale = X_train.std(axis=0) + 1e-8
 
     t0 = time.perf_counter()
-    adapter.fit(X_train, y_train)
-    y_pred = np.asarray(adapter.predict(X_test))
+    adapter.fit((X_train - mean) / scale, (y_train - mean) / scale)
+    y_pred_test = np.asarray(adapter.predict((X_test - mean) / scale)) * scale + mean
+    nrmse = float(np.linalg.norm(y_pred_test - y_test) / (np.linalg.norm(y_test) + 1e-12))
+    capture_predictions(y_test, y_pred_test)
+
+    # Held-out ICs for the rollout eval — disjoint draw from the training ICs.
+    rollout_ics = _generate_lorenz_rollout_ics(
+        n_ics=n_eval_ics, n_steps=n_rollout_steps, dt=dt, seed=seed + 1_000_000)
+    truth = np.transpose(rollout_ics, (1, 0, 2))  # (n_steps + 1, n_eval_ics, 3)
+    initial_state, truths = truth[0], truth[1:]
+
+    def predict_fn(state: np.ndarray) -> np.ndarray:
+        x = (state - mean) / scale
+        out = np.asarray(adapter.predict(x)).reshape(state.shape)
+        return out * scale + mean
+
+    preds, _ = autoregressive_rollout(predict_fn, initial_state, truths)
     elapsed = time.perf_counter() - t0
 
-    # NRMSE over all predicted steps and state dimensions.
-    nrmse = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
-    metrics: dict = {"test_nrmse": nrmse, "runtime_s": elapsed}
+    step_err = np.linalg.norm(preds - truths, axis=-1) / climate_norm  # (n_steps, n_eval_ics)
+    vpts = np.array([
+        valid_prediction_time(step_err[:, i], _LORENZ_VPT_THRESHOLD, dt_lyapunov,
+                              horizon_lyapunov=rollout_lyapunov_times)
+        for i in range(step_err.shape[1])
+    ])
+    climate_err = climate_histogram_error(truths[..., 2], preds[..., 2])
+
+    metrics: dict = {
+        "test_vpt_median": float(np.median(vpts)),
+        "test_vpt_p25": float(np.percentile(vpts, 25)),
+        "test_vpt_p75": float(np.percentile(vpts, 75)),
+        "test_climate_error": climate_err,
+        "test_nrmse": nrmse,
+        "runtime_s": elapsed,
+    }
+
+    # Median-VPT IC — a representative (not cherry-picked best) rollout for figures.
+    i_ref = int(np.argsort(vpts)[len(vpts) // 2])
     return BenchmarkResult(
         benchmark_key="sequence.lorenz63",
         model_key=adapter.name,
         tier="0",
         task_type="regression",
         metrics=metrics,
-        passed=nrmse < 0.30,
-        message="Lorenz-63 RK-4 short-horizon prediction (inline, no download)",
-        extra={"n_train": len(X_train), "n_test": len(X_test), "T_in": T_in, "T_out": T_out},
+        passed=metrics["test_vpt_median"] >= 2.0,
+        message="Lorenz-63 one-step surrogate, scored via 10-λ autoregressive rollout VPT",
+        extra={
+            "n_train": len(X_train), "n_test": len(X_test),
+            "n_eval_ics": n_eval_ics, "n_rollout_steps": n_rollout_steps,
+            "dt": dt, "lyapunov_time": lyapunov_time, "dt_lyapunov": dt_lyapunov,
+            "rollout_lyapunov_times": rollout_lyapunov_times,
+            "vpt_threshold": _LORENZ_VPT_THRESHOLD, "climate_norm": climate_norm,
+            "per_ic_vpt": vpts.tolist(),
+            "median_error_curve": np.median(step_err, axis=1).tolist(),
+            "sample_truth_xyz": truth[:, i_ref, :].tolist(),
+            "sample_pred_xyz": np.vstack(
+                [initial_state[i_ref][None, :], preds[:, i_ref, :]]).tolist(),
+        },
     )
 
 
