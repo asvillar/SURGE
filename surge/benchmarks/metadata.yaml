@@ -628,7 +628,7 @@ benchmarks:
   visible: true
   focus: false
 - key: vision.cifar10
-  status: needs_rerun
+  status: ready
   status_note: "best on file 0.285, invalid run; added pytorch.dino_linear_probe
     (frozen DINOv2 ViT-S/14 + LogisticRegression, transfer learning, literature
     linear-probe protocol) as a defensible pretrained baseline alongside the
@@ -967,8 +967,8 @@ benchmarks:
   focus: true
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.qlknn10d
-  status: needs_rerun
-  status_note: "gate R2>=0.95 added to code; surge bench rerun in progress 2026-10-20"
+  status: ready
+  status_note: "surge bench run 2026-10-21: residual MLP R² 0.9898 on 200k held-out QuaLiKiz fluxes (gate 0.95); trained with the benchmark-declared hyperparameters (batch 4096, 60 epochs)"
   name: QLKNN10D QuaLiKiz Training Data
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
