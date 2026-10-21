@@ -9,7 +9,8 @@ Everything on the page is generated from machine-readable sources:
 
 The page needs no server and no network: spider charts are inline SVG
 rendered with the SURGE matplotlib theme, styling is inline CSS on the
-dark palette, and the only JavaScript is a ~20-line table sorter.
+dark palette, and the JavaScript is a ~20-line table sorter plus the
+vanilla search/filter index (surge/report/index_section.py).
 
 Usage (from repo root):
     python -m surge.report.leaderboard \
@@ -354,20 +355,40 @@ _LABELS = {
 }
 
 
-def _fmt_cell(metric: str, agg: dict | None) -> str:
+def _fmt_value(metric: str, agg: dict | None) -> str:
+    """Plain metric text, no cell markup (shared by the table cell and the
+    index-table "best" column)."""
     if agg is None:
-        return "<td data-v=''>—</td>"
+        return "—"
     kind = ("runtime" if metric == "runtime_s"
             else "rmse" if _is_lower_better(metric) or "memory" in metric
             else "r2")
     txt = fmt_metric(agg["mean"], kind)
     if metric == "peak_memory_mb":
         txt = f"{agg['mean']:.0f} MB"
+    return txt
+
+
+def _fmt_cell(metric: str, agg: dict | None) -> str:
+    if agg is None:
+        return "<td data-v=''>—</td>"
+    txt = _fmt_value(metric, agg)
     if agg["std"] > 0:
         std = (fmt_metric(agg["std"], "runtime") if metric == "runtime_s"
                else f"{agg['std']:.3g}")
         txt += f" <span style='color:var(--muted)'>±{std}</span>"
     return f"<td data-v='{agg['mean']:.6g}'>{txt}</td>"
+
+
+def _gate_chip(agg: dict) -> str:
+    """PASS/FAIL/synthetic chip for one model aggregate (shared by the
+    per-benchmark table and the index-table "gate" column)."""
+    if agg.get("synthetic"):
+        return "<span class='chip syn'>synthetic</span>"
+    if agg["passed"] is None:
+        return "—"
+    return ("<span class='chip pass'>PASS</span>" if agg["passed"]
+            else "<span class='chip fail'>FAIL</span>")
 
 
 _STATUS_COLOR = {"ready": "good", "tutorial": "muted", "in_progress": "warn",
@@ -476,12 +497,7 @@ def _table(bench_results: dict[str, dict], pm: str | None, cols: list[str],
                   f"{bar}{html.escape(model)}</td>")]
         for c in cols:
             cells.append(_fmt_cell(c, r["metrics"].get(c)))
-        if r.get("synthetic"):
-            chip = "<span class='chip syn'>synthetic</span>"
-        else:
-            chip = ("<span class='chip pass'>PASS</span>" if r["passed"]
-                    else "<span class='chip fail'>FAIL</span>" if r["passed"] is not None
-                    else "—")
+        chip = _gate_chip(r)
         cells.append(f"<td data-v='{int(bool(r['passed']))}'>{chip}</td>")
         cells.append(f"<td data-v='{r['n_runs']}'>{r['n_runs']}</td>")
         rows.append(f"<tr class='{'best' if i == 0 else ''}'>{''.join(cells)}</tr>")
@@ -574,6 +590,7 @@ def _bench_card(key: str, meta: dict[str, dict],
     tier = info.get("tier")
     return f"""
 <section class="bench" id="{html.escape(key)}">
+  <a class="idx-back" href="#bench-index">&uarr; index</a>
   <h3>{html.escape(info.get('name', key))} {badges}
     <span class="pills">
       {f"<span class='pill tier'>tier {tier}</span>" if tier is not None else ""}
@@ -599,19 +616,30 @@ def _bench_card(key: str, meta: dict[str, dict],
 </section>"""
 
 
+def _category_of(key: str, meta: dict[str, dict]) -> str:
+    return meta.get(key, {}).get("capability") or key.split(".")[0].title()
+
+
 def _group(keys: list[str], meta: dict, results: dict) -> dict[str, list[str]]:
     cats: dict[str, list[str]] = defaultdict(list)
     for key in sorted(keys):
-        cap = meta.get(key, {}).get("capability") or key.split(".")[0].title()
-        cats[cap].append(key)
+        cats[_category_of(key, meta)].append(key)
     return cats
 
 
 def _category_blocks(cats: dict[str, list[str]], heads: dict, results: dict, meta: dict,
-                     mode: str, first: str | None = None) -> str:
-    order = sorted(cats, key=lambda c: (c != first, c))
+                     mode: str, first: str | None = None,
+                     order: list[str] | None = None) -> str:
+    """Render one ``<h2>`` + spider + cards block per category.
+
+    ``order`` overrides the default single-category pin (``first``) with an
+    explicit category sequence (categories not in ``cats`` are ignored) —
+    used by the full layout to put ready-containing categories first.
+    """
+    cat_order = ([c for c in order if c in cats] if order is not None
+                else sorted(cats, key=lambda c: (c != first, c)))
     out = []
-    for cap in order:
+    for cap in cat_order:
         keys = cats[cap]
         try:
             svg = spider_svg(cap, keys, heads, meta, mode=mode)
@@ -621,22 +649,36 @@ def _category_blocks(cats: dict[str, list[str]], heads: dict, results: dict, met
             _bench_card(k, meta, heads[k], preview=preview_svg(k, mode), history=results[k])
             for k in keys)
         out.append(f"""
+<section data-cat="{html.escape(cap)}">
 <h2 class="cat">{html.escape(cap)}</h2>
 <p class="cat-sub">{len(keys)} benchmark{'s' if len(keys) != 1 else ''}</p>
 <div class="catgrid">
   {f"<div class='spider'>{svg}</div>" if svg else ""}
   {cards}
-</div>""")
+</div>
+</section>""")
     return "".join(out)
 
 
 def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
                  video: Path | None = None, demo_runs: dict[str, str] | None = None,
                  anim_dir: Path | None = None, budget_mb: float = 12.0,
-                 metadata_path: Path | None = None, maintainer: bool = False) -> Path:
+                 metadata_path: Path | None = None, maintainer: bool = False,
+                 layout: str = "status") -> Path:
     """Build the single-file leaderboard. ``maintainer=True`` also prints the
     maintainer's focus notes (internal working notes) in the Focus section;
-    the default public page lists focus benchmarks by name only."""
+    the default public page lists focus benchmarks by name only.
+
+    ``layout``:
+      * ``"status"`` (default) — current behaviour: ready/tutorial sections
+        expanded, in-progress/needs_rerun/sanity collapsed under a
+        ``<details class='tail'>``.
+      * ``"full"`` — every visible benchmark expanded in its category
+        section (ready categories first), status still shown as a badge on
+        each card, nothing collapsed; for dense browsing.
+    """
+    if layout not in ("status", "full"):
+        raise ValueError(f"layout must be 'status' or 'full', got {layout!r}")
     from surge.report import demo
 
     meta = load_metadata(metadata_path)
@@ -667,23 +709,36 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
                    default="")[:10]
 
     p = PALETTES[mode]
-    css = _CSS_TEMPLATE.format(accent=p["series"][0], **p) + demo.CSS
+    from surge.report import index_section
+    css = _CSS_TEMPLATE.format(accent=p["series"][0], **p) + demo.CSS + index_section.CSS
+    index_rows = index_section.build_index_rows(results, heads, meta)
+    index_html = index_section.index_section_html(index_rows)
 
     ready_cats = _group(ready, meta, results)
     first = "Scientific Domain" if "Scientific Domain" in ready_cats else None
-    ready_html = _category_blocks(ready_cats, heads, results, meta, mode, first=first)
-    tut_html = ""
-    if tutorial:
-        tut_html = ("<h2 class='cat'>Tutorial / plumbing</h2>"
-                    "<p class='cat-sub'>Small public datasets that exercise the pipeline.</p>"
-                    + _category_blocks(_group(tutorial, meta, results), heads, results,
-                                       meta, mode))
-    tail_html = ""
-    if tail:
-        tail_html = (f"<details class='tail'><summary>In progress · needs rerun · sanity "
-                     f"checks ({len(tail)})</summary>"
-                     + _category_blocks(_group(tail, meta, results), heads, results,
-                                        meta, mode) + "</details>")
+    if layout == "full":
+        # Every visible benchmark expanded, grouped by category, ready
+        # categories first (status shown only as a per-card badge).
+        all_cats = _group(list(results), meta, results)
+        order = (sorted(ready_cats, key=lambda c: (c != first, c))
+                 + sorted(c for c in all_cats if c not in ready_cats))
+        ready_html = _category_blocks(all_cats, heads, results, meta, mode, order=order)
+        tut_html = ""
+        tail_html = ""
+    else:
+        ready_html = _category_blocks(ready_cats, heads, results, meta, mode, first=first)
+        tut_html = ""
+        if tutorial:
+            tut_html = ("<h2 class='cat'>Tutorial / plumbing</h2>"
+                        "<p class='cat-sub'>Small public datasets that exercise the pipeline.</p>"
+                        + _category_blocks(_group(tutorial, meta, results), heads, results,
+                                           meta, mode))
+        tail_html = ""
+        if tail:
+            tail_html = (f"<details class='tail'><summary>In progress · needs rerun · sanity "
+                         f"checks ({len(tail)})</summary>"
+                         + _category_blocks(_group(tail, meta, results), heads, results,
+                                            meta, mode) + "</details>")
 
     focus_keys = sorted(k for k in results if meta.get(k, {}).get("focus") is True)
     focus_html = ""
@@ -729,6 +784,7 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
 </div>
 <p class="tilenote">+{len(tutorial)} tutorial, +{len(tail)} in progress/rerun/sanity
  · {n_runs} newest-sweep results behind the tiles; synthetic fixtures excluded from pass counts.</p>
+{index_html}
 {ready_html}
 {tut_html}
 {tail_html}
@@ -768,12 +824,16 @@ def main() -> None:
     ap.add_argument("--anim-dir", default=None, help="pre-rendered *_<mode>.webm clips")
     ap.add_argument("--maintainer", action="store_true",
                     help="include the maintainer's focus notes (internal view)")
+    ap.add_argument("--layout", choices=("full", "status"), default="status",
+                    help="'full': every visible benchmark expanded by category "
+                         "(dense browsing); 'status' (default): ready/tutorial "
+                         "expanded, in-progress/rerun/sanity collapsed")
     args = ap.parse_args()
     demo_runs = dict(kv.split("=", 1) for kv in args.demo_run) or None
     out = build_report(Path(args.reports), Path(args.out), mode=args.mode,
                        video=Path(args.video) if args.video else None,
                        demo_runs=demo_runs, anim_dir=args.anim_dir,
-                       maintainer=args.maintainer)
+                       maintainer=args.maintainer, layout=args.layout)
     print(f"wrote {out}")
 
 

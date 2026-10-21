@@ -583,6 +583,22 @@ def _aggregate_seed_results(results: list[BenchmarkResult]) -> BenchmarkResult:
     )
 
 
+# Per-benchmark model defaults: hyperparameters a benchmark NEEDS to be
+# meaningful at its data scale (documented in the benchmark's status_note /
+# the reproduction study). Applied by `surge bench` when the user does not
+# override them; recorded in result.extra["model_defaults_applied"].
+BENCH_MODEL_DEFAULTS: dict[str, dict[str, dict]] = {
+    "plasma.qlknn10d": {
+        # examples/qlknn10d_study.py: 2.2M rows need large batches; registry
+        # defaults (200 epochs, batch 64) take days on CPU and were never the
+        # published protocol.
+        "pytorch.residual_mlp": {"hidden_layers": [512, 512, 256], "n_epochs": 60,
+                                  "batch_size": 4096, "patience": 15,
+                                  "patience_window": 5},
+    },
+}
+
+
 def _run_with_adapter(
     benchmark_key: str, adapter: Any, *, seed: int, input_features: str | None = None
 ) -> BenchmarkResult | None:
