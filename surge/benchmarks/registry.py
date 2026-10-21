@@ -701,11 +701,19 @@ def run_benchmark(key: str, **kwargs: Any) -> BenchmarkResult:
         from .leaderboard import _run_with_adapter
         from surge.model.registry import MODEL_REGISTRY
 
+        from .leaderboard import BENCH_MODEL_DEFAULTS
+
         model_key = kwargs.pop("model_key", "sklearn.ridge")
         seed = kwargs.pop("seed", 42)
+        model_kwargs = kwargs.pop("model_kwargs", None) or {}
         if model_key not in MODEL_REGISTRY:
             raise KeyError(f"Model {model_key!r} not registered.")
-        adapter = MODEL_REGISTRY.create(model_key)
+        # benchmark-declared hyperparameters (what the task NEEDS at its data
+        # scale); explicit model_kwargs always win
+        defaults = BENCH_MODEL_DEFAULTS.get(key, {}).get(model_key, {})
+        if defaults:
+            print(f"  [defaults] {key}: {defaults} (overridable via model_kwargs)")
+        adapter = MODEL_REGISTRY.create(model_key, **{**defaults, **model_kwargs})
         result = _run_with_adapter(key, adapter, seed=seed)
         if result is None:
             raise RuntimeError(f"Benchmark {key!r} with model {model_key!r} failed.")
