@@ -204,6 +204,8 @@ _TORCH_GROUPS = [
                                    ['ft_transformer_classifier'])]),
     ('.adapters.vit', [('ViTAdapter', 'pytorch.vit', ['vit'])]),
     ('.adapters.alexnet', [('AlexNetAdapter', 'pytorch.alexnet', ['alexnet'])]),
+    ('.adapters.dino_linear_probe', [('DINOLinearProbeAdapter', 'pytorch.dino_linear_probe',
+                                      ['dino_linear_probe', 'dino', 'dinov2'])]),
     ('.adapters.fno2d', [('FNO2dAdapter', 'pytorch.fno2d', ['fno2d'])]),
     ('.adapters.unet', [('UNetAdapter', 'pytorch.unet', ['unet'])]),
     ('.adapters.vae', [('VAEAdapter', 'pytorch.vae', ['vae'])]),

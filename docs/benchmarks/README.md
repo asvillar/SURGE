@@ -51,6 +51,7 @@ The on-file result is the best of each model's newest run on or after the benchm
 |---|---|---|---|---|---|---|---|---|
 | `plasma.constellaration_modb` | 2×64×32 → 64×32 | Cadena et al. (2025) arXiv:2506.19583; VMEC — Hirshman & Whitson (1983) Phys. Fluids 26, 3553 | no result on file | rel-L2 ≤ 0.05 | — | field surrogates; 500/26,897 equilibria cached | — | ✓ |
 | `plasma.constellaration_surfaces` | 2×64×32 → 2×16×64 | Cadena et al. (2025) arXiv:2506.19583; VMEC — Hirshman & Whitson (1983) Phys. Fluids 26, 3553 | no result on file | rel-L2 ≤ 0.02 | — | field surrogates; 500/26,897 equilibria cached | — | ✓ |
+| `sequence.lorenz63` | 3 → 3 (one step; scored as 10-λ rollout) | Lorenz (1963) J. Atmospheric Sciences | nrmse 0.011 ✗ (pytorch.residual_mlp, 2026-10-21) | VPT ≥ 2.0 λ | — | protocol upgraded to Lyapunov-time rollout. Sweep: residual MLP 0.91 λ, MLP 0.68, RF 0.61, ridge 0.20 — all below the 2 λ gate; capacity sweep shows bigger nets LOWER VPT (512-512-256: 0.36 λ) while improving one-step NRMSE, i.e. one-step accuracy is the wrong tuning target for chaotic rollouts. 50 λ probe: rollouts stay bounded on the attractor (0/30 diverge, 100% still lobe-switching, climate error 0.16) — the surrogate learns the climate, not the weather. Next: rollout-aware training (noise injection, multi-step loss) and HPO on VPT instead of NRMSE. | ✓ | ✓ |
 
 ## Needs rerun
 
@@ -62,19 +63,19 @@ The on-file result is the best of each model's newest run on or after the benchm
 | `plasma.constellaration` | 90 → 1 | Cadena et al. (2025) arXiv:2506.19583 — ConStellaration dataset | r2 0.899 ✓ (sklearn.mlp, 2026-05-23) | R² ≥ 0.85 | 0.982 R² [diff] | code gate fixed to 0.85 (was 0.50); rerun in progress 2026-10-20 | — | ✓ |
 | `plasma.constellaration_paper` | 90 → 12 | Cadena et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol | r2_mean 0.928 ✗ (pytorch.residual_mlp, 2026-05-23) | mean R² ≥ 0.85 | 0.99 R² (mean) [diff] | paper protocol, mean R² 0.929 vs paper 0.97 — parity check, honest fail | ✓ | ✓ |
 | `plasma.qlknn10d` | 9 → 1 | van de Plassche et al. (2020) Phys. Plasmas 27, 022310 — QLKNN10D, Zenodo 10.5281/zenodo.3497066 | no result on file | R² ≥ 0.95 | — | gate R2>=0.95 added to code; surge bench rerun in progress 2026-10-20 | ✓ | ✓ |
-| `vision.cifar10` | 32×32×3 → 10 | torchvision CIFAR-10; upstream dataset terms | accuracy 0.285 ✗ (pytorch.resnet20, 2026-06-16) | Acc ≥ 0.91 | 0.9125 Accuracy [same] | best on file 0.285, invalid run | ✓ | ✓ |
+| `vision.cifar10` | 32×32×3 → 10 | torchvision CIFAR-10; upstream dataset terms | accuracy 0.285 ✗ (pytorch.resnet20, 2026-06-16) | Acc ≥ 0.91 | 0.995 Accuracy [diff] | best on file 0.285, invalid run; added pytorch.dino_linear_probe (frozen DINOv2 ViT-S/14 + LogisticRegression, transfer learning, literature linear-probe protocol) as a defensible pretrained baseline alongside the from-scratch pytorch.resnet20 gate — rerun in progress, see audit/reruns/cifar10_dino_linear_probe.log | ✓ | ✓ |
 
 ## Tutorial / plumbing
 
 | benchmark | task shape | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |
 |---|---|---|---|---|---|---|---|---|
-| `classification.flow_regime` | 3 → 4 | SURGE inline fixture — Mach / Re / AoA regime labeling | accuracy 0.944 ✓ (sklearn.random_forest_classifier, 2026-10-20) | Acc ≥ 0.85 | — | Small classification set (n < 1,000 effective); plumbing check | ✓ | — |
+| `classification.flow_regime` | 3 → 4 | SURGE inline fixture — Mach / Re / AoA regime labeling | accuracy 0.944 ✓ (sklearn.random_forest_classifier, 2026-10-21) | Acc ≥ 0.85 | — | Small classification set (n < 1,000 effective); plumbing check | ✓ | — |
 | `multioutput.scm20d` | 61 → 20 | Spyromitros-Xioufis et al. (2016) Machine Learning | r2 0.879 ✓ (pytorch.gru, 2026-05-18) | avg R² ≥ 0.60 | — | Small multi-output set; plumbing / teaching benchmark | ✓ | — |
 | `plasma.qlknn_transport` | 10 → 1 | van de Plassche et al. (2020) Phys. Plasmas — QuaLiKiz surrogate | r2 0.950 ✓ (pytorch.residual_mlp, 2026-05-22) | R² ≥ 0.90 | — | ground truth is the QLKNN_7_11 network itself | ✓ | ✓ |
 | `tabular.breast_cancer` | 30 → 2 | Mangasarian & Wolberg (1990) University of Wisconsin | accuracy 0.956 ✓ (pytorch.mlp_classifier, 2026-05-18) | Acc ≥ 0.95 | 0.99 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | ✓ |
 | `tabular.diabetes` | 10 → 1 | Efron, Hastie, Johnstone & Tibshirani (2004) Annals of Statistics | r2 0.535 ✓ (pytorch.mlp, 2026-05-18) | R² ≥ 0.40 | 0.5 R² [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
 | `tabular.digits` | 64 → 10 | Alpaydin & Kaynak (1998) UCI | accuracy 0.983 ✓ (pytorch.mlp_classifier, 2026-05-18) | Acc ≥ 0.97 | 0.99 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
-| `tabular.iris` | 4 → 3 | Fisher (1936) Annals of Eugenics | accuracy 0.947 ✓ (sklearn.logistic_regression, 2026-10-20) | Acc ≥ 0.95 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | ✓ |
+| `tabular.iris` | 4 → 3 | Fisher (1936) Annals of Eugenics | accuracy 0.947 ✓ (sklearn.logistic_regression, 2026-10-21) | Acc ≥ 0.95 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | ✓ |
 | `tabular.wine` | 13 → 3 | Aeberhard, Coomans & De Vel (1992) UCI | accuracy 1.000 ✓ (sklearn.logistic_regression, 2026-05-18) | Acc ≥ 0.90 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
 | `tabular.yacht_dynamics` | 6 → 1 | Gerritsma, Onnink & Versluis (1981) CFD — SHIP DESIGN | r2 1.000 ✓ (gpflow.gpr, 2026-05-23) | R² ≥ 0.95 | 0.99 R² [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
 | `vision.mnist` | 28×28 → 10 | LeCun, Bottou, Bengio & Haffner (1998) Proc. IEEE | accuracy 0.996 ✓ (pytorch.resnet20, 2026-05-26) | Acc ≥ 0.99 | 0.998 Accuracy [same] | MNIST is a plumbing check, not a surrogate result | ✓ | — |
@@ -84,4 +85,3 @@ The on-file result is the best of each model's newest run on or after the benchm
 | benchmark | task shape | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |
 |---|---|---|---|---|---|---|---|---|
 | `pde.burgers_1d` | 64 → 64 (field) | Li et al. (2021) ICLR — FNO paper; solver: Burgers (1948) | r2 1.000 ✓ (pytorch.fno1d, 2026-05-22) | NRMSE ≤ 0.10 | 0.0068 rel-L2 [diff] | R² 1.000 at 64 points — too easy as posed vs FNO paper's 1024 | ✓ | ✓ |
-| `sequence.lorenz63` | 3×20 → 3×20 (rollout) | Lorenz (1963) J. Atmospheric Sciences | nrmse 0.026 ✓ (sklearn.random_forest, 2026-10-20) | NRMSE ≤ 0.10 | — | fixed-window NRMSE, not Lyapunov-time rollout | ✓ | ✓ |

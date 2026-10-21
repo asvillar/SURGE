@@ -511,7 +511,13 @@ benchmarks:
 - key: sequence.lorenz63
   definition_date: 2026-10-21
   status: in_progress
-  status_note: "protocol upgraded to Lyapunov-time rollout; sweep underway"
+  status_note: "protocol upgraded to Lyapunov-time rollout. Sweep: residual MLP 0.91 λ,
+    MLP 0.68, RF 0.61, ridge 0.20 — all below the 2 λ gate; capacity sweep shows bigger
+    nets LOWER VPT (512-512-256: 0.36 λ) while improving one-step NRMSE, i.e. one-step
+    accuracy is the wrong tuning target for chaotic rollouts. 50 λ probe: rollouts stay
+    bounded on the attractor (0/30 diverge, 100% still lobe-switching, climate error
+    0.16) — the surrogate learns the climate, not the weather. Next: rollout-aware
+    training (noise injection, multi-step loss) and HPO on VPT instead of NRMSE."
   name: Lorenz-63 Chaotic Forecasting
   capability: Time Series / Forecasting
   tier: 0
@@ -602,7 +608,11 @@ benchmarks:
   focus: false
 - key: vision.cifar10
   status: needs_rerun
-  status_note: "best on file 0.285, invalid run"
+  status_note: "best on file 0.285, invalid run; added pytorch.dino_linear_probe
+    (frozen DINOv2 ViT-S/14 + LogisticRegression, transfer learning, literature
+    linear-probe protocol) as a defensible pretrained baseline alongside the
+    from-scratch pytorch.resnet20 gate — rerun in progress, see
+    audit/reruns/cifar10_dino_linear_probe.log"
   name: CIFAR-10 Image Classification
   capability: Vision
   tier: 2
@@ -613,18 +623,34 @@ benchmarks:
   primary_metric: Accuracy
   threshold: Acc ≥ 0.91
   threshold_note: Prior ResNet-20 run (28% acc) was invalid — train/predict normalization
-    mismatch + no val split. Fixed; re-run needed for official metrics.
+    mismatch + no val split. Fixed; re-run needed for official metrics. This
+    0.91 gate targets the from-scratch (no pretraining) regime — ResNet-20
+    trained only on CIFAR-10 itself, ~91.25% per He et al. 2016. It is not
+    the bar for pretrained/transfer-learning models such as
+    pytorch.dino_linear_probe, which should be judged against the DINOv2
+    linear-probe and literature-SOTA numbers in `sota` below instead.
   description: Classify 32×32×3 natural images into 10 object categories.
   task_explainer: "A 32x32 RGB natural image is mapped to one of ten object classes (airplane, car, bird, ...). It stresses the convolutional backends on real image statistics. The metric is top-1 accuracy on the standard 10k test images."
   published_in: "Krizhevsky, Learning Multiple Layers of Features from Tiny Images (2009); University of Toronto CIFAR-10"
   sota:
-    value: 0.9125
+    value: 0.995
     metric: "Accuracy"
-    model: "ResNet-20"
-    source: "He et al., CVPR 2016 (Deep Residual Learning)"
-    url: "https://arxiv.org/abs/1512.03385"
-    protocol_match: "same"
-    note: "ResNet-20 is the small-model reference; 2024-2026 large models exceed 99%. No valid SURGE run exists yet"
+    model: "ViT-H/14 (JFT-300M pretrained, fine-tuned)"
+    source: "Dosovitskiy et al., ICLR 2021 — An Image is Worth 16x16 Words, Table 2"
+    url: "https://arxiv.org/abs/2010.11929"
+    protocol_match: "different"
+    note: "Literature SOTA with large-scale (JFT-300M) pretraining + fine-tuning;
+      BiT-L (ResNet152x4) reaches 99.37% in the same table. DINOv2 ViT-S/14
+      frozen-backbone LINEAR PROBE (no fine-tuning) reaches 97.7% (Oquab et
+      al. 2023, DINOv2: Learning Robust Visual Features without Supervision,
+      arXiv:2304.07193, Table 8, 'C10' column of the fine-grained linear-eval
+      suite; larger DINOv2 backbones: ViT-B/14 98.7%, ViT-L/14 99.3%, ViT-g/14
+      99.5%) — SURGE's pytorch.dino_linear_probe adapter reproduces exactly
+      this linear-probe protocol with ViT-S/14. From-scratch (no pretraining)
+      ResNet-20 reaches ~91.25% (He et al. 2016, CVPR, Deep Residual Learning,
+      Table 6, https://arxiv.org/abs/1512.03385) — that is the regime SURGE's
+      Acc >= 0.91 gate targets and is not comparable to the pretrained numbers
+      above."
   inputs:
   - {name: "image", desc: "32x32x3 RGB pixels (0-255)"}
   outputs:
