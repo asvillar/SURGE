@@ -281,6 +281,7 @@ h2.cat {{ font-size: 17px; margin: 42px 0 4px; }}
 .pill {{ font-size: 10.5px; padding: 1.5px 8px; border-radius: 99px;
   border: 1px solid var(--line); color: var(--ink2); }}
 .pill.tier {{ color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }}
+.pill.discipline {{ color: var(--ink2); border-style: dashed; }}
 .bench-top {{ display: flex; gap: 22px; align-items: flex-start;
   flex-wrap: wrap; }}
 .bench-info {{ flex: 1 1 320px; }}
@@ -588,12 +589,14 @@ def _bench_card(key: str, meta: dict[str, dict],
                 if rec else "")
 
     tier = info.get("tier")
+    discipline = _discipline_of(key, meta)
     return f"""
 <section class="bench" id="{html.escape(key)}">
   <a class="idx-back" href="#bench-index">&uarr; index</a>
   <h3>{html.escape(info.get('name', key))} {badges}
     <span class="pills">
       {f"<span class='pill tier'>tier {tier}</span>" if tier is not None else ""}
+      <span class="pill discipline">{html.escape(discipline)}</span>
       <span class="pill">{html.escape(info.get('shape', ''))}</span>
       <span class="pill">n = {html.escape(str(info.get('n', '?')))}</span>
       {f"<span class='pill'>{html.escape(info.get('threshold', ''))}</span>" if info.get('threshold') else ""}
@@ -618,6 +621,10 @@ def _bench_card(key: str, meta: dict[str, dict],
 
 def _category_of(key: str, meta: dict[str, dict]) -> str:
     return meta.get(key, {}).get("capability") or key.split(".")[0].title()
+
+
+def _discipline_of(key: str, meta: dict[str, dict]) -> str:
+    return meta.get(key, {}).get("discipline") or "Uncategorized"
 
 
 def _group(keys: list[str], meta: dict, results: dict) -> dict[str, list[str]]:

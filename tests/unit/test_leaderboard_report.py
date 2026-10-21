@@ -314,6 +314,40 @@ def test_index_table_excludes_maintainer_hidden_benchmark(tmp_path: Path):
     assert "<tr data-key='tabular.california_housing'" in text
 
 
+DISCIPLINES = {
+    "Fusion & Plasma Physics", "Nonlinear Dynamics & Chaos",
+    "Fluid Dynamics & PDE Operators", "Materials Science", "Engineering",
+    "Environmental Sciences", "Biology & Medicine", "Chemistry",
+    "Operations Research", "Computer Vision",
+}
+
+
+def test_metadata_discipline_schema():
+    meta = load_metadata()
+    assert len(meta) >= 28
+    for key, m in meta.items():
+        assert m.get("discipline") in DISCIPLINES, key
+
+
+def test_index_table_has_discipline_column_and_chips(tmp_path: Path):
+    root = _fake_tree(tmp_path)
+    text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
+                        demo_runs={}).read_text()
+    assert "<th>discipline</th>" in text
+    assert "data-discipline='Environmental Sciences'" in text
+    assert "data-kind='discipline'" in text
+    assert "Fluid Dynamics &amp; PDE Operators" in text  # pde.burgers_1d row/chip
+
+
+def test_bench_card_shows_discipline_badge(tmp_path: Path):
+    root = _fake_tree(tmp_path)
+    text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
+                        demo_runs={}).read_text()
+    card = text[text.index('id="tabular.california_housing"'):]
+    card = card[:card.index("</section>")]
+    assert '<span class="pill discipline">Environmental Sciences</span>' in card
+
+
 def test_index_section_has_search_filter_and_count_controls(tmp_path: Path):
     root = _fake_tree(tmp_path)
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",

@@ -10,6 +10,7 @@ benchmarks:
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: California Housing
   capability: Scalar Regression
+  discipline: Environmental Sciences
   tier: 1
   citation: Pace & Barry (1997) Statistics & Probability Letters
   url: https://doi.org/10.1016/S0167-7160(97)00010-0
@@ -48,6 +49,7 @@ benchmarks:
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: Concrete Compressive Strength
   capability: Scalar Regression
+  discipline: Materials Science
   tier: 1
   citation: Yeh (1998) Cement and Concrete Research
   url: https://doi.org/10.1016/S0008-8846(98)00165-3
@@ -85,6 +87,7 @@ benchmarks:
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: Building Energy Efficiency
   capability: Scalar Regression
+  discipline: Engineering
   tier: 1
   citation: Tsanas & Xifara (2012) Energy & Buildings
   url: https://doi.org/10.1016/j.enbuild.2012.03.003
@@ -122,6 +125,7 @@ benchmarks:
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: NASA Airfoil Self-Noise
   capability: Scalar Regression
+  discipline: Engineering
   tier: 1
   citation: Brooks, Pope & Marcolini (1989) NASA TM 100514
   url: https://archive.ics.uci.edu/dataset/291/airfoil+self+noise
@@ -157,6 +161,7 @@ benchmarks:
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Yacht Hydrodynamics
   capability: Scalar Regression
+  discipline: Engineering
   tier: 1
   citation: Gerritsma, Onnink & Versluis (1981) CFD — SHIP DESIGN
   url: https://archive.ics.uci.edu/dataset/243/yacht+hydrodynamics
@@ -192,6 +197,7 @@ benchmarks:
   status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
   name: Superconductor Critical Temperature
   capability: Scalar Regression
+  discipline: Materials Science
   tier: 1
   citation: Hamidieh (2018) Computational Materials Science
   url: https://doi.org/10.1016/j.commatsci.2018.07.052
@@ -225,6 +231,7 @@ benchmarks:
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Diabetes Progression
   capability: Scalar Regression
+  discipline: Biology & Medicine
   tier: 1
   citation: Efron, Hastie, Johnstone & Tibshirani (2004) Annals of Statistics
   url: https://doi.org/10.1214/009053604000000067
@@ -265,6 +272,7 @@ benchmarks:
   status_note: "Small multi-output set; plumbing / teaching benchmark"
   name: SCM20d Supply Chain (20 targets)
   capability: Multi-output Regression
+  discipline: Operations Research
   tier: 1
   citation: Spyromitros-Xioufis et al. (2016) Machine Learning
   url: https://doi.org/10.1007/s10994-016-5546-z
@@ -295,6 +303,7 @@ benchmarks:
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Wisconsin Breast Cancer (WDBC)
   capability: Tabular Classification
+  discipline: Biology & Medicine
   tier: 1
   citation: Mangasarian & Wolberg (1990) University of Wisconsin
   url: https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic
@@ -325,6 +334,7 @@ benchmarks:
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Optical Recognition of Handwritten Digits
   capability: Tabular Classification
+  discipline: Computer Vision
   tier: 1
   citation: Alpaydin & Kaynak (1998) UCI
   url: https://archive.ics.uci.edu/dataset/80/optical+recognition+of+handwritten+digits
@@ -355,6 +365,7 @@ benchmarks:
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: Iris (3-class)
   capability: Tabular Classification
+  discipline: Biology & Medicine
   tier: 1
   citation: Fisher (1936) Annals of Eugenics
   url: https://doi.org/10.1111/j.1469-1809.1936.tb02137.x
@@ -388,6 +399,7 @@ benchmarks:
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
   name: UCI Wine (3-class)
   capability: Tabular Classification
+  discipline: Chemistry
   tier: 1
   citation: Aeberhard, Coomans & De Vel (1992) UCI
   url: https://archive.ics.uci.edu/dataset/109/wine
@@ -418,6 +430,7 @@ benchmarks:
   status_note: "run 2026-10-20 gradient boosting acc 0.760 FAIL on 20k subsample; full 581k not yet tried"
   name: Forest Covertype (7-class)
   capability: Scientific Classification
+  discipline: Environmental Sciences
   tier: 1
   citation: Blackard & Dean (1999) Computers & Electronics in Agriculture
   url: https://archive.ics.uci.edu/dataset/31/covertype
@@ -447,9 +460,13 @@ benchmarks:
   focus: true
 - key: classification.plasma_stability
   status: ready
-  status_note: "run 2026-10-20 sklearn.gradient_boosting_classifier acc 0.936 (PASS)"
+  status_note: "run 2026-10-20 sklearn.gradient_boosting_classifier acc 0.936 (PASS). This
+    is plainly the UCI electrical-grid-stability simulated dataset, not real fusion plasma
+    data; it is used here only as a stand-in classification proxy for plasma-control-style
+    stability decisions."
   name: Electrical Grid Stability (plasma proxy)
   capability: Scientific Classification
+  discipline: Engineering
   tier: 2
   citation: Arzamasov, Bohm & Jochem (2018) IEEE PMAPS
   url: https://archive.ics.uci.edu/dataset/471/electrical+grid+stability+simulated+data
@@ -482,6 +499,7 @@ benchmarks:
   status_note: "Small classification set (n < 1,000 effective); plumbing check"
   name: CFD Flow Regime (4-class)
   capability: Scientific Classification
+  discipline: Fluid Dynamics & PDE Operators
   tier: 0
   citation: SURGE inline fixture — Mach / Re / AoA regime labeling
   url: ''
@@ -520,6 +538,7 @@ benchmarks:
     training (noise injection, multi-step loss) and HPO on VPT instead of NRMSE."
   name: Lorenz-63 Chaotic Forecasting
   capability: Time Series / Forecasting
+  discipline: Nonlinear Dynamics & Chaos
   tier: 0
   citation: Lorenz (1963) J. Atmospheric Sciences
   url: https://doi.org/10.1175/1520-0469(1963)020<0130:DNF>2.0.CO;2
@@ -551,6 +570,7 @@ benchmarks:
   status_note: "R² 1.000 at 64 points — too easy as posed vs FNO paper's 1024"
   name: Viscous Burgers 1D (Inline FD Solver)
   capability: 1D PDE Operator
+  discipline: Fluid Dynamics & PDE Operators
   tier: 1
   citation: 'Li et al. (2021) ICLR — FNO paper; solver: Burgers (1948)'
   url: https://arxiv.org/abs/2010.08895
@@ -581,6 +601,7 @@ benchmarks:
   status_note: "MNIST is a plumbing check, not a surrogate result"
   name: MNIST Handwritten Digits
   capability: Vision
+  discipline: Computer Vision
   tier: 2
   citation: LeCun, Bottou, Bengio & Haffner (1998) Proc. IEEE
   url: http://yann.lecun.com/exdb/mnist/
@@ -615,6 +636,7 @@ benchmarks:
     audit/reruns/cifar10_dino_linear_probe.log"
   name: CIFAR-10 Image Classification
   capability: Vision
+  discipline: Computer Vision
   tier: 2
   citation: Krizhevsky (2009) — Learning Multiple Layers of Features from Tiny Images
   url: https://www.cs.toronto.edu/~kriz/cifar.html
@@ -663,6 +685,7 @@ benchmarks:
   status_note: "on-file result is the synthetic fallback fixture"
   name: M3DC1 Tokamak Equilibrium Surrogate
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: M3DC1 Group — NSTX-U experimental data, PPPL
   url: https://m3dc1.pppl.gov
@@ -693,6 +716,7 @@ benchmarks:
   status_note: "accuracy on resampled data; field convention is ROC/FPR"
   name: C-Mod Greenwald Density Limit
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: Greenwald et al. (2002) Plasma Phys. Control. Fusion
   url: https://doi.org/10.1088/0741-3335/44/8/325
@@ -724,6 +748,7 @@ benchmarks:
   status_note: "code gate fixed to 0.85 (was 0.50); rerun in progress 2026-10-20"
   name: ConStellaration Stellarator Surrogate
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: Cadena et al. (2025) arXiv:2506.19583 — ConStellaration dataset
   url: https://arxiv.org/abs/2506.19583
@@ -756,6 +781,7 @@ benchmarks:
   status_note: "paper protocol, mean R² 0.929 vs paper 0.97 — parity check, honest fail"
   name: ConStellaration Multi-output (Paper Benchmark)
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: Cadena et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol
   url: https://arxiv.org/abs/2506.19583
@@ -789,6 +815,7 @@ benchmarks:
   status_note: "90→8 equilibrium metrics; run 2026-09-25 mean R² 0.916, QI 0.935"
   name: ConStellaration Joint Multi-output
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: Cadena et al. (2025) arXiv:2506.19583 — single 90→8 surrogate
   url: https://arxiv.org/abs/2506.19583
@@ -858,6 +885,7 @@ benchmarks:
   status_note: "field surrogates; 500/26,897 equilibria cached"
   name: ConStellaration |B| Field Surrogate
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: Cadena et al. (2025) arXiv:2506.19583; VMEC — Hirshman & Whitson (1983) Phys.
     Fluids 26, 3553
@@ -901,6 +929,7 @@ benchmarks:
   status_note: "field surrogates; 500/26,897 equilibria cached"
   name: ConStellaration Flux-Surface Field Surrogate
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: Cadena et al. (2025) arXiv:2506.19583; VMEC — Hirshman & Whitson (1983) Phys.
     Fluids 26, 3553
@@ -942,6 +971,7 @@ benchmarks:
   status_note: "gate R2>=0.95 added to code; surge bench rerun in progress 2026-10-20"
   name: QLKNN10D QuaLiKiz Training Data
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: van de Plassche et al. (2020) Phys. Plasmas 27, 022310 — QLKNN10D, Zenodo 10.5281/zenodo.3497066
   url: https://zenodo.org/records/3497066
@@ -981,6 +1011,7 @@ benchmarks:
   status_note: "ground truth is the QLKNN_7_11 network itself"
   name: QLKNN Turbulent Transport Coefficient
   capability: Scientific Domain
+  discipline: Fusion & Plasma Physics
   tier: 2
   citation: van de Plassche et al. (2020) Phys. Plasmas — QuaLiKiz surrogate
   url: https://doi.org/10.1063/1.5134126
