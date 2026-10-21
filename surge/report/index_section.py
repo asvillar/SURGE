@@ -19,8 +19,8 @@ def build_index_rows(results: dict[str, dict], heads: dict[str, dict],
     # Lazy import: leaderboard imports this module, so importing leaderboard
     # at module scope here would be circular.
     from surge.report.leaderboard import (
-        _category_of, _fmt_value, _gate_chip, _status_of, primary_metric_key,
-        rank_models,
+        _category_of, _discipline_of, _fmt_value, _gate_chip, _status_of,
+        primary_metric_key, rank_models,
     )
 
     rows = []
@@ -28,6 +28,7 @@ def build_index_rows(results: dict[str, dict], heads: dict[str, dict],
         info = meta.get(key, {})
         bench_heads = heads.get(key, {})
         cat = _category_of(key, meta)
+        discipline = _discipline_of(key, meta)
         status = _status_of(info)
         pm = primary_metric_key(bench_heads)
         ranked = rank_models(bench_heads, pm) if pm else sorted(bench_heads)
@@ -38,11 +39,13 @@ def build_index_rows(results: dict[str, dict], heads: dict[str, dict],
         gate_html = _gate_chip(bench_heads[best_model]) if best_model else "—"
         model_keys = sorted(bench_heads)
         haystack = " ".join([
-            info.get("name", key), key, cat, str(info.get("task_explainer") or ""),
+            info.get("name", key), key, cat, discipline,
+            str(info.get("task_explainer") or ""),
             " ".join(model_keys),
         ]).lower()
         rows.append({
             "key": key, "name": info.get("name", key), "category": cat,
+            "discipline": discipline,
             "status": status, "tier": info.get("tier"), "shape": info.get("shape", ""),
             "focus": bool(info.get("focus") is True), "best_model": best_model,
             "value_text": value_text, "gate_html": gate_html, "haystack": haystack,
@@ -55,12 +58,16 @@ _CSS = """
 .idx-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 8px; }
 #idx-search { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
   color: var(--ink); padding: 7px 12px; font-size: 13px; min-width: 240px; }
-.idx-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.idx-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.idx-chiprow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.idx-chiprow-label { font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .04em; flex: 0 0 auto; min-width: 62px; }
 .chip-toggle { font-size: 11px; padding: 3px 10px; border-radius: 99px; cursor: pointer;
   background: transparent; border: 1px solid var(--line); color: var(--muted); }
 .chip-toggle.active { color: var(--accent); border-color: var(--accent); }
 .idx-follow { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
 .idx-count { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
+.idx-table-wrap { overflow-x: auto; }
 .idx-table td, .idx-table th { white-space: nowrap; }
 .idx-star { color: var(--warn); font-size: 11px; }
 .idx-link { color: var(--ink); text-decoration: none; }
@@ -82,7 +89,7 @@ _JS = """
   const searchEl = document.getElementById("idx-search");
   const followEl = document.getElementById("idx-follow");
   const countEl = document.getElementById("idx-count");
-  const selected = { status: new Set(), cat: new Set() };
+  const selected = { status: new Set(), cat: new Set(), discipline: new Set() };
   document.querySelectorAll(".chip-toggle").forEach(btn => {
     btn.addEventListener("click", () => {
       const set = selected[btn.dataset.kind];
@@ -100,7 +107,8 @@ _JS = """
       const key = tr.dataset.key, r = idx[key] || {};
       const ok = (!q || (r.haystack || "").includes(q))
         && (selected.status.size === 0 || selected.status.has(tr.dataset.status))
-        && (selected.cat.size === 0 || selected.cat.has(tr.dataset.cat));
+        && (selected.cat.size === 0 || selected.cat.has(tr.dataset.cat))
+        && (selected.discipline.size === 0 || selected.discipline.has(tr.dataset.discipline));
       tr.style.display = ok ? "" : "none";
       if (ok) shown++;
       catVisible[tr.dataset.cat] = catVisible[tr.dataset.cat] || ok;
@@ -139,6 +147,7 @@ def index_section_html(rows: list[dict]) -> str:
 
     statuses = sorted({r["status"] for r in rows})
     cats = sorted({r["category"] for r in rows})
+    disciplines = sorted({r["discipline"] for r in rows})
 
     def row_html(r: dict) -> str:
         star = " <span class='idx-star' title='focus'>&#9733;</span>" if r["focus"] else ""
@@ -147,12 +156,14 @@ def index_section_html(rows: list[dict]) -> str:
         status_badge = (f"<span class='badge {_STATUS_COLOR.get(r['status'], 'muted')}'>"
                         f"{html.escape(r['status'].replace('_', ' '))}</span>")
         return (f"<tr data-key='{html.escape(r['key'])}' data-status='{html.escape(r['status'])}' "
-                f"data-cat='{html.escape(r['category'])}'>"
+                f"data-cat='{html.escape(r['category'])}' "
+                f"data-discipline='{html.escape(r['discipline'])}'>"
                 f"<td class='model' data-v='{html.escape(r['name'])}'>"
                 f"<a href='#{html.escape(r['key'])}' class='idx-link'>{html.escape(r['name'])}</a>"
                 f"{star}</td>"
                 f"<td><code>{html.escape(r['key'])}</code></td>"
                 f"<td data-v='{html.escape(r['category'])}'>{html.escape(r['category'])}</td>"
+                f"<td data-v='{html.escape(r['discipline'])}'>{html.escape(r['discipline'])}</td>"
                 f"<td data-v='{html.escape(r['status'])}'>{status_badge}</td>"
                 f"<td>{tier}</td>"
                 f"<td>{html.escape(r.get('shape') or '—')}</td>"
@@ -166,6 +177,9 @@ def index_section_html(rows: list[dict]) -> str:
     cat_chips = "".join(
         f"<button type='button' class='chip-toggle' data-kind='cat' data-val='{html.escape(c)}'>"
         f"{html.escape(c)}</button>" for c in cats)
+    discipline_chips = "".join(
+        f"<button type='button' class='chip-toggle' data-kind='discipline' data-val='{html.escape(d)}'>"
+        f"{html.escape(d)}</button>" for d in disciplines)
     data_json = json.dumps([
         {"key": r["key"], "haystack": r["haystack"]} for r in rows
     ])
@@ -176,16 +190,19 @@ def index_section_html(rows: list[dict]) -> str:
   <p class="cat-sub">search, filter and jump to any benchmark card</p>
   <div class="idx-controls">
     <input id="idx-search" type="search" placeholder="Search name, key, category, model…" autocomplete="off">
-    <div class="idx-chips">{status_chips}</div>
-    <div class="idx-chips">{cat_chips}</div>
     <label class="idx-follow"><input type="checkbox" id="idx-follow" checked> cards follow table</label>
   </div>
+  <div class="idx-chiprow"><span class="idx-chiprow-label">status</span><div class="idx-chips">{status_chips}</div></div>
+  <div class="idx-chiprow"><span class="idx-chiprow-label">category</span><div class="idx-chips">{cat_chips}</div></div>
+  <div class="idx-chiprow"><span class="idx-chiprow-label">discipline</span><div class="idx-chips">{discipline_chips}</div></div>
   <p class="idx-count" id="idx-count"></p>
+  <div class="idx-table-wrap">
   <table class="sortable idx-table" id="idx-table">
-    <thead><tr><th>name</th><th>key</th><th>category</th><th>status</th><th>tier</th>
+    <thead><tr><th>name</th><th>key</th><th>category</th><th>discipline</th><th>status</th><th>tier</th>
       <th>shape</th><th>best</th></tr></thead>
     <tbody>{body}</tbody>
   </table>
+  </div>
 </section>
 <script>const BENCH_INDEX = {data_json};</script>
 <script>{_JS}</script>

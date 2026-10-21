@@ -99,3 +99,26 @@ def test_status_ledger_focus_column_and_section(tmp_path):
     assert "## Focus" in md and "- `tabular.california_housing`: key demo" in md
     row = next(ln for ln in md.splitlines() if ln.startswith("| `tabular.california_housing`"))
     assert row.endswith("| ✓ | ✓ |")
+
+
+DISCIPLINES = {
+    "Fusion & Plasma Physics", "Nonlinear Dynamics & Chaos",
+    "Fluid Dynamics & PDE Operators", "Materials Science", "Engineering",
+    "Environmental Sciences", "Biology & Medicine", "Chemistry",
+    "Operations Research", "Computer Vision",
+}
+
+
+def test_metadata_discipline_schema():
+    meta = load_metadata()
+    assert len(meta) >= 28
+    for key, m in meta.items():
+        assert m.get("discipline") in DISCIPLINES, key
+
+
+def test_status_ledger_has_discipline_column(tmp_path):
+    md = render_status_md(tmp_path)
+    assert "| discipline |" in md
+    row = next(ln for ln in md.splitlines()
+               if ln.startswith("| `tabular.california_housing`"))
+    assert "| Environmental Sciences |" in row

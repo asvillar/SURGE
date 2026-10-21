@@ -232,11 +232,12 @@ def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> st
         if not keys:
             lines.append("_None._")
             continue
-        lines += ["| benchmark | task shape | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |",
-                  "|---|---|---|---|---|---|---|---|---|"]
+        lines += ["| benchmark | task shape | discipline | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
         for k in keys:
             m, r = meta[k], results.get(k)
-            row = [f"`{k}`", m.get("shape", ""), _source(m, r), _fmt_result(r),
+            row = [f"`{k}`", m.get("shape", ""), m.get("discipline", "—"),
+                   _source(m, r), _fmt_result(r),
                    m.get("threshold", ""), _sota_cell(m), m.get("status_note", ""),
                    "✓" if is_visible(m) else "—", "✓" if is_focus(m) else "—"]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")
