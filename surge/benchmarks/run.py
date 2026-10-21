@@ -756,7 +756,12 @@ def main(argv: list[str] | None = None) -> int:
         if (_monitor_kwargs or args.input_features) and args.model:
             from .leaderboard import _run_with_adapter
             from surge.model.registry import MODEL_REGISTRY
-            adapter = MODEL_REGISTRY.create(args.model, **_monitor_kwargs)
+            from surge.benchmarks.leaderboard import BENCH_MODEL_DEFAULTS
+            _bench_defaults = BENCH_MODEL_DEFAULTS.get(single_bm_key, {}).get(args.model, {})
+            if _bench_defaults:
+                print(f"  [defaults] {single_bm_key}: applying benchmark model defaults "
+                      f"{_bench_defaults} (override by key=value args)")
+            adapter = MODEL_REGISTRY.create(args.model, **{**_bench_defaults, **_monitor_kwargs})
             result = _run_with_adapter(
                 single_bm_key, adapter, seed=args.seed, input_features=args.input_features
             )

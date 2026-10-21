@@ -38,7 +38,7 @@ The on-file result is the best of each model's newest run on or after the benchm
 | benchmark | task shape | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |
 |---|---|---|---|---|---|---|---|---|
 | `classification.plasma_stability` | 12 → 2 | Arzamasov, Bohm & Jochem (2018) IEEE PMAPS | accuracy 0.936 ✓ (sklearn.gradient_boosting_classifier, 2026-10-19) | Acc ≥ 0.92 | 0.978 Accuracy [?] | run 2026-10-20 sklearn.gradient_boosting_classifier acc 0.936 (PASS) | — | ✓ |
-| `plasma.constellaration_multioutput` | 90 → 8 | proxima-fusion/constellaration on HuggingFace; upstream dataset terms | r2_equilibrium_mean 0.916 ✓ (pytorch.residual_mlp, 2026-09-25) | equilibrium mean R² ≥ 0.85 | 0.99 R² (mean) [diff] | 90→8 equilibrium metrics; run 2026-09-25 mean R² 0.916, QI 0.935 | ✓ | ✓ |
+| `plasma.constellaration_multioutput` | 90 → 8 | proxima-fusion/constellaration on HuggingFace; upstream dataset terms | r2_equilibrium_mean 0.917 ✓ (pytorch.residual_mlp, 2026-10-20) | equilibrium mean R² ≥ 0.85 | 0.99 R² (mean) [diff] | 90→8 equilibrium metrics; run 2026-09-25 mean R² 0.916, QI 0.935 | ✓ | ✓ |
 | `tabular.airfoil_noise` | 5 → 1 | Brooks, Pope & Marcolini (1989) NASA TM 100514 | r2 0.957 ✓ (xgboost.xgbregressor, 2026-05-18) | R² ≥ 0.85 | 0.963 R² [?] | Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file | ✓ | ✓ |
 | `tabular.california_housing` | 8 → 1 | Pace & Barry (1997) Statistics & Probability Letters | r2 0.847 ✓ (xgboost.xgbregressor, 2026-05-18) | R² ≥ 0.75 | — | Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file | ✓ | ✓ |
 | `tabular.concrete_strength` | 8 → 1 | Yeh (1998) Cement and Concrete Research | r2 0.930 ✓ (gpflow.gpr, 2026-05-23) | R² ≥ 0.80 | 0.94 R² [diff] | Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file | ✓ | ✓ |
@@ -74,7 +74,7 @@ The on-file result is the best of each model's newest run on or after the benchm
 | `tabular.breast_cancer` | 30 → 2 | Mangasarian & Wolberg (1990) University of Wisconsin | accuracy 0.956 ✓ (pytorch.mlp_classifier, 2026-05-18) | Acc ≥ 0.95 | 0.99 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | ✓ |
 | `tabular.diabetes` | 10 → 1 | Efron, Hastie, Johnstone & Tibshirani (2004) Annals of Statistics | r2 0.535 ✓ (pytorch.mlp, 2026-05-18) | R² ≥ 0.40 | 0.5 R² [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
 | `tabular.digits` | 64 → 10 | Alpaydin & Kaynak (1998) UCI | accuracy 0.983 ✓ (pytorch.mlp_classifier, 2026-05-18) | Acc ≥ 0.97 | 0.99 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
-| `tabular.iris` | 4 → 3 | Fisher (1936) Annals of Eugenics | accuracy 0.947 ✓ (sklearn.logistic_regression, 2026-10-13) | Acc ≥ 0.95 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | ✓ |
+| `tabular.iris` | 4 → 3 | Fisher (1936) Annals of Eugenics | accuracy 0.947 ✓ (sklearn.logistic_regression, 2026-10-20) | Acc ≥ 0.95 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | ✓ |
 | `tabular.wine` | 13 → 3 | Aeberhard, Coomans & De Vel (1992) UCI | accuracy 1.000 ✓ (sklearn.logistic_regression, 2026-05-18) | Acc ≥ 0.90 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
 | `tabular.yacht_dynamics` | 6 → 1 | Gerritsma, Onnink & Versluis (1981) CFD — SHIP DESIGN | r2 1.000 ✓ (gpflow.gpr, 2026-05-23) | R² ≥ 0.95 | 0.99 R² [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
 | `vision.mnist` | 28×28 → 10 | LeCun, Bottou, Bengio & Haffner (1998) Proc. IEEE | accuracy 0.996 ✓ (pytorch.resnet20, 2026-05-26) | Acc ≥ 0.99 | 0.998 Accuracy [same] | MNIST is a plumbing check, not a surrogate result | ✓ | — |
@@ -84,4 +84,4 @@ The on-file result is the best of each model's newest run on or after the benchm
 | benchmark | task shape | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |
 |---|---|---|---|---|---|---|---|---|
 | `pde.burgers_1d` | 64 → 64 (field) | Li et al. (2021) ICLR — FNO paper; solver: Burgers (1948) | r2 1.000 ✓ (pytorch.fno1d, 2026-05-22) | NRMSE ≤ 0.10 | 0.0068 rel-L2 [diff] | R² 1.000 at 64 points — too easy as posed vs FNO paper's 1024 | ✓ | ✓ |
-| `sequence.lorenz63` | 3×20 → 3×20 (rollout) | Lorenz (1963) J. Atmospheric Sciences | nrmse 0.026 ✓ (sklearn.random_forest, 2026-10-13) | NRMSE ≤ 0.10 | — | fixed-window NRMSE, not Lyapunov-time rollout | ✓ | ✓ |
+| `sequence.lorenz63` | 3×20 → 3×20 (rollout) | Lorenz (1963) J. Atmospheric Sciences | nrmse 0.026 ✓ (sklearn.random_forest, 2026-10-20) | NRMSE ≤ 0.10 | — | fixed-window NRMSE, not Lyapunov-time rollout | ✓ | ✓ |

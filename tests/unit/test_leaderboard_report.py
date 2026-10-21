@@ -134,6 +134,24 @@ def test_status_layout_synthetic_and_newest_sweep(tmp_path: Path):
     assert len(text.encode()) < 1_000_000
 
 
+def test_full_layout_expands_tail_benchmarks(tmp_path: Path):
+    root = _fake_tree(tmp_path)
+    text = build_report(root, tmp_path / "full.html", video=tmp_path / "none.mp4",
+                        demo_runs={}, layout="full").read_text()
+    assert "<details class='tail'>" not in text
+    # sanity benchmark is rendered expanded, with its status badge still shown
+    bench_at = text.index('id="pde.burgers_1d"')
+    card = text[bench_at:text.index("</section>", bench_at)]
+    assert "<span class='badge muted'>sanity</span>" in card
+    # the spider chart for its category is still rendered (full layout keeps
+    # the category blocks, just not collapsed)
+    assert "<h2 class=\"cat\">" in text
+    # the status layout still behaves as before (default, unchanged)
+    status_text = build_report(root, tmp_path / "status.html", video=tmp_path / "none.mp4",
+                               demo_runs={}).read_text()
+    assert "<details class='tail'>" in status_text
+
+
 def test_synthetic_excluded_from_pass_count(tmp_path: Path):
     root = _fake_tree(tmp_path)
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
@@ -257,3 +275,51 @@ def test_ledger_has_sota_column(tmp_path: Path):
 
     md = render_status_md(_fake_tree(tmp_path), _fake_meta(tmp_path))
     assert "| SOTA |" in md and "0.95 R² [diff]" in md
+
+
+# --------------------------------------------------------------- index table
+
+def test_index_table_has_one_row_per_visible_benchmark(tmp_path: Path):
+    root = _fake_tree(tmp_path)
+    text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
+                        demo_runs={}).read_text()
+    assert 'id="bench-index"' in text
+    # fusion.m3dc1_sample is hidden by metadata.yaml (visible: False), so only
+    # 2 of the 3 benchmarks in the fake tree are visible/indexed
+    assert text.count("<tr data-key='") == 2
+    for key in ("tabular.california_housing", "pde.burgers_1d"):
+        assert f"<tr data-key='{key}'" in text
+        assert f"<a href='#{key}' class='idx-link'" in text
+    assert "<tr data-key='fusion.m3dc1_sample'" not in text
+    # best-model haystack carries the winning model's key for search
+    assert "const BENCH_INDEX" in text
+    assert "new.model" in text[text.index("const BENCH_INDEX"):text.index("</script>",
+           text.index("const BENCH_INDEX"))]
+
+
+def test_index_table_excludes_maintainer_hidden_benchmark(tmp_path: Path):
+    from surge.benchmarks.status import apply_selection
+
+    root = _fake_tree(tmp_path)
+    src = Path(__file__).resolve().parents[2] / "surge/benchmarks/metadata.yaml"
+    mp = tmp_path / "metadata.yaml"
+    mp.write_text(src.read_text())
+    sel = tmp_path / "sel.json"
+    sel.write_text(json.dumps({"benchmarks": [
+        {"key": "pde.burgers_1d", "show": False, "push": False, "note": ""}]}))
+    apply_selection(sel, mp)
+    text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
+                        demo_runs={}, metadata_path=mp).read_text()
+    assert "<tr data-key='pde.burgers_1d'" not in text
+    assert "<tr data-key='tabular.california_housing'" in text
+
+
+def test_index_section_has_search_filter_and_count_controls(tmp_path: Path):
+    root = _fake_tree(tmp_path)
+    text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
+                        demo_runs={}).read_text()
+    assert 'id="idx-search"' in text
+    assert 'id="idx-follow"' in text
+    assert 'id="idx-count"' in text
+    assert "chip-toggle" in text
+    assert "&uarr; index" in text  # card backlink
