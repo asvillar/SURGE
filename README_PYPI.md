@@ -56,7 +56,6 @@ from the ready, gated benchmarks:
   fluxes, reproduced end-to-end from public data (gate R² ≥ 0.95).
 - **ConStellaration stellarator design** — mean R² 0.916 across 8 VMEC++
   equilibrium metrics (gate R² ≥ 0.85).
-- **CIFAR-10** — accuracy 0.965 with a frozen DINOv2 linear probe (gate ≥ 0.91).
 - **Airfoil self-noise** (UCI) — R² 0.957 (gate R² ≥ 0.85).
 
 Full ledger with per-benchmark status: [docs/benchmarks/README.md](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/benchmarks/README.md).

@@ -49,8 +49,10 @@ All notable changes to SURGE (`surge-ml`). Follows
   card, per-epoch training logs, HPO trial logs.
 - **DINOv2 frozen-backbone linear probe** (`pytorch.dino_linear_probe`):
   frozen DINOv2 ViT-S/14 (`torch.hub`) features plus a logistic-regression
-  head, cached per dataset fingerprint and labelled as transfer learning;
-  `vision.cifar10` passes its accuracy gate (0.965 vs. 0.91).
+  head, cached per content hash and extractor identity, labelled as
+  transfer learning and reloadable through `load_model_compat`;
+  `vision.cifar10` passes its accuracy gate (0.965 vs. 0.91) and is kept
+  as a tutorial-tier plumbing benchmark (no surrogate-modelling content).
 - **QLKNN10D** (`plasma.qlknn10d`): reproduces QLKNN from its public
   290M-row QuaLiKiz training table, residual MLP R² 0.9898 on 200k
   held-out fluxes (gate 0.95). `BENCH_MODEL_DEFAULTS` lets a benchmark

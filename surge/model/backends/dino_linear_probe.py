@@ -13,9 +13,11 @@ DINOv2 linear-probe protocol (see ``surge/benchmarks/metadata.yaml``
 
 Because the backbone is frozen, features depend only on the input images
 (not on any trainable state), so they are extracted once per split and
-cached to an ``.npz`` file keyed by a cheap content fingerprint
-(shape + strided value sample) — re-running the benchmark after the first
-pass is seconds instead of minutes.
+cached to an ``.npz`` file keyed by a versioned extractor/preprocessing
+identity plus a full-content hash of the input array (shape + dtype + every
+byte, hashed in bounded chunks) — re-running the benchmark after the first
+pass is seconds instead of minutes. A custom ``hub_loader`` without an
+``extractor_id`` disables the persistent cache (in-process cache only).
 """
 from __future__ import annotations
 
@@ -32,6 +34,15 @@ DINOV2_STD = (0.229, 0.224, 0.225)
 HUB_REPO = "facebookresearch/dinov2"
 HUB_MODEL = "dinov2_vits14"
 EXPECTED_FEATURE_DIM = 384  # ViT-S/14 [CLS] token width (informational only)
+CACHE_SCHEMA_VERSION = 2
+SAVE_FORMAT = "surge.dino_linear_probe/1"
+_HASH_CHUNK_BYTES = 64 * 1024 * 1024
+
+
+_SAVED_PARAMS = (
+    "n_classes", "img_size", "in_channels", "batch_size", "resize_to",
+    "C", "max_iter", "random_state",
+)
 
 
 def _default_cache_path() -> Path:
@@ -43,19 +54,21 @@ def _default_cache_path() -> Path:
 
 
 def _fingerprint(X: np.ndarray) -> str:
-    """Cheap, order-sensitive content fingerprint for cache keys.
+    """Full-content, order-sensitive fingerprint for cache keys.
 
-    Hashes the array shape plus a fixed-stride subsample of values, so cost
-    is independent of ``N`` (no full-array hashing of tens of thousands of
-    images) while still distinguishing train/val/test splits and different
-    random seeds/shuffles.
+    Hashes shape, dtype of the hashed buffer (float32) and every byte, in
+    bounded chunks (never a whole-array ``tobytes()``). Identical data held
+    as float64/uint8 hashes identically because it is cast to float32 first.
     """
-    flat = np.ascontiguousarray(X).reshape(-1)
-    sample = flat[::997][:4096].astype(np.float32, copy=False)
-    h = hashlib.sha1()
-    h.update(np.asarray(X.shape, dtype=np.int64).tobytes())
-    h.update(sample.tobytes())
-    return h.hexdigest()[:16]
+    arr = np.ascontiguousarray(np.asarray(X), dtype=np.float32)
+    h = hashlib.blake2b(digest_size=16)
+    h.update(np.asarray(arr.shape, dtype=np.int64).tobytes())
+    h.update(str(arr.dtype).encode())
+    flat = arr.reshape(-1).view(np.uint8)
+    mv = memoryview(flat)
+    for start in range(0, len(mv), _HASH_CHUNK_BYTES):
+        h.update(mv[start:start + _HASH_CHUNK_BYTES])
+    return h.hexdigest()
 
 
 def load_hub_backbone() -> Any:
@@ -80,6 +93,11 @@ class DINOLinearProbeModel:
         Where extracted features are cached (npz, one entry per content
         fingerprint). Defaults to
         ``data/datasets/benchmarks/vision/dino_features_cifar10.npz``.
+    extractor_id:
+        Stable name of the feature extractor, part of the cache key. Defaults
+        to the DINOv2 hub id when ``hub_loader`` is None. With a custom
+        ``hub_loader`` and no ``extractor_id`` the persistent cache is
+        disabled (only an in-process cache is used).
     """
 
     def __init__(
@@ -96,6 +114,7 @@ class DINOLinearProbeModel:
         device: Optional[str] = None,
         cache_path: Optional[str] = None,
         hub_loader: Optional[Callable[[], Any]] = None,
+        extractor_id: Optional[str] = None,
         **_ignored: Any,
     ) -> None:
         self.n_classes = n_classes
@@ -109,6 +128,10 @@ class DINOLinearProbeModel:
         self._device_req = device
         self.cache_path = Path(cache_path) if cache_path else _default_cache_path()
         self._hub_loader = hub_loader or load_hub_backbone
+        if hub_loader is None:
+            extractor_id = extractor_id or f"{HUB_REPO}/{HUB_MODEL}"
+        self.extractor_id: Optional[str] = extractor_id
+        self._mem_cache: dict[str, np.ndarray] = {}
         self._backbone: Any = None
         self._torch_device: Any = None
         self._clf: Any = None
@@ -137,11 +160,28 @@ class DINOLinearProbeModel:
 
     # -- feature extraction (cached) -------------------------------------
 
+    @property
+    def _persistent_cache(self) -> bool:
+        return self.extractor_id is not None
+
+    def _cache_identity(self) -> str:
+        """Short hash of everything (besides the data) that shapes features."""
+        payload = repr((
+            CACHE_SCHEMA_VERSION, self.extractor_id, self.resize_to,
+            self.img_size, self.in_channels, DINOV2_MEAN, DINOV2_STD, "bicubic",
+        ))
+        return hashlib.blake2b(payload.encode(), digest_size=8).hexdigest()
+
     def _extract_features(self, X: np.ndarray) -> np.ndarray:
-        key = _fingerprint(np.asarray(X))
+        key = f"{self._cache_identity()}_{_fingerprint(np.asarray(X))}"
         n = len(X)
-        cached = self._read_cache(key, n)
+        mem = self._mem_cache.get(key)
+        if mem is not None and mem.shape[0] == n:
+            self.feature_dim_ = mem.shape[1]
+            return mem
+        cached = self._read_cache(key, n) if self._persistent_cache else None
         if cached is not None:
+            self._mem_cache[key] = cached
             return cached
 
         import torch
@@ -178,7 +218,9 @@ class DINOLinearProbeModel:
 
         assert feats is not None
         self.feature_dim_ = feats.shape[1]
-        self._write_cache(key, feats)
+        self._mem_cache[key] = feats
+        if self._persistent_cache:
+            self._write_cache(key, feats)
         return feats
 
     def _read_cache(self, key: str, n: int) -> Optional[np.ndarray]:
@@ -239,6 +281,8 @@ class DINOLinearProbeModel:
         import joblib
 
         joblib.dump({
+            "format": SAVE_FORMAT,
+            "extractor_id": self.extractor_id,
             "clf": self._clf,
             "feature_dim": self.feature_dim_,
             "params": {
@@ -259,3 +303,9 @@ class DINOLinearProbeModel:
         data = joblib.load(path)
         self._clf = data["clf"]
         self.feature_dim_ = data.get("feature_dim")
+        for name, value in (data.get("params") or {}).items():
+            if name in _SAVED_PARAMS:
+                setattr(self, name, value)
+        if data.get("extractor_id") is not None:
+            self.extractor_id = data["extractor_id"]
+        self._mem_cache = {}

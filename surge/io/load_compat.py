@@ -221,6 +221,27 @@ def _reconstruct_net_mlp(checkpoint: dict) -> Optional[Any]:
     return _TorchAdapter(model)
 
 
+def _load_dino_probe(obj: dict, path: Path) -> Any:
+    """Rebuild a ``pytorch.dino_linear_probe`` adapter from a saved artifact."""
+    try:
+        import torch  # noqa: F401
+        import sklearn  # noqa: F401
+    except ImportError as e:
+        raise ImportError(
+            "Loading a surge.dino_linear_probe artifact requires torch and "
+            "scikit-learn (pip install torch scikit-learn)"
+        ) from e
+    from ..model import MODEL_REGISTRY
+
+    params = dict(obj.get("params") or {})
+    if obj.get("extractor_id") is not None:
+        params["extractor_id"] = obj["extractor_id"]
+    adapter = MODEL_REGISTRY.create("pytorch.dino_linear_probe", **params)
+    adapter.load(str(path))
+    adapter.mark_fitted()
+    return adapter
+
+
 def load_model_compat(
     model_path: Path,
     model_entry: Optional[dict] = None,
@@ -247,6 +268,10 @@ def load_model_compat(
     # Try joblib (works for sklearn models and some torch if no protocol 0 issues)
     try:
         obj = joblib.load(model_path)
+        if isinstance(obj, dict) and str(obj.get("format", "")).startswith(
+            "surge.dino_linear_probe"
+        ):
+            return _load_dino_probe(obj, Path(model_path))
         # If we got a dict (torch checkpoint) or thin adapter without fit, use torch loader
         if isinstance(obj, dict) and "model_state_dict" in obj:
             adapter = _load_torch_model(model_path, model_entry, for_finetune=for_finetune)
