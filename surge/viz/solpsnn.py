@@ -236,7 +236,7 @@ def field_figure(te_true: np.ndarray, te_pred: np.ndarray, crx: np.ndarray,
     from matplotlib.collections import PolyCollection
     from matplotlib.colors import CenteredNorm
 
-    from surge.viz.theme import diverging_cmap, sequential_cmap, surge_theme
+    from surge.viz.theme import diverging_cmap, field_cmap, surge_theme
 
     te_true = np.asarray(te_true, float)
     te_pred = np.asarray(te_pred, float)
@@ -266,9 +266,9 @@ def field_figure(te_true: np.ndarray, te_pred: np.ndarray, crx: np.ndarray,
             vmax = float(max(lt.max(), lq.max()))
             half = max(float(np.percentile(np.abs(err), 99)), 1e-3)
             panels = [
-                (lt, sequential_cmap(mode), None, vmin, vmax,
+                (lt, field_cmap(mode), None, vmin, vmax,
                  "SOLPS-ITER"),
-                (lq, sequential_cmap(mode), None, vmin, vmax, "surrogate"),
+                (lq, field_cmap(mode), None, vmin, vmax, "surrogate"),
                 (err, diverging_cmap(mode), CenteredNorm(halfrange=half),
                  None, None, "log$_{10}$(surrogate / SOLPS-ITER)"),
             ]
@@ -399,7 +399,7 @@ def te_cases_figure(te: np.ndarray, crx: np.ndarray, cry: np.ndarray, *,
     from matplotlib.collections import PolyCollection
     from matplotlib.colors import Normalize
 
-    from surge.viz.theme import sequential_cmap, surge_theme
+    from surge.viz.theme import field_cmap, surge_theme
 
     te = np.asarray(te, float)[:6]
     crx = np.asarray(crx, float)
@@ -421,7 +421,7 @@ def te_cases_figure(te: np.ndarray, crx: np.ndarray, cry: np.ndarray, *,
         h = 3.4
         fig, axes = plt.subplots(1, n, figsize=(n * (h / aspect + 0.35) + 1.2, h + 0.9),
                                  squeeze=False, sharey=True)
-        cmap = sequential_cmap(mode)
+        cmap = field_cmap(mode)
         for i, ax in enumerate(axes[0]):
             pc = PolyCollection(verts, array=lt[i].ravel(), cmap=cmap, norm=norm,
                                 edgecolors="none", antialiaseds=False)
@@ -439,5 +439,81 @@ def te_cases_figure(te: np.ndarray, crx: np.ndarray, cry: np.ndarray, *,
             if i == 0:
                 ax.set_ylabel("Z [m]")
         cb = fig.colorbar(pc, ax=axes[0].tolist(), fraction=0.025, pad=0.02)
+        cb.set_label(label)
+    return _finish(fig, out_stem)
+
+
+# -------------------------------------------------------------------- atlas
+
+def te_atlas_figure(rows: "dict[str, np.ndarray]", crx: np.ndarray, cry: np.ndarray, *,
+                    titles: "dict[str, Sequence[str]] | None" = None,
+                    separatrix: int | None = None,
+                    label: str = r"$\log_{10}(T_e / T_e^{\mathrm{omp,sep}})$",
+                    vlim: tuple[float, float] | None = None,
+                    mode: str = "light", out_stem=None):
+    """Atlas of SOLPS-NN fields: one row per scenario type, up to eight small
+    panels per row on the B2 grid, a single shared colour scale (``log10`` of
+    the given field; pass a normalised field for structure, raw Te for level).
+    ``rows`` maps the row label to an array (n_cases, nx, ny); ``titles`` the
+    row label to one short title per panel."""
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import PolyCollection
+    from matplotlib.colors import Normalize
+
+    from surge.viz.theme import field_cmap, surge_theme
+
+    crx = np.asarray(crx, float)
+    cry = np.asarray(cry, float)
+    order = [0, 1, 3, 2]
+    sl = (slice(1, -1), slice(1, -1))
+    verts = np.stack([crx[sl][..., order], cry[sl][..., order]], axis=-1).reshape(-1, 4, 2)
+    xmin, xmax = verts[..., 0].min(), verts[..., 0].max()
+    ymin, ymax = verts[..., 1].min(), verts[..., 1].max()
+    aspect = (ymax - ymin) / (xmax - xmin)
+    keys = list(rows)
+    fields = {k: np.log10(np.clip(np.asarray(rows[k], float)[:8][:, sl[0], sl[1]], 1e-6, None))
+              for k in keys}
+    ncol = max(f.shape[0] for f in fields.values())
+    allv = np.concatenate([f.ravel() for f in fields.values()])
+    if vlim is None:
+        vlim = (float(np.percentile(allv, 0.5)), float(np.percentile(allv, 99.5)))
+    norm = Normalize(*vlim)
+    sep_xy = None
+    if separatrix is not None:
+        sep_xy = (np.concatenate([crx[1:-1, separatrix, 0], crx[-2:-1, separatrix, 1]]),
+                  np.concatenate([cry[1:-1, separatrix, 0], cry[-2:-1, separatrix, 1]]))
+
+    with surge_theme(mode) as p:
+        h = 2.3
+        w = max(h / aspect, 1.55)  # wide enough for a two-line title
+        fig, axes = plt.subplots(len(keys), ncol, squeeze=False,
+                                 figsize=(ncol * (w + 0.12) + 1.3, len(keys) * (h + 0.55)))
+        cmap = field_cmap(mode)
+        pc = None
+        for r, k in enumerate(keys):
+            f = fields[k]
+            for c in range(ncol):
+                ax = axes[r, c]
+                if c >= f.shape[0]:
+                    ax.set_axis_off()
+                    continue
+                pc = PolyCollection(verts, array=f[c].ravel(), cmap=cmap, norm=norm,
+                                    edgecolors="none", antialiaseds=False)
+                ax.add_collection(pc)
+                if sep_xy is not None:
+                    ax.plot(*sep_xy, color=p["ink2"], lw=0.5, alpha=0.8)
+                ax.set_xlim(xmin, xmax)
+                ax.set_ylim(ymin, ymax)
+                ax.set_aspect("equal")
+                ax.set_xticks([])
+                ax.set_yticks([])
+                for s in ax.spines.values():
+                    s.set_visible(False)
+                ax.grid(False)
+                if titles and k in titles and c < len(titles[k]):
+                    ax.set_title(titles[k][c], fontsize=6.3, color=p["ink2"], pad=2)
+            axes[r, 0].set_ylabel(k, fontsize=9, color=p["ink"], labelpad=4)
+        # the theme enables constrained layout; let it place the shared colourbar
+        cb = fig.colorbar(pc, ax=axes.ravel().tolist(), shrink=0.55, pad=0.01, aspect=45)
         cb.set_label(label)
     return _finish(fig, out_stem)
