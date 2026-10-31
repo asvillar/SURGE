@@ -1,6 +1,7 @@
 """Tests for the top-level ``surge`` CLI dispatcher."""
 from __future__ import annotations
 
+import importlib.metadata
 import json
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
+import surge
 from surge.cli import main
 
 
@@ -22,6 +24,17 @@ def test_no_args_prints_help(capsys):
 def test_version(capsys):
     assert main(["version"]) == 0
     assert "surge-ml" in capsys.readouterr().out
+
+
+def test_version_matches_installed_distribution():
+    # Guards the dynamic version wiring: pyproject.toml reads `version` from
+    # surge.__version__ via [tool.setuptools.dynamic], so the installed
+    # distribution metadata must agree with the source attribute.
+    try:
+        installed = importlib.metadata.version("surge-ml")
+    except importlib.metadata.PackageNotFoundError:
+        pytest.skip("surge-ml is not installed as a distribution (no dist-info)")
+    assert installed == surge.__version__
 
 
 def test_models_lists_registry(capsys):
