@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "surge-ml"
-version = "0.1.0rc1"
+dynamic = ["version"]
 description = "Surrogate modeling framework for scientific workflows: SciML, AutoML, UQ, and MLOps-style provenance in a declarative pipeline"
-readme = "README.md"
+readme = "README_PYPI.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [{ name = "Álvaro Sánchez Villar" }]
@@ -62,9 +62,15 @@ tensorflow = ["tensorflow>=2.21", "tf-keras>=2.21"]
 shap = ["shap>=0.46"]
 # h5py is included so M3DC1 batch-mode tests run without an extra install.
 mlflow = ["mlflow>=2.0.0"]
-benchmarks = ["h5py>=3.0", "optuna>=3.0"]
+benchmarks = ["h5py>=3.0"]  # optuna is already a core dependency (see deps above)
 tabpfn = ["tabpfn>=2.0"]
 thewell = ["the-well"]
+# Convenience bundle pulling in SURGE's own other extras. Deliberately
+# excludes gpflow (its published metadata pins numpy<2, unresolvable next
+# to the tensorflow floor here — see the `gpflow` extra above and
+# GETTING_STARTED.md for the `pip install gpflow --no-deps` finish),
+# tabpfn and thewell (niche, heavy extras most installs won't need).
+all = ["surge-ml[torch,onnx,shap,mlflow,benchmarks,tensorflow]"]
 dev = ["pytest>=6.0", "pytest-cov", "ruff>=0.1.0", "h5py>=3.0"]
 # Mirrors docs/requirements.txt (the ReadTheDocs build input); conf.py
 # uses the RTD theme, not furo.
@@ -81,6 +87,11 @@ Homepage = "https://github.com/S-Villar/SURGE"
 Documentation = "https://github.com/S-Villar/SURGE/blob/main/docs/README.md"
 Repository = "https://github.com/S-Villar/SURGE"
 Issues = "https://github.com/S-Villar/SURGE/issues"
+
+# Single source of truth for the version: read from surge/__init__.py
+# instead of duplicating it here (pairs with `dynamic = ["version"]` above).
+[tool.setuptools.dynamic]
+version = { attr = "surge.__version__" }
 
 # Install the `surge` Python package from the `surge/` directory.
 # Package name on PyPI is `surge-ml` to reduce clash with other projects named "surge".

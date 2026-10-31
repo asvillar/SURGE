@@ -236,20 +236,24 @@ surge version && surge models
 With plain pip: `python3.11 -m venv .venv && source .venv/bin/activate &&
 pip install -e ".[torch,dev]"`.
 
-> PyPI release of `surge-ml` is prepared (`uv build` produces clean
-> artifacts — see [`docs/RELEASING.md`](docs/RELEASING.md)); until it is
-> published, install from the repository as above.
+**From PyPI** — no clone needed:
+
+```bash
+pip install surge-ml
+surge version && surge models
+```
 
 | Extra | Adds | Install |
 |-------|------|---------|
-| *(base)* | sklearn, pandas, Optuna, plotting | `pip install -e .` |
-| `torch` | PyTorch model families | `pip install -e ".[torch]"` |
-| `onnx` | ONNX export + runtime parity tests | `pip install -e ".[onnx]"` |
-| `benchmarks` | h5py, Optuna for the benchmark suite | `pip install -e ".[benchmarks]"` |
-| `tensorflow` | TF ≥ 2.21 + tf-keras → `keras.mlp` adapter | `pip install -e ".[tensorflow]"` |
-| `gpflow` | TF stack for GPflow GPs (then `pip install gpflow --no-deps`) | `pip install -e ".[gpflow]"` |
-| `shap` | SHAP feature importance (NumPy-2 compatible) | `pip install -e ".[shap]"` |
-| `dev` | pytest, ruff, h5py | `pip install -e ".[dev]"` |
+| *(base)* | sklearn, pandas, Optuna, plotting | `pip install surge-ml` |
+| `torch` | PyTorch model families | `pip install "surge-ml[torch]"` |
+| `onnx` | ONNX export + runtime parity tests | `pip install "surge-ml[onnx]"` |
+| `benchmarks` | h5py for the benchmark suite | `pip install "surge-ml[benchmarks]"` |
+| `tensorflow` | TF ≥ 2.21 + tf-keras → `keras.mlp` adapter | `pip install "surge-ml[tensorflow]"` |
+| `gpflow` | TF stack for GPflow GPs (then `pip install gpflow --no-deps`) | `pip install "surge-ml[gpflow]"` |
+| `shap` | SHAP feature importance (NumPy-2 compatible) | `pip install "surge-ml[shap]"` |
+| `all` | torch + onnx + shap + mlflow + benchmarks + tensorflow (not gpflow — no-deps trap) | `pip install "surge-ml[all]"` |
+| `dev` | pytest, ruff, h5py | `pip install "surge-ml[dev]"` |
 
 ---
 
