@@ -749,7 +749,8 @@ def lorenz_rollout_metrics(
         "rollout_lyapunov_times": rollout_lyapunov_times,
         "vpt_threshold": _LORENZ_VPT_THRESHOLD, "climate_norm": climate_norm,
         "per_ic_vpt": vpts.tolist(),
-        "median_error_curve": np.median(step_err, axis=1).tolist(),
+        # nanmedian: a diverged trajectory must not blank the curve for everyone
+        "median_error_curve": np.nanmedian(step_err, axis=1).tolist(),
         "sample_truth_xyz": truth[:, i_ref, :].tolist(),
         "sample_pred_xyz": np.vstack(
             [initial_state[i_ref][None, :], preds[:, i_ref, :]]).tolist(),
