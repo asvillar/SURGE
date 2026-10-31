@@ -629,11 +629,10 @@ benchmarks:
   focus: false
 - key: vision.cifar10
   status: ready
-  status_note: "best on file 0.285, invalid run; added pytorch.dino_linear_probe
-    (frozen DINOv2 ViT-S/14 + LogisticRegression, transfer learning, literature
-    linear-probe protocol) as a defensible pretrained baseline alongside the
-    from-scratch pytorch.resnet20 gate — rerun in progress, see
-    audit/reruns/cifar10_dino_linear_probe.log"
+  status_note: "surge bench run 2026-10-21: pytorch.dino_linear_probe (frozen
+    DINOv2 ViT-S/14 + LogisticRegression, transfer learning, literature
+    linear-probe protocol) reaches accuracy 0.965 (gate 0.91); the from-scratch
+    pytorch.resnet20 remains the scratch-training reference"
   name: CIFAR-10 Image Classification
   capability: Vision
   discipline: Computer Vision

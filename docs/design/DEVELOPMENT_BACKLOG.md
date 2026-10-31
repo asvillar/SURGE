@@ -57,8 +57,13 @@ R1–R14, `RESOURCE_MANAGEMENT.md` R15–R18, `FIGURE_UPGRADE_PLAN.md`).
   slates), offline validation with did-you-mean suggestions (exit 0/2),
   schema generated from the dataclasses and shipped in package-data
   (editor autocomplete documented in GETTING_STARTED).
-- **Publish 0.1.0rc1 → 0.1.0** (user-side: `uv publish`; then version
-  bump, retag, Trusted Publishing on PyPI).
+- **Publish 0.1.0 to PyPI** — release prepared 2026-10-30: version 0.1.0,
+  CHANGELOG, CITATION.cff (`date-released`), `docs/RELEASING.md`, and
+  `.github/workflows/release.yml` updated for the canonical GitHub owner
+  (`asvillar`) and the build → audit → fresh-venv smoke → TestPyPI
+  rehearsal → `uv publish` → tag order. Still user-side: the TestPyPI
+  rehearsal, `uv publish`, the tag push, the GitHub release, and the
+  optional Trusted Publishing pending-publisher registration.
 - **Verify README publication titles** (user-side).
 
 - **PCA / POD training transforms (R3 slice)** — library slice DONE:
