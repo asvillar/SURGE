@@ -1948,6 +1948,71 @@ def scale_figure(mode: str):
         return fig
 
 
+# ------------------------------------------------------------ SOLPS-NN (synthetic)
+
+def solpsnn_figures(mode: str, seed: int = 0):
+    """SOLPS-NN exhaust-surrogate figures from SYNTHETIC data (offline)."""
+    from surge.viz.solpsnn import (
+        dataset_overview_figure, error_cdf_figure, field_figure,
+        scalar_parity_figure,
+        target_profile_figure)
+
+    rng = np.random.default_rng(seed)
+    n = 300
+    preds = {}
+    for key, (lo, hi, s) in {"psol": (4.5, 7.0, 0.05),
+                             "qpeak": (6.0, 9.0, 0.12),
+                             "gamma": (20.5, 23.0, 0.2)}.items():
+        t = 10 ** rng.uniform(lo, hi, n)
+        preds[key] = (t, t * np.exp(rng.normal(0, s, n)))
+    labels = {"psol": "P_SOL", "qpeak": "peak heat flux",
+              "gamma": "particle flux"}
+    units = {"psol": "W", "qpeak": "W/m²", "gamma": "atoms/s"}
+    rel = {labels[k]: np.abs(q - t) / t for k, (t, q) in preds.items()}
+
+    ni, nj = 104, 50
+    r = np.linspace(1.0, 1.6, ni + 1)
+    th = np.linspace(-0.9, 0.9, nj + 1)
+    R = 0.9 + r[:, None] * np.cos(th)[None, :] * 0.6
+    Z = r[:, None] * np.sin(th)[None, :] * 0.9
+    crx = np.stack([R[:-1, :-1], R[1:, :-1], R[:-1, 1:], R[1:, 1:]], -1)
+    cry = np.stack([Z[:-1, :-1], Z[1:, :-1], Z[:-1, 1:], Z[1:, 1:]], -1)
+    gi, gj = np.meshgrid(np.linspace(0, 1, ni), np.linspace(0, 1, nj),
+                         indexing="ij")
+    base = 10 ** (0.6 + 1.8 * np.exp(-((gi - 0.5) ** 2) / 0.15)
+                  * (0.4 + 0.6 * gj))
+    amp = rng.uniform(0.7, 1.4, (3, 1, 1))
+    te_t = base[None] * amp
+    wob = 0.08 * np.sin(6 * gi + 3 * gj)[None] * rng.uniform(0.5, 1.5, (3, 1, 1))
+    te_p = te_t * np.exp(wob)
+
+    prof_t = te_t[:, -2, 1:49]
+    prof_p = te_p[:, -2, 1:49]
+    names = ["P_in", "n_sep", "D_perp", "chi_e", "chi_i", "gas puff",
+             "B_t", "I_p"]
+    p_units = ["MW", "1e19 m⁻³", "m²/s", "m²/s", "m²/s", "1e21 /s", "T", "MA"]
+    Xtr = np.column_stack([
+        rng.uniform(1, 10, n), rng.uniform(1, 6, n), rng.uniform(0.1, 1, n),
+        10 ** rng.uniform(-1, 1, n), 10 ** rng.uniform(-1, 1, n),
+        10 ** rng.uniform(-1, 1, n), rng.uniform(2, 5, n),
+        rng.uniform(1, 3, n)])
+    Xte = Xtr[:60] * rng.uniform(0.95, 1.05, (60, 8))
+    out_ov = dataset_overview_figure(
+        Xtr, Xte, {labels[k]: preds[k][0] for k in preds}, crx, cry,
+        param_names=names, param_units=p_units, mode=mode)
+    return {
+        "solpsnn_overview": out_ov,
+        "solpsnn_parity": scalar_parity_figure(
+            preds, mode=mode, labels=labels, units=units),
+        "solpsnn_error_cdf": error_cdf_figure(
+            rel, mode=mode, reference={"thesis median": 0.05}),
+        "solpsnn_profiles": target_profile_figure(
+            prof_t, prof_p, mode=mode, cases=[0, 1, 2]),
+        "solpsnn_fields": field_figure(
+            te_t[:2], te_p[:2], crx, cry, case_ids=[0, 1], mode=mode),
+    }
+
+
 # -------------------------------------------------------------------- main\n
 
 def main():
@@ -1982,6 +2047,7 @@ def main():
             Path(args.hpo_run), m),
         "constellaration": constellaration_figure,
         "scale": scale_figure,
+        "solpsnn": solpsnn_figures,
         "parity_singles": lambda m: parity_figure(Path(args.run), m, singles=True),
         "trio_singles": lambda m: trio_figure(m, singles=True),
         "field2d_singles": lambda m: field2d_figure(m, singles=True),
