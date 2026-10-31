@@ -764,7 +764,7 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
     names = {k: meta.get(k, {}).get("name", k) for k in results}
     demo_runs = (demo.DEFAULT_DEMO_RUNS if demo_runs is None else demo_runs)
     anim_dir = Path(anim_dir) if anim_dir else demo.DEFAULT_ANIM_DIR
-    video = demo.DEFAULT_VIDEO if video is None else Path(video)
+    video = demo.default_video() if video is None else Path(video)
     notes = []
 
     def assemble(include_mission: bool) -> str:

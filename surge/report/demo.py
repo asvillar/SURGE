@@ -7,9 +7,23 @@ import html
 import tempfile
 from pathlib import Path
 
-DEFAULT_VIDEO = Path("docs/assets/readme/surge_end_to_end.mp4")
-DEFAULT_ANIM_DIR = Path("audit/presentation/assets/anim")
-DEFAULT_DEMO_RUNS = {"plasma.qlknn_transport": "runs/qlknn_hpo_200_best"}
+from surge.benchmarks import paths
+
+DEFAULT_VIDEO = None
+DEFAULT_ANIM_DIR = None
+DEFAULT_DEMO_RUNS: dict[str, str] = {}
+
+
+def default_video() -> Path | None:
+    """``<repo>/docs/assets/readme/surge_end_to_end.mp4`` when running from a
+    checkout and the asset is present; ``None`` otherwise (installed wheel,
+    or the file hasn't been fetched) so the report never assumes it exists."""
+    root = paths.repo_root()
+    if root is None:
+        return None
+    video = root / "docs" / "assets" / "readme" / "surge_end_to_end.mp4"
+    return video if video.is_file() else None
+
 
 CSS = """
 .demo { margin: 0 0 30px; }
@@ -62,11 +76,12 @@ def video_section(video: Path | None, poster: Path | None = None) -> str:
             "leaderboard, end to end.</p></section>")
 
 
-def _clip(run_dir: Path, kind: str, mode: str, anim_dir: Path) -> Path | None:
+def _clip(run_dir: Path, kind: str, mode: str, anim_dir: Path | None) -> Path | None:
     """Reuse a pre-rendered ``<kind>_<mode>.webm`` or render it from the run."""
-    pre = Path(anim_dir) / f"{kind}_{mode}.webm"
-    if pre.is_file():
-        return pre
+    if anim_dir is not None:
+        pre = Path(anim_dir) / f"{kind}_{mode}.webm"
+        if pre.is_file():
+            return pre
     try:
         from surge.viz import animate
         tmp = Path(tempfile.mkdtemp(prefix=f"surge_{kind}_"))
@@ -80,13 +95,15 @@ def _clip(run_dir: Path, kind: str, mode: str, anim_dir: Path) -> Path | None:
         return None
 
 
-def replay_panels(demo_runs: dict[str, str], mode: str, anim_dir: Path,
+def replay_panels(demo_runs: dict[str, str], mode: str, anim_dir: Path | None,
                   names: dict[str, str] | None = None,
                   include_mission: bool = True) -> str:
     out = []
     for key, run in demo_runs.items():
         rd = Path(run)
-        if not rd.is_dir() and not (Path(anim_dir) / f"hpo_evolution_{mode}.webm").is_file():
+        pre_rendered = (anim_dir is not None
+                        and (Path(anim_dir) / f"hpo_evolution_{mode}.webm").is_file())
+        if not rd.is_dir() and not pre_rendered:
             continue
         kinds = ["hpo_evolution"] + (["mission_control"] if include_mission else [])
         vids = []

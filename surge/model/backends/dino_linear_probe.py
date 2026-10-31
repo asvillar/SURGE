@@ -35,9 +35,11 @@ EXPECTED_FEATURE_DIM = 384  # ViT-S/14 [CLS] token width (informational only)
 
 
 def _default_cache_path() -> Path:
-    """``<repo_root>/data/datasets/benchmarks/vision/dino_features_cifar10.npz``."""
-    repo_root = Path(__file__).resolve().parents[3]
-    return repo_root / "data" / "datasets" / "benchmarks" / "vision" / "dino_features_cifar10.npz"
+    """``<bench_data_root>/vision/dino_features_cifar10.npz`` (honours
+    ``SURGE_DATA_DIR``; see :mod:`surge.benchmarks.paths`)."""
+    from surge.benchmarks import paths
+
+    return paths.bench_data_root() / "vision" / "dino_features_cifar10.npz"
 
 
 def _fingerprint(X: np.ndarray) -> str:
