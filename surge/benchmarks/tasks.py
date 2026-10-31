@@ -750,6 +750,31 @@ def lorenz_rollout_metrics(
     return {"metrics": metrics, "extra": extra}
 
 
+def lorenz_adapter_run(
+    adapter, X_train, y_train, X_test, *, seed: int, climate_norm: float,
+    n_eval_ics: int = 100, rollout_lyapunov_times: float = 10.0,
+) -> dict:
+    """Z-score fit + predict + rollout scoring of a one-step Lorenz-63 adapter.
+
+    The single code path shared by ``run_sequence_lorenz63``, the leaderboard
+    adapter runner and the HPO trial runner, so each emits the gate metric
+    ``test_vpt_median``.  Returns ``{"y_pred": de-standardised test
+    predictions, "metrics": {...vpt/climate...}, "extra": {...}}``.
+    """
+    X_train = np.asarray(X_train)
+    y_train = np.asarray(y_train)
+    X_test = np.asarray(X_test)
+    mean = X_train.mean(axis=0)
+    scale = X_train.std(axis=0) + 1e-8
+    adapter.fit((X_train - mean) / scale, (y_train - mean) / scale)
+    y_pred = np.asarray(adapter.predict((X_test - mean) / scale)) * scale + mean
+    roll = lorenz_rollout_metrics(
+        adapter, seed=seed, n_eval_ics=n_eval_ics,
+        rollout_lyapunov_times=rollout_lyapunov_times,
+        climate_norm=climate_norm, x_mean=mean, x_scale=scale)
+    return {"y_pred": y_pred, "metrics": roll["metrics"], "extra": roll["extra"]}
+
+
 def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
     model_kwargs: dict | None = None, n_trajectories: int = 1200,
     n_eval_ics: int = 100, rollout_lyapunov_times: float = 10.0) -> "BenchmarkResult":
@@ -796,20 +821,13 @@ def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
     from surge.model.registry import MODEL_REGISTRY
     adapter = MODEL_REGISTRY.create(key, **(model_kwargs or {}))
 
-    # z-score normalisation (shared by inputs/outputs — same attractor stats).
-    mean = X_train.mean(axis=0)
-    scale = X_train.std(axis=0) + 1e-8
-
     t0 = time.perf_counter()
-    adapter.fit((X_train - mean) / scale, (y_train - mean) / scale)
-    y_pred_test = np.asarray(adapter.predict((X_test - mean) / scale)) * scale + mean
+    roll = lorenz_adapter_run(
+        adapter, X_train, y_train, X_test, seed=seed, climate_norm=climate_norm,
+        n_eval_ics=n_eval_ics, rollout_lyapunov_times=rollout_lyapunov_times)
+    y_pred_test = roll["y_pred"]
     nrmse = float(np.linalg.norm(y_pred_test - y_test) / (np.linalg.norm(y_test) + 1e-12))
     capture_predictions(y_test, y_pred_test)
-
-    roll = lorenz_rollout_metrics(
-        adapter, seed=seed, n_eval_ics=n_eval_ics,
-        rollout_lyapunov_times=rollout_lyapunov_times,
-        climate_norm=climate_norm, x_mean=mean, x_scale=scale)
     elapsed = time.perf_counter() - t0
 
     metrics: dict = {

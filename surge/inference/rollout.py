@@ -117,7 +117,8 @@ def valid_prediction_time(
     vpt : float, in Lyapunov-time units.
     """
     errors = np.asarray(errors)
-    exceed = np.nonzero(errors > threshold)[0]
+    # A non-finite error (diverged / NaN rollout) counts as a crossing.
+    exceed = np.nonzero(~np.isfinite(errors) | (errors > threshold))[0]
     if exceed.size == 0:
         return float(
             horizon_lyapunov if horizon_lyapunov is not None

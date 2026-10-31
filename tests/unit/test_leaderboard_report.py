@@ -391,14 +391,17 @@ def test_vpt_is_primary_and_ranked_descending():
 def test_index_json_cannot_close_script_block():
     from surge.report.index_section import index_section_html, json_for_script
 
-    rows = [{"key": "k</script><b>", "haystack": "a & </script>", "status": "ready",
-             "category": "c", "discipline": "d", "title": "t", "models": "",
-             "value_text": "—", "gate_html": ""}]
-    payload = json_for_script([{"key": r["key"], "haystack": r["haystack"]} for r in rows])
+    evil = "k</script><b>"
+    row = {"key": evil, "name": "n", "category": "c", "discipline": "d",
+           "status": "ready", "tier": 0, "shape": "s", "focus": False,
+           "best_model": "m", "value_text": "1.0", "gate_html": "",
+           "haystack": "a & </script>"}
+    payload = json_for_script([{"key": row["key"], "haystack": row["haystack"]}])
     assert "</script>" not in payload and "<" not in payload
-    assert json.loads(payload) == [{"key": rows[0]["key"], "haystack": rows[0]["haystack"]}]
-    try:
-        page = index_section_html(rows)
-    except KeyError:
-        return
-    assert page.count("</script>") == 1
+    assert json.loads(payload) == [{"key": evil, "haystack": row["haystack"]}]
+    page = index_section_html([row])
+    assert page
+    n_open = len(re.findall(r"<script\b", page))
+    assert page.count("</script>") == n_open  # only the section's own closes
+    for block in re.findall(r"<script\b[^>]*>(.*?)</script>", page, flags=re.S):
+        assert "</script" not in block

@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 
 from . import paths
-from .base import BenchmarkResult
+from .base import BenchmarkResult, capture_predictions
 from .registry import benchmark_info, benchmark_metadata, run_benchmark
 
 
@@ -690,6 +690,8 @@ def _run_with_adapter(
     if not was_tracing:
         tracemalloc.start()
     _reset_gpu_peak_memory()
+    lorenz_metrics: dict[str, Any] = {}
+    lorenz_extra: dict[str, Any] = {}
     t0 = time.perf_counter()
     try:
         import inspect
@@ -700,11 +702,17 @@ def _run_with_adapter(
             if "X_val" in fit_sig.parameters:
                 fit_kwargs = {"X_val": X_val, "y_val": y_val}
         if benchmark_key == "sequence.lorenz63":
-            # Same z-score contract as tasks.run_sequence_lorenz63.
-            lz_mean = X_train.mean(axis=0)
-            lz_scale = X_train.std(axis=0) + 1e-8
-            adapter.fit((X_train - lz_mean) / lz_scale, (y_train - lz_mean) / lz_scale)
-            y_pred = np.asarray(adapter.predict((X_test - lz_mean) / lz_scale)) * lz_scale + lz_mean
+            # Gate is rollout VPT: fit + predict + rollout score inside the
+            # timed/traced window (matches tasks.run_sequence_lorenz63).
+            from .tasks import lorenz_adapter_run
+
+            lz = lorenz_adapter_run(
+                adapter, X_train, y_train, X_test, seed=seed,
+                climate_norm=float(np.sqrt(np.mean(np.sum(np.vstack([X, y]) ** 2, axis=1)))),
+            )
+            y_pred = lz["y_pred"]
+            lorenz_metrics = lz["metrics"]
+            lorenz_extra = lz["extra"]
         else:
             adapter.fit(X_train, y_train, **fit_kwargs)
             y_pred = np.asarray(adapter.predict(X_test))
@@ -719,12 +727,12 @@ def _run_with_adapter(
         tracemalloc.stop()
 
     mo_extra: dict[str, Any] = {}
-    lorenz_extra: dict[str, Any] = {}
     if task_type == "regression":
         # Sequence benchmarks: compute NRMSE instead of / in addition to R².
         if benchmark_key.startswith("sequence.") or benchmark_key.startswith("pde.") or benchmark_key.startswith("pdebench."):
             nrmse = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
             metrics = {"test_nrmse": nrmse}
+            capture_predictions(y_test, y_pred)
             # Also compute R² if single-output, skip for multi-output PDE fields.
             try:
                 from sklearn.metrics import r2_score
@@ -732,18 +740,7 @@ def _run_with_adapter(
                 metrics["test_r2"] = r2
             except Exception:
                 pass
-            if benchmark_key == "sequence.lorenz63":
-                # The gate is rollout VPT, not one-step NRMSE: score it here so
-                # every adapter path emits test_vpt_median.
-                from .tasks import lorenz_rollout_metrics
-
-                roll = lorenz_rollout_metrics(
-                    adapter, seed=seed,
-                    climate_norm=float(np.sqrt(np.mean(np.sum(np.vstack([X, y]) ** 2, axis=1)))),
-                    x_mean=lz_mean, x_scale=lz_scale,
-                )
-                metrics.update(roll["metrics"])
-                lorenz_extra = roll["extra"]
+            metrics.update(lorenz_metrics)
         else:
             # Support multi-output: only ravel for 1-D targets.
             y_pred_mo = y_pred.ravel() if y_test.ndim == 1 else y_pred
@@ -793,6 +790,10 @@ def _run_with_adapter(
     if gpu_peak is not None:
         metrics["gpu_peak_memory_mb"] = gpu_peak
     passed = _check_pass(benchmark_key, metrics)
+    if not passed:
+        gate_key = gate_metric_key(benchmark_key)
+        if gate_key is not None and gate_key not in metrics:
+            lorenz_extra["gate_metric_missing"] = gate_key
 
     message = f"leaderboard run via {model_key}"
     if benchmark_key == "plasma.constellaration_multioutput":
@@ -1886,67 +1887,74 @@ def _run_constellaration_paper_benchmark(
     )
 
 
+_GATE_THRESHOLDS: dict[str, tuple[str, float]] = {
+    "synthetic.regression_1d": ("test_r2", 0.85),
+    "synthetic.multioutput_2d": ("test_r2", 0.75),
+    "tabular.diabetes": ("test_r2", 0.35),
+    "tabular.california_housing": ("test_r2", 0.75),
+    "tabular.concrete_strength": ("test_r2", 0.80),
+    "tabular.energy_efficiency": ("test_r2", 0.90),
+    "synthetic.classification_binary": ("test_accuracy", 0.75),
+    "tabular.iris": ("test_accuracy", 0.88),
+    "tabular.breast_cancer": ("test_accuracy", 0.93),
+    "tabular.wine": ("test_accuracy", 0.90),
+    "tabular.digits": ("test_accuracy", 0.95),
+    "sequence.lorenz63": ("test_vpt_median", 2.0),  # higher is better (Lyapunov times)
+    "pde.burgers_1d": ("test_relative_l2", 0.10),  # lower is better
+    "classification.flow_regime": ("test_accuracy", 0.85),
+    "tabular.airfoil_noise": ("test_r2", 0.80),
+    "tabular.yacht_dynamics": ("test_r2", 0.80),
+    "classification.plasma_stability": ("test_accuracy", 0.92),
+    "tabular.superconductor": ("test_r2", 0.90),
+    "multioutput.scm20d": ("test_r2", 0.60),
+    "classification.covertype": ("test_accuracy", 0.85),
+    # CTR-23 — thresholds from Grinsztajn et al. 2022 tree-model baselines
+    "ctr23.abalone": ("test_r2", 0.55),
+    "ctr23.bike_sharing": ("test_r2", 0.90),
+    "ctr23.diamonds": ("test_r2", 0.95),
+    "ctr23.house_sales": ("test_r2", 0.80),
+    "ctr23.brazilian_houses": ("test_r2", 0.75),
+    # Vision benchmarks
+    # MNIST: published LeNet-5 is 99.05%; we use 99.0% as the bar.
+    "vision.mnist": ("test_accuracy", 0.990),
+    # CIFAR-10: ResNet-20 paper result is 91.25% (He et al. 2016).
+    # Threshold set at 91.0% to allow ±0.25% seed variance.
+    "vision.cifar10": ("test_accuracy", 0.910),
+    # DOE fusion plasma benchmarks
+    "plasma.cmod_density_limit": ("test_accuracy", 0.85),
+    "plasma.qlknn_transport": ("test_r2", 0.90),
+    "plasma.qlknn10d": ("test_r2", 0.95),
+    "plasma.constellaration": ("test_r2", 0.85),
+    "thewell.gray_scott": ("test_relative_l2", 0.30),
+    # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
+    "plasma.constellaration_paper": ("test_r2_mean", 0.97),
+    # Gate on the 8 metrics that need the VMEC++ equilibrium solve. The
+    # geometry (3) and derived (1) ConStellaration labels are no longer
+    # trained at all (they are closed-form functions of the boundary
+    # coefficients the model already sees) — training on them would
+    # otherwise mask a weak surrogate behind an easy R²=1.0.
+    "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
+    # Field benchmarks — PROVISIONAL, set from the 500-row smoke cache;
+    # to be re-set from the first full (26,897-row) leaderboard run.
+    "plasma.constellaration_modb": ("test_relative_l2", 0.05),
+    "plasma.constellaration_surfaces": ("test_relative_l2", 0.02),
+}
+
+
+def gate_metric_key(benchmark_key: str) -> "str | None":
+    """Name of the pass/fail gate metric for *benchmark_key* (None if ungated)."""
+    entry = _GATE_THRESHOLDS.get(benchmark_key)
+    return entry[0] if entry else None
+
+
 def _check_pass(benchmark_key: str, metrics: dict) -> bool:
     """Best-effort pass check using known thresholds."""
-    _THRESHOLDS: dict[str, tuple[str, float]] = {
-        "synthetic.regression_1d": ("test_r2", 0.85),
-        "synthetic.multioutput_2d": ("test_r2", 0.75),
-        "tabular.diabetes": ("test_r2", 0.35),
-        "tabular.california_housing": ("test_r2", 0.75),
-        "tabular.concrete_strength": ("test_r2", 0.80),
-        "tabular.energy_efficiency": ("test_r2", 0.90),
-        "synthetic.classification_binary": ("test_accuracy", 0.75),
-        "tabular.iris": ("test_accuracy", 0.88),
-        "tabular.breast_cancer": ("test_accuracy", 0.93),
-        "tabular.wine": ("test_accuracy", 0.90),
-        "tabular.digits": ("test_accuracy", 0.95),
-        "sequence.lorenz63": ("test_vpt_median", 2.0),  # higher is better (Lyapunov times)
-        "pde.burgers_1d": ("test_relative_l2", 0.10),  # lower is better
-        "classification.flow_regime": ("test_accuracy", 0.85),
-        "tabular.airfoil_noise": ("test_r2", 0.80),
-        "tabular.yacht_dynamics": ("test_r2", 0.80),
-        "classification.plasma_stability": ("test_accuracy", 0.92),
-        "tabular.superconductor": ("test_r2", 0.90),
-        "multioutput.scm20d": ("test_r2", 0.60),
-        "classification.covertype": ("test_accuracy", 0.85),
-        # CTR-23 — thresholds from Grinsztajn et al. 2022 tree-model baselines
-        "ctr23.abalone": ("test_r2", 0.55),
-        "ctr23.bike_sharing": ("test_r2", 0.90),
-        "ctr23.diamonds": ("test_r2", 0.95),
-        "ctr23.house_sales": ("test_r2", 0.80),
-        "ctr23.brazilian_houses": ("test_r2", 0.75),
-        # Vision benchmarks
-        # MNIST: published LeNet-5 is 99.05%; we use 99.0% as the bar.
-        "vision.mnist": ("test_accuracy", 0.990),
-        # CIFAR-10: ResNet-20 paper result is 91.25% (He et al. 2016).
-        # Threshold set at 91.0% to allow ±0.25% seed variance.
-        "vision.cifar10": ("test_accuracy", 0.910),
-        # DOE fusion plasma benchmarks
-        "plasma.cmod_density_limit": ("test_accuracy", 0.85),
-        "plasma.qlknn_transport": ("test_r2", 0.90),
-        "plasma.qlknn10d": ("test_r2", 0.95),
-        "plasma.constellaration": ("test_r2", 0.85),
-        "thewell.gray_scott": ("test_relative_l2", 0.30),
-        # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
-        "plasma.constellaration_paper": ("test_r2_mean", 0.97),
-        # Gate on the 8 metrics that need the VMEC++ equilibrium solve. The
-        # geometry (3) and derived (1) ConStellaration labels are no longer
-        # trained at all (they are closed-form functions of the boundary
-        # coefficients the model already sees) — training on them would
-        # otherwise mask a weak surrogate behind an easy R²=1.0.
-        "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
-        # Field benchmarks — PROVISIONAL, set from the 500-row smoke cache;
-        # to be re-set from the first full (26,897-row) leaderboard run.
-        "plasma.constellaration_modb": ("test_relative_l2", 0.05),
-        "plasma.constellaration_surfaces": ("test_relative_l2", 0.02),
-    }
-    if benchmark_key not in _THRESHOLDS:
+    if benchmark_key not in _GATE_THRESHOLDS:
         return True
-    metric_key, threshold = _THRESHOLDS[benchmark_key]
+    metric_key, threshold = _GATE_THRESHOLDS[benchmark_key]
     val = metrics.get(metric_key)
     if val is None:
         # A gated benchmark without its gate metric must never PASS.
-        metrics["gate_metric_missing"] = metric_key
         return False
     # For lower-is-better metrics, pass if val <= threshold.
     if metric_key in _LOWER_IS_BETTER or metric_key == "test_nrmse":
