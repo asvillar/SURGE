@@ -243,10 +243,12 @@ def test_load_restores_saved_params(tmp_path):
 def test_load_model_compat_reconstructs_dino(tmp_path, monkeypatch):
     from surge.io.load_compat import load_model_compat
 
+    from surge.model.backends import dino_linear_probe as backend
+
     monkeypatch.setenv("SURGE_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setattr(
-        "surge.model.backends.dino_linear_probe.load_hub_backbone", _fake_loader
-    )
+    # The artifact names its extractor; the compat loader must resolve that
+    # id to the matching backbone, never to the default DINOv2 hub model.
+    monkeypatch.setitem(backend._EXTRACTOR_LOADERS, "test-fake-conv", _fake_loader)
     rng = np.random.default_rng(0)
     X = rng.standard_normal((20, 64)).astype("float32")
     y = rng.integers(0, 3, 20)
@@ -259,4 +261,38 @@ def test_load_model_compat_reconstructs_dino(tmp_path, monkeypatch):
         str(path), {"backend": "pytorch", "name": "pytorch.dino_linear_probe"}
     )
     assert hasattr(model, "predict")
+    assert model._model._hub_loader is _fake_loader
     assert np.array_equal(model.predict(X), a1.predict(X))
+
+
+def test_load_model_compat_rejects_unregistered_extractor(tmp_path, monkeypatch):
+    from surge.io.load_compat import load_model_compat
+    from surge.model.backends import dino_linear_probe as backend
+
+    monkeypatch.setenv("SURGE_DATA_DIR", str(tmp_path / "data"))
+    rng = np.random.default_rng(1)
+    X = rng.standard_normal((16, 64)).astype("float32")
+    y = rng.integers(0, 2, 16)
+    a1 = _make_adapter(
+        tmp_path / "c.npz", img_size=8, in_channels=1, resize_to=16,
+        extractor_id="unregistered-custom-backbone",
+    )
+    a1.fit(X, y)
+    path = tmp_path / "m.joblib"
+    a1.save(path)
+    assert "unregistered-custom-backbone" not in backend._EXTRACTOR_LOADERS
+
+    with pytest.raises(ValueError, match="unregistered-custom-backbone"):
+        load_model_compat(str(path), {"backend": "pytorch"})
+
+
+def test_resolve_extractor_default_and_registered():
+    from surge.model.backends import dino_linear_probe as backend
+
+    assert backend.resolve_extractor(None) is backend.load_hub_backbone
+    assert backend.resolve_extractor(backend.DEFAULT_EXTRACTOR_ID) is backend.load_hub_backbone
+    backend.register_extractor("test-resolver-id", _fake_loader)
+    try:
+        assert backend.resolve_extractor("test-resolver-id") is _fake_loader
+    finally:
+        backend._EXTRACTOR_LOADERS.pop("test-resolver-id", None)

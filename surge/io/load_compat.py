@@ -232,10 +232,15 @@ def _load_dino_probe(obj: dict, path: Path) -> Any:
             "scikit-learn (pip install torch scikit-learn)"
         ) from e
     from ..model import MODEL_REGISTRY
+    from ..model.backends.dino_linear_probe import resolve_extractor
 
     params = dict(obj.get("params") or {})
-    if obj.get("extractor_id") is not None:
-        params["extractor_id"] = obj["extractor_id"]
+    extractor_id = obj.get("extractor_id")
+    # Restore the backbone that produced the saved features (raises for an
+    # unregistered custom extractor instead of substituting DINOv2).
+    params["hub_loader"] = resolve_extractor(extractor_id)
+    if extractor_id is not None:
+        params["extractor_id"] = extractor_id
     adapter = MODEL_REGISTRY.create("pytorch.dino_linear_probe", **params)
     adapter.load(str(path))
     adapter.mark_fitted()
