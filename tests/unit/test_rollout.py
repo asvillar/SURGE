@@ -264,3 +264,14 @@ def test_match_frame_nonzero_diff_when_no_exact_match():
 
     assert idx == 1
     assert diff == pytest.approx(0.4, abs=1e-6)
+
+
+def test_valid_prediction_time_nan_counts_as_crossing():
+    dt = 0.01
+    assert valid_prediction_time(np.full(50, np.nan), 0.4, dt) == pytest.approx(1 * dt)
+    errs = np.array([0.1, 0.2, 0.1, np.nan, 0.1])
+    assert valid_prediction_time(errs, 0.4, dt) == pytest.approx(4 * dt)
+    errs = np.array([0.1, np.inf, 0.1])
+    assert valid_prediction_time(errs, 0.4, dt) == pytest.approx(2 * dt)
+    # finite curves unchanged
+    assert valid_prediction_time(np.array([0.1, 0.2]), 0.4, dt, horizon_lyapunov=7.0) == 7.0

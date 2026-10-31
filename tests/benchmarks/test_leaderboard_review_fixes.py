@@ -3,6 +3,8 @@ lorenz cache validation, --no-predictions in sweeps)."""
 
 from __future__ import annotations
 
+import pytest
+
 import numpy as np
 
 from surge.benchmarks import leaderboard as lb
@@ -12,7 +14,8 @@ from surge.model.registry import MODEL_REGISTRY
 def test_check_pass_missing_gate_metric_is_not_pass():
     metrics = {"test_nrmse": 0.01}
     assert lb._check_pass("sequence.lorenz63", metrics) is False
-    assert metrics["gate_metric_missing"] == "test_vpt_median"
+    assert metrics == {"test_nrmse": 0.01}  # pure: no mutation
+    assert lb.gate_metric_key("sequence.lorenz63") == "test_vpt_median"
     # ungated benchmarks keep the permissive default
     assert lb._check_pass("not.a.benchmark", {}) is True
 
@@ -39,6 +42,7 @@ def test_load_lorenz63_regenerates_stale_cache(tmp_path, monkeypatch, capsys):
 
 
 def test_run_leaderboard_merges_bench_model_defaults(tmp_path, monkeypatch):
+    pytest.importorskip("torch")  # pytorch.residual_mlp is unregistered on the no-torch job
     captured: list[dict] = []
 
     class _Stub:

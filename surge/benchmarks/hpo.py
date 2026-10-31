@@ -366,7 +366,7 @@ _PRIMARY_METRIC: dict[str, tuple[str, str]] = {
 
 # Per-benchmark metric overrides (for benchmarks where task_type alone is insufficient).
 _BENCHMARK_PRIMARY_METRIC: dict[str, tuple[str, str]] = {
-    "sequence.lorenz63": ("test_nrmse", "minimize"),
+    "sequence.lorenz63": ("test_vpt_median", "maximize"),
     "pde.burgers_1d": ("test_relative_l2", "minimize"),
     "pdebench.burgers_1d": ("test_relative_l2", "minimize"),
     "pdebench.darcy_2d": ("test_relative_l2", "minimize"),
@@ -602,6 +602,7 @@ def run_benchmark_hpo(
             X_train, X_test, y_train, y_test,
             task_type=info["task_type"],
             tier=info["tier"],
+            seed=seed,
         )
         if result is None:
             raise optuna.exceptions.TrialPruned()
@@ -651,6 +652,7 @@ def run_benchmark_hpo(
             X_train, X_test, y_train, y_test,
             task_type=info["task_type"],
             tier=info["tier"],
+            seed=seed,
         )
 
     result = best_result[0]
@@ -697,6 +699,7 @@ def _run_with_adapter_data(
     *,
     task_type: str,
     tier: str,
+    seed: int = 0,
 ) -> Any:
     """
     Fit *adapter* on pre-split data and return a :class:`BenchmarkResult`.
@@ -707,12 +710,26 @@ def _run_with_adapter_data(
 
     from .base import BenchmarkResult
     from .tasks import _clf_metrics, _multioutput_reg_extras, _reg_metrics
-    from .leaderboard import _check_pass
+    from .leaderboard import _check_pass, gate_metric_key
 
+    lorenz_metrics: dict[str, Any] = {}
+    lorenz_extra: dict[str, Any] = {}
     try:
         t0 = time.perf_counter()
-        adapter.fit(X_train, y_train)
-        y_pred = np.asarray(adapter.predict(X_test))
+        if benchmark_key == "sequence.lorenz63":
+            from .tasks import lorenz_adapter_run
+
+            # Same point set as the full-data definition np.vstack([X, y])
+            # (train/test partition X and y; the sum is order-invariant).
+            climate_norm = float(np.sqrt(np.mean(np.sum(
+                np.vstack([X_train, X_test, y_train, y_test]) ** 2, axis=1))))
+            lz = lorenz_adapter_run(
+                adapter, X_train, y_train, X_test, seed=seed, climate_norm=climate_norm)
+            y_pred = lz["y_pred"]
+            lorenz_metrics, lorenz_extra = lz["metrics"], lz["extra"]
+        else:
+            adapter.fit(X_train, y_train)
+            y_pred = np.asarray(adapter.predict(X_test))
         elapsed = time.perf_counter() - t0
     except Exception as exc:
         LOG.debug("fit/predict failed: %s", exc)
@@ -736,6 +753,7 @@ def _run_with_adapter_data(
             y_test, y_pred_mo, names=mo_names, kinds=mo_kinds
         )
         metrics.update(mo_metrics)
+        metrics.update(lorenz_metrics)
     else:
         y_prob = None
         if hasattr(adapter, "predict_proba"):
@@ -750,6 +768,11 @@ def _run_with_adapter_data(
 
     extra: dict[str, Any] = {"n_train": len(X_train), "n_test": len(X_test)}
     extra.update(mo_extra)
+    extra.update(lorenz_extra)
+    if not passed:
+        gate_key = gate_metric_key(benchmark_key)
+        if gate_key is not None and gate_key not in metrics:
+            extra["gate_metric_missing"] = gate_key
 
     return BenchmarkResult(
         benchmark_key=benchmark_key,

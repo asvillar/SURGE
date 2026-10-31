@@ -76,21 +76,26 @@ def video_section(video: Path | None, poster: Path | None = None) -> str:
             "leaderboard, end to end.</p></section>")
 
 
-def _clip(run_dir: Path, kind: str, mode: str, anim_dir: Path | None) -> Path | None:
-    """Reuse a pre-rendered ``<kind>_<mode>.webm`` or render it from the run."""
+def _clip(run_dir: Path, kind: str, mode: str, anim_dir: Path | None) -> bytes | None:
+    """Bytes of a pre-rendered ``<kind>_<mode>.webm``, or one rendered from the run.
+
+    Rendering happens in a temporary directory that is always removed, so no
+    frames/webm are left behind (also on failure).
+    """
     if anim_dir is not None:
         pre = Path(anim_dir) / f"{kind}_{mode}.webm"
         if pre.is_file():
-            return pre
+            return pre.read_bytes()
     try:
         from surge.viz import animate
-        tmp = Path(tempfile.mkdtemp(prefix=f"surge_{kind}_"))
-        fn = {"hpo_evolution": animate.hpo_evolution_frames,
-              "mission_control": animate.mission_control_frames}[kind]
-        fn(Path(run_dir), tmp / "frames", mode)
-        animate.frames_to_video(tmp / "frames", tmp / kind)
-        out = tmp / f"{kind}.webm"
-        return out if out.is_file() else None
+        with tempfile.TemporaryDirectory(prefix=f"surge_{kind}_") as tmp_s:
+            tmp = Path(tmp_s)
+            fn = {"hpo_evolution": animate.hpo_evolution_frames,
+                  "mission_control": animate.mission_control_frames}[kind]
+            fn(Path(run_dir), tmp / "frames", mode)
+            animate.frames_to_video(tmp / "frames", tmp / kind)
+            out = tmp / f"{kind}.webm"
+            return out.read_bytes() if out.is_file() else None
     except Exception:  # noqa: BLE001 - media must never break the report
         return None
 
@@ -111,7 +116,8 @@ def replay_panels(demo_runs: dict[str, str], mode: str, anim_dir: Path | None,
             p = _clip(rd, kind, mode, anim_dir)
             if p:
                 vids.append(f"<video muted loop playsinline preload='metadata' "
-                            f"src='data:video/webm;base64,{_b64(p)}'></video>")
+                            f"src='data:video/webm;base64,"
+                            f"{base64.b64encode(p).decode()}'></video>")
         if vids:
             title = (names or {}).get(key, key)
             out.append(f"<div class='replay'><h4>Campaign replay · {html.escape(title)}"
