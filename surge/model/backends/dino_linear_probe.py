@@ -34,6 +34,7 @@ DINOV2_STD = (0.229, 0.224, 0.225)
 HUB_REPO = "facebookresearch/dinov2"
 HUB_MODEL = "dinov2_vits14"
 EXPECTED_FEATURE_DIM = 384  # ViT-S/14 [CLS] token width (informational only)
+DEFAULT_EXTRACTOR_ID = f"{HUB_REPO}/{HUB_MODEL}"
 CACHE_SCHEMA_VERSION = 2
 SAVE_FORMAT = "surge.dino_linear_probe/1"
 _HASH_CHUNK_BYTES = 64 * 1024 * 1024
@@ -76,6 +77,41 @@ def load_hub_backbone() -> Any:
     import torch
 
     return torch.hub.load(HUB_REPO, HUB_MODEL)
+
+
+_EXTRACTOR_LOADERS: dict[str, Callable[[], Any]] = {}
+
+
+def register_extractor(extractor_id: str, loader: Callable[[], Any]) -> None:
+    """Register a zero-arg backbone loader under a stable ``extractor_id``.
+
+    Artifacts saved by a probe built with a custom ``hub_loader`` record that
+    id; :func:`surge.io.load_compat.load_model_compat` can only rebuild them
+    when the same id resolves to a loader here (or through an adapter built
+    with the matching ``hub_loader``).
+    """
+    _EXTRACTOR_LOADERS[extractor_id] = loader
+
+
+def resolve_extractor(extractor_id: Optional[str]) -> Callable[[], Any]:
+    """Return the backbone loader for ``extractor_id``.
+
+    ``None`` or :data:`DEFAULT_EXTRACTOR_ID` map to :func:`load_hub_backbone`;
+    any other id must have been registered with :func:`register_extractor`,
+    otherwise a ``ValueError`` is raised rather than silently substituting the
+    default DINOv2 backbone (whose features would not match the saved head).
+    """
+    if extractor_id is None or extractor_id == DEFAULT_EXTRACTOR_ID:
+        return load_hub_backbone
+    try:
+        return _EXTRACTOR_LOADERS[extractor_id]
+    except KeyError:
+        raise ValueError(
+            f"DINO linear-probe artifact was produced with extractor {extractor_id!r}, "
+            "which is not registered; call surge.model.backends.dino_linear_probe."
+            f"register_extractor({extractor_id!r}, loader) first, or load the artifact "
+            "through an adapter built with the matching hub_loader."
+        ) from None
 
 
 class DINOLinearProbeModel:
@@ -129,7 +165,7 @@ class DINOLinearProbeModel:
         self.cache_path = Path(cache_path) if cache_path else _default_cache_path()
         self._hub_loader = hub_loader or load_hub_backbone
         if hub_loader is None:
-            extractor_id = extractor_id or f"{HUB_REPO}/{HUB_MODEL}"
+            extractor_id = extractor_id or DEFAULT_EXTRACTOR_ID
         self.extractor_id: Optional[str] = extractor_id
         self._mem_cache: dict[str, np.ndarray] = {}
         self._backbone: Any = None
