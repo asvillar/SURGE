@@ -31,7 +31,6 @@ The on-file result is the best of each model's newest run on or after the benchm
 - `tabular.concrete_strength`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
 - `tabular.iris`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
 - `tabular.superconductor`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
-- `vision.cifar10`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
 
 ## Ready
 
@@ -45,7 +44,6 @@ The on-file result is the best of each model's newest run on or after the benchm
 | `tabular.concrete_strength` | 8 → 1 | Materials Science | Yeh (1998) Cement and Concrete Research | r2 0.930 ✓ (gpflow.gpr, 2026-05-23) | R² ≥ 0.80 | 0.94 R² [diff] | Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file | ✓ | ✓ |
 | `tabular.energy_efficiency` | 8 → 1 | Engineering | Tsanas & Xifara (2012) Energy & Buildings | r2 0.996 ✓ (gpflow.multi_kernel, 2026-05-23) | R² ≥ 0.90 | 0.99 R² [?] | Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file | ✓ | — |
 | `tabular.superconductor` | 81 → 1 | Materials Science | Hamidieh (2018) Computational Materials Science | r2 0.930 ✓ (sklearn.random_forest, 2026-10-20) | R² ≥ 0.90 | 0.92 R² [?] | Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file | ✓ | ✓ |
-| `vision.cifar10` | 32×32×3 → 10 | Computer Vision | Krizhevsky (2009) — Learning Multiple Layers of Features from Tiny Images | accuracy 0.965 ✓ (pytorch.dino_linear_probe, 2026-10-21) | Acc ≥ 0.91 | 0.995 Accuracy [diff] | surge bench run 2026-10-21: pytorch.dino_linear_probe (frozen DINOv2 ViT-S/14 + LogisticRegression, transfer learning, literature linear-probe protocol) reaches accuracy 0.965 (gate 0.91); the from-scratch pytorch.resnet20 remains the scratch-training reference | ✓ | ✓ |
 
 ## In progress
 
@@ -78,6 +76,7 @@ The on-file result is the best of each model's newest run on or after the benchm
 | `tabular.iris` | 4 → 3 | Biology & Medicine | Fisher (1936) Annals of Eugenics | accuracy 0.947 ✓ (sklearn.logistic_regression, 2026-10-21) | Acc ≥ 0.95 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | ✓ |
 | `tabular.wine` | 13 → 3 | Chemistry | Aeberhard, Coomans & De Vel (1992) UCI | accuracy 1.000 ✓ (sklearn.logistic_regression, 2026-05-18) | Acc ≥ 0.90 | 1 Accuracy [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
 | `tabular.yacht_dynamics` | 6 → 1 | Engineering | Gerritsma, Onnink & Versluis (1981) CFD — SHIP DESIGN | r2 1.000 ✓ (gpflow.gpr, 2026-05-23) | R² ≥ 0.95 | 0.99 R² [?] | Small dataset (n < 1,000); plumbing / teaching benchmark | ✓ | — |
+| `vision.cifar10` | 32×32×3 → 10 | Computer Vision | Krizhevsky (2009) — Learning Multiple Layers of Features from Tiny Images | accuracy 0.965 ✓ (pytorch.dino_linear_probe, 2026-10-21) | Acc ≥ 0.91 | 0.995 Accuracy [diff] | Natural-image classification with no surrogate-modelling content; kept as a plumbing/tutorial benchmark and a transfer-learning reference. surge bench run 2026-10-21: pytorch.dino_linear_probe (frozen DINOv2 ViT-S/14 + LogisticRegression, literature linear-probe protocol) reaches accuracy 0.965 (gate 0.91); the from-scratch pytorch.resnet20 remains the scratch-training reference | ✓ | — |
 | `vision.mnist` | 28×28 → 10 | Computer Vision | LeCun, Bottou, Bengio & Haffner (1998) Proc. IEEE | accuracy 0.996 ✓ (pytorch.resnet20, 2026-05-26) | Acc ≥ 0.99 | 0.998 Accuracy [same] | MNIST is a plumbing check, not a surrogate result | ✓ | — |
 
 ## Sanity checks (not surrogate results)

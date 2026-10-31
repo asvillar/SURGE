@@ -137,7 +137,9 @@ try:
             "pytorch.alexnet",
         ]
         # CIFAR-10 uses RGB (3-channel) — exclude grayscale-only LeNet5.
-        _CIFAR10_MODELS = [m for m in _VISION_MODELS if m != "pytorch.lenet5"]
+        _CIFAR10_MODELS = [m for m in _VISION_MODELS if m != "pytorch.lenet5"] + [
+            "pytorch.dino_linear_probe",
+        ]
         # Temporal/sequence models — valid for time-series benchmarks.
         # NOT included in default tabular regression (no spatial structure).
         _SEQUENCE_MODELS = [

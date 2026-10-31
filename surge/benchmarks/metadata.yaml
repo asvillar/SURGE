@@ -630,11 +630,13 @@ benchmarks:
   visible: true
   focus: false
 - key: vision.cifar10
-  status: ready
-  status_note: "surge bench run 2026-10-21: pytorch.dino_linear_probe (frozen
-    DINOv2 ViT-S/14 + LogisticRegression, transfer learning, literature
-    linear-probe protocol) reaches accuracy 0.965 (gate 0.91); the from-scratch
-    pytorch.resnet20 remains the scratch-training reference"
+  status: tutorial
+  status_note: "Natural-image classification with no surrogate-modelling content;
+    kept as a plumbing/tutorial benchmark and a transfer-learning reference.
+    surge bench run 2026-10-21: pytorch.dino_linear_probe (frozen DINOv2
+    ViT-S/14 + LogisticRegression, literature linear-probe protocol) reaches
+    accuracy 0.965 (gate 0.91); the from-scratch pytorch.resnet20 remains the
+    scratch-training reference"
   name: CIFAR-10 Image Classification
   capability: Vision
   discipline: Computer Vision
@@ -679,7 +681,7 @@ benchmarks:
   outputs:
   - {name: "class", desc: "Object class: airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck"}
   visible: true
-  focus: true
+  focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: fusion.m3dc1_sample
   status: needs_rerun
