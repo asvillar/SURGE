@@ -81,6 +81,24 @@ def test_build_report_is_self_contained_html(reports: Path, tmp_path: Path):
     assert "http" not in text.split("</style>")[0]  # no external CSS/fonts
 
 
+def test_report_has_no_repo_relative_defaults_outside_checkout(tmp_path: Path, monkeypatch):
+    """Simulates an installed wheel (no SURGE checkout on disk): the report
+    must not assume repo-relative demo-video/anim-dir defaults exist."""
+    from surge.benchmarks import paths as bpaths
+
+    root = tmp_path / "benchmark_reports"
+    _write_result(root, "tabular.california_housing", "sklearn.random_forest",
+                  "2026-01-01T00-00-00Z", test_r2=0.80, test_rmse=0.51, runtime_s=3.0)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(bpaths, "repo_root", lambda: None)
+
+    out = build_report(root, tmp_path / "lb.html")
+    text = out.read_text()
+    assert "audit/" not in text
+    assert "docs/assets" not in text
+    assert "<video" not in text
+
+
 # ------------------------------------------------------------ status-aware v2
 
 def _fake_tree(tmp_path: Path) -> Path:

@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 
+from . import paths
 from .base import BenchmarkResult
 from .registry import benchmark_info, benchmark_metadata, run_benchmark
 
@@ -50,9 +51,7 @@ def _bench_data_root() -> Path:
     On first run each loader creates its subdirectory and saves the data.
     Subsequent runs load from the local cache without re-downloading.
     """
-    root = Path(__file__).parent.parent.parent / "data" / "datasets" / "benchmarks"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    return paths.bench_data_root()
 
 
 def _fetch_openml(*args, **kwargs):
@@ -1255,11 +1254,9 @@ def _load_fusion_m3dc1_sample():
     There is no synthetic fallback — results from this benchmark must
     come from real M3DC1 data.
     """
-    repo_root = Path(__file__).parent.parent.parent
-    candidate_paths = [
-        _bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5",
-        repo_root / "data" / "datasets" / "M3DC1" / "m3dc1_sample.hdf5",
-    ]
+    candidate_paths = [_bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5"]
+    if paths.repo_root() is not None:
+        candidate_paths.append(paths.datasets_root() / "M3DC1" / "m3dc1_sample.hdf5")
     h5_path = next((p for p in candidate_paths if p.exists()), None)
     if h5_path is None:
         raise FileNotFoundError(
@@ -1435,11 +1432,9 @@ def _load_constellaration(n_samples: int = 10_000):
     DOI: arXiv:2506.19583
     """
     # Fast path — check both the new unified cache location and the legacy path.
-    repo_root = Path(__file__).parent.parent.parent
-    _npz_candidates = [
-        _bench_data_root() / "plasma" / "constellaration" / "paper_nfp3_clip0.05.npz",
-        repo_root / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz",
-    ]
+    _npz_candidates = [_bench_data_root() / "plasma" / "constellaration" / "paper_nfp3_clip0.05.npz"]
+    if paths.repo_root() is not None:
+        _npz_candidates.append(paths.datasets_root() / "constellaration" / "paper_nfp3_clip0.05.npz")
     npz_path = next((p for p in _npz_candidates if p.exists()), None)
     if npz_path is not None:
         data = np.load(npz_path, allow_pickle=True)
@@ -1538,9 +1533,8 @@ def _load_constellaration_paper(
     cache_file = _cache_dir / f"paper_nfp{n_field_periods}_clip{outlier_clip_pct}.npz"
 
     # Also check legacy path so existing local caches are reused.
-    if not cache_file.exists():
-        repo_root = Path(__file__).parent.parent.parent
-        legacy = repo_root / "data" / "datasets" / "constellaration" / cache_file.name
+    if not cache_file.exists() and paths.repo_root() is not None:
+        legacy = paths.datasets_root() / "constellaration" / cache_file.name
         if legacy.exists():
             cache_file = legacy
 

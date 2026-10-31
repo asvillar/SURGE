@@ -11,6 +11,8 @@ from pathlib import Path
 
 from surge.report.leaderboard import load_metadata
 
+from . import paths
+
 STATUS_ORDER = ("ready", "in_progress", "needs_rerun", "tutorial", "sanity")
 STATUS_TITLES = {
     "ready": "Ready",
@@ -34,7 +36,9 @@ _LOWER_IS_BETTER = ("test_rel_l2", "test_nrmse", "test_nrmse_mean", "test_rmse")
 
 def _is_lower_better(metric_key: str) -> bool:
     return metric_key in _LOWER_IS_BETTER
-DEFAULT_OUT = Path("docs/benchmarks/README.md")
+_repo_root = paths.repo_root()
+DEFAULT_OUT = (_repo_root / "docs" / "benchmarks" / "README.md"
+               if _repo_root is not None else Path("benchmarks_status.md"))
 _SEL_FIELDS = ("visible", "focus", "focus_note")
 
 

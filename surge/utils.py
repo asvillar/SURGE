@@ -196,12 +196,13 @@ def get_data_path(dataset_name="HHFW-NSTX"):
     Returns:
         Path: Path to the dataset directory
     """
-    surge_path = setup_surge_path()
-    data_path = surge_path / "data" / "datasets" / dataset_name
+    from surge.benchmarks import paths
+
+    datasets_dir = paths.datasets_root()
+    data_path = datasets_dir / dataset_name
 
     if not data_path.exists():
         available_datasets = []
-        datasets_dir = surge_path / "data" / "datasets"
         if datasets_dir.exists():
             available_datasets = [d.name for d in datasets_dir.iterdir() if d.is_dir()]
 

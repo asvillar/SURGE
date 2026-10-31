@@ -15,14 +15,11 @@ import pickle
 import socket
 import struct
 from contextlib import contextmanager
-from pathlib import Path
 
 import numpy as np
 
+from surge.benchmarks import paths
 from surge.viz.theme import density_cmap, surge_theme
-
-_REPO = Path(__file__).resolve().parents[2]
-_BENCH_DATA = _REPO / "data" / "datasets" / "benchmarks"
 
 _FIGSIZE = (3.6, 2.5)
 
@@ -182,7 +179,7 @@ def _lorenz(X, Y, mode, n=4):
 # ----------------------------------------------------------- data loaders
 
 def _mnist_samples():
-    raw = _BENCH_DATA / "vision" / "MNIST" / "raw"
+    raw = paths.bench_data_root() / "vision" / "MNIST" / "raw"
     fi = raw / "t10k-images-idx3-ubyte"
     fl = raw / "t10k-labels-idx1-ubyte"
     if not fi.exists():
@@ -200,8 +197,8 @@ def _mnist_samples():
 
 
 def _cifar_samples():
-    batch = _BENCH_DATA / "vision" / "cifar-10-batches-py" / "data_batch_1"
-    meta = _BENCH_DATA / "vision" / "cifar-10-batches-py" / "batches.meta"
+    batch = paths.bench_data_root() / "vision" / "cifar-10-batches-py" / "data_batch_1"
+    meta = paths.bench_data_root() / "vision" / "cifar-10-batches-py" / "batches.meta"
     if not batch.exists():
         return None
     d = pickle.loads(batch.read_bytes(), encoding="bytes")
@@ -212,7 +209,7 @@ def _cifar_samples():
 
 
 def _npz(relpath: str):
-    f = _BENCH_DATA / relpath
+    f = paths.bench_data_root() / relpath
     if not f.exists():
         return None
     return np.load(f, allow_pickle=True)

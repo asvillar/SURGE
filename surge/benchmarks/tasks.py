@@ -1541,18 +1541,23 @@ def run_fusion_m3dc1_sample(*, seed: int = 42, model_key: str | None = None,
 
     Data
     ----
-    Tries to load from ``data/datasets/M3DC1/m3dc1_sample.hdf5`` (13→1
-    regression on normalized MHD equilibrium parameters).  Falls back to a
-    synthetic inline fixture (same shape / difficulty) if the HDF5 is absent
-    so that CI and tests run without the large dataset.
+    Tries the unified benchmark cache (``<bench_data_root>/fusion/m3dc1/
+    m3dc1_sample.hdf5``), then the legacy ``<repo>/data/datasets/M3DC1/
+    m3dc1_sample.hdf5`` path inside a checkout.  Falls back to a synthetic
+    inline fixture (same shape / difficulty) if neither is present, so that
+    CI and tests run without the large dataset.
 
     Shape: 13 input features → 1 stability metric (R²).
     Pass threshold: R² ≥ 0.70.
     """
-    from pathlib import Path
     from sklearn.model_selection import train_test_split
+    from surge.benchmarks import paths  # local import avoids an import cycle
 
-    H5_PATH = Path(__file__).parent.parent.parent / "data" / "datasets" / "M3DC1" / "m3dc1_sample.hdf5"
+    PRIMARY_H5_PATH = paths.bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5"
+    if PRIMARY_H5_PATH.exists():
+        H5_PATH = PRIMARY_H5_PATH
+    else:
+        H5_PATH = paths.datasets_root() / "M3DC1" / "m3dc1_sample.hdf5"
 
     X, y = None, None
 
@@ -1594,7 +1599,7 @@ def run_fusion_m3dc1_sample(*, seed: int = 42, model_key: str | None = None,
 
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
-    note = "(synthetic inline fixture — place real data at data/datasets/M3DC1/m3dc1_sample.hdf5)" if _is_synthetic else ""
+    note = f"(synthetic inline fixture — place real data at {PRIMARY_H5_PATH})" if _is_synthetic else ""
     return BenchmarkResult(
         benchmark_key="fusion.m3dc1_sample",
         model_key=adapter.name,
