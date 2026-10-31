@@ -564,8 +564,8 @@ benchmarks:
   - {name: "state", desc: "Lorenz-63 state (x, y, z) at time t (dimensionless)"}
   outputs:
   - {name: "next_state", desc: "Lorenz-63 state (x, y, z) at time t + dt=0.01 (dimensionless)"}
-  visible: true
-  focus: true
+  visible: false
+  focus: false
   focus_note: ""
 - key: pde.burgers_1d
   status: sanity
