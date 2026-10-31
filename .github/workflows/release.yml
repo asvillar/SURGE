@@ -3,7 +3,7 @@ name: Release to PyPI
 # Publishes surge-ml when a version tag is pushed (v0.1.0rc1, v0.1.0, ...).
 # Uses PyPI Trusted Publishing (OIDC) — no long-lived token in secrets.
 # One-time setup on pypi.org: project surge-ml → Publishing → add GitHub
-# publisher (owner S-Villar, repo SURGE, workflow release.yml,
+# publisher (owner asvillar, repo SURGE, workflow release.yml,
 # environment pypi). Until that is configured, publish manually per
 # docs/RELEASING.md.
 
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Build sdist and wheel
@@ -28,9 +28,26 @@ jobs:
           uv venv /tmp/relcheck
           VIRTUAL_ENV=/tmp/relcheck uv pip install dist/*.whl
           /tmp/relcheck/bin/surge version
+          SURGE_STRICT_REGISTRY=1 /tmp/relcheck/bin/python -c "import surge"
           /tmp/relcheck/bin/surge models --verbose
           /tmp/relcheck/bin/surge bench -b synthetic.regression_1d \
             -m sklearn.random_forest --no-save
+          # toy-CSV surge init -> validate -> run; cd /tmp first so the
+          # wizard's relative run artifacts (runs/<tag>/) land outside the
+          # checkout instead of dirtying the working tree.
+          cd /tmp
+          /tmp/relcheck/bin/python -c "
+          import numpy as np, pandas as pd
+          rng = np.random.default_rng(0)
+          X = rng.standard_normal((60, 2))
+          y = X @ [1.5, -2.0] + 0.05 * rng.standard_normal(60)
+          df = pd.DataFrame(X, columns=['x1', 'x2'])
+          df['y'] = y
+          df.to_csv('/tmp/toy.csv', index=False)
+          "
+          /tmp/relcheck/bin/surge init --data /tmp/toy.csv --target y --budget smoke --yes --out /tmp/spec.yaml
+          /tmp/relcheck/bin/surge validate /tmp/spec.yaml
+          /tmp/relcheck/bin/surge run /tmp/spec.yaml
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -38,8 +55,10 @@ jobs:
 
   publish:
     # Requires one-time PyPI Trusted Publishing setup (see header note);
-    # non-blocking until then so tag builds stay green and publishing is
-    # done manually per docs/RELEASING.md.
+    # non-blocking (continue-on-error) until then so tag builds stay green
+    # and publishing is done manually per docs/RELEASING.md. skip-existing
+    # makes this idempotent against a manual `uv publish` that already
+    # pushed this version before the tag landed.
     needs: build
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -52,3 +71,5 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
