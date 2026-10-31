@@ -76,16 +76,23 @@ def video_section(video: Path | None, poster: Path | None = None) -> str:
             "leaderboard, end to end.</p></section>")
 
 
-def _clip(run_dir: Path, kind: str, mode: str, anim_dir: Path | None) -> bytes | None:
-    """Bytes of a pre-rendered ``<kind>_<mode>.webm``, or one rendered from the run.
+def _clip(run_dir: Path, kind: str, mode: str, anim_dir: Path | None,
+          allow_flat: bool = False) -> bytes | None:
+    """Bytes of a pre-rendered clip, or one rendered from the run.
 
-    Rendering happens in a temporary directory that is always removed, so no
+    Looks up ``<anim_dir>/<run_dir.name>/<kind>_<mode>.webm`` first; the flat
+    ``<anim_dir>/<kind>_<mode>.webm`` is accepted only when ``allow_flat`` (a
+    single demo run), so several campaigns never share one clip.  Rendering
+    happens in a temporary directory that is always removed, so no
     frames/webm are left behind (also on failure).
     """
     if anim_dir is not None:
-        pre = Path(anim_dir) / f"{kind}_{mode}.webm"
-        if pre.is_file():
-            return pre.read_bytes()
+        cands = [Path(anim_dir) / Path(run_dir).name / f"{kind}_{mode}.webm"]
+        if allow_flat:
+            cands.append(Path(anim_dir) / f"{kind}_{mode}.webm")
+        for pre in cands:
+            if pre.is_file():
+                return pre.read_bytes()
     try:
         from surge.viz import animate
         with tempfile.TemporaryDirectory(prefix=f"surge_{kind}_") as tmp_s:
@@ -106,14 +113,17 @@ def replay_panels(demo_runs: dict[str, str], mode: str, anim_dir: Path | None,
     out = []
     for key, run in demo_runs.items():
         rd = Path(run)
-        pre_rendered = (anim_dir is not None
-                        and (Path(anim_dir) / f"hpo_evolution_{mode}.webm").is_file())
+        allow_flat = len(demo_runs) == 1
+        pre_rendered = (anim_dir is not None and any(
+            f.is_file() for f in (
+                Path(anim_dir) / rd.name / f"hpo_evolution_{mode}.webm",
+                *([Path(anim_dir) / f"hpo_evolution_{mode}.webm"] if allow_flat else []))))
         if not rd.is_dir() and not pre_rendered:
             continue
         kinds = ["hpo_evolution"] + (["mission_control"] if include_mission else [])
         vids = []
         for kind in kinds:
-            p = _clip(rd, kind, mode, anim_dir)
+            p = _clip(rd, kind, mode, anim_dir, allow_flat=allow_flat)
             if p:
                 vids.append(f"<video muted loop playsinline preload='metadata' "
                             f"src='data:video/webm;base64,"
