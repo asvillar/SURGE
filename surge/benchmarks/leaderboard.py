@@ -728,6 +728,8 @@ def _run_with_adapter(
 
     mo_extra: dict[str, Any] = {}
     if task_type == "regression":
+        from .tasks import relative_l2_metrics
+
         # Sequence benchmarks: compute NRMSE instead of / in addition to R².
         if benchmark_key.startswith("sequence.") or benchmark_key.startswith("pde.") or benchmark_key.startswith("pdebench."):
             nrmse = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
@@ -741,6 +743,7 @@ def _run_with_adapter(
             except Exception:
                 pass
             metrics.update(lorenz_metrics)
+            metrics.update(relative_l2_metrics(benchmark_key, y_test, y_pred))
         else:
             # Support multi-output: only ravel for 1-D targets.
             y_pred_mo = y_pred.ravel() if y_test.ndim == 1 else y_pred
@@ -759,6 +762,7 @@ def _run_with_adapter(
                 y_test, y_pred_mo, names=mo_names, kinds=mo_kinds
             )
             metrics.update(mo_metrics)
+            metrics.update(relative_l2_metrics(benchmark_key, y_test, y_pred_mo))
 
         # UQ metrics — computed when the model exposes predict_with_uncertainty.
         _uq_model = getattr(adapter, "_model", adapter)

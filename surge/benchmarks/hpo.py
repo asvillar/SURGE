@@ -709,7 +709,7 @@ def _run_with_adapter_data(
     import time
 
     from .base import BenchmarkResult
-    from .tasks import _clf_metrics, _multioutput_reg_extras, _reg_metrics
+    from .tasks import _clf_metrics, _multioutput_reg_extras, _reg_metrics, relative_l2_metrics
     from .leaderboard import _check_pass, gate_metric_key
 
     lorenz_metrics: dict[str, Any] = {}
@@ -754,6 +754,7 @@ def _run_with_adapter_data(
         )
         metrics.update(mo_metrics)
         metrics.update(lorenz_metrics)
+        metrics.update(relative_l2_metrics(benchmark_key, y_test, y_pred_mo))
     else:
         y_prob = None
         if hasattr(adapter, "predict_proba"):

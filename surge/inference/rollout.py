@@ -147,20 +147,34 @@ def climate_histogram_error(
 
     Returns
     -------
-    error : ``sum(|pred_hist - truth_hist|) / sum(|truth_hist|)``, both
-        histograms density-normalised over the same bin edges.
+    error : ``sum(|pred_mass - truth_mass|) / sum(|truth_mass|)`` over shared
+        equal-width bins (identical to the density-normalised form for finite
+        inputs).  Non-finite handling: bin edges come from FINITE values only;
+        masses are counts divided by the total entry count INCLUDING
+        non-finite ones, so non-finite predictions carry no mass and raise the
+        error by that fraction; a fully non-finite prediction scores 1.0.
     """
     truth_values = np.asarray(truth_values, dtype=np.float64).ravel()
     pred_values = np.asarray(pred_values, dtype=np.float64).ravel()
-    lo = min(truth_values.min(), pred_values.min())
-    hi = max(truth_values.max(), pred_values.max())
+    n_truth, n_pred = truth_values.size, pred_values.size
+    truth_f = truth_values[np.isfinite(truth_values)]
+    pred_f = pred_values[np.isfinite(pred_values)]
+    if truth_f.size == 0 or n_truth == 0:
+        return 1.0 if n_pred else 0.0
+    if pred_f.size == 0:
+        return 1.0  # nothing finite predicted: no mass overlaps the truth
+    lo = min(truth_f.min(), pred_f.min())
+    hi = max(truth_f.max(), pred_f.max())
     if hi <= lo:
         hi = lo + 1e-6
     edges = np.linspace(lo, hi, bins + 1)
-    truth_hist, _ = np.histogram(truth_values, bins=edges, density=True)
-    pred_hist, _ = np.histogram(pred_values, bins=edges, density=True)
-    denom = float(np.sum(np.abs(truth_hist))) + 1e-12
-    return float(np.sum(np.abs(pred_hist - truth_hist)) / denom)
+    truth_hist, _ = np.histogram(truth_f, bins=edges)
+    pred_hist, _ = np.histogram(pred_f, bins=edges)
+    # Probability masses over ALL entries (non-finite included in the total).
+    truth_mass = truth_hist / n_truth
+    pred_mass = pred_hist / n_pred
+    denom = float(np.sum(np.abs(truth_mass))) + 1e-12
+    return float(np.sum(np.abs(pred_mass - truth_mass)) / denom)
 
 
 def sample_rollout_starts(

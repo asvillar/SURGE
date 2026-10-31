@@ -715,9 +715,16 @@ def lorenz_rollout_metrics(
     initial_state, truths = truth[0], truth[1:]
 
     def predict_fn(state: np.ndarray) -> np.ndarray:
-        x = (state - mean) / scale
-        out = np.asarray(adapter.predict(x)).reshape(state.shape)
-        return out * scale + mean
+        # Diverged trajectories (any non-finite component) are not fed to the
+        # adapter (sklearn raises on NaN); they stay NaN so the batch survives
+        # and valid_prediction_time scores them as crossed.
+        out = np.full(state.shape, np.nan, dtype=float)
+        ok = np.all(np.isfinite(state), axis=1)
+        if ok.any():
+            x = (state[ok] - mean) / scale
+            pred = np.asarray(adapter.predict(x)).reshape(x.shape)
+            out[ok] = pred * scale + mean
+        return out
 
     preds, _ = autoregressive_rollout(predict_fn, initial_state, truths)
 
@@ -903,6 +910,42 @@ def _generate_burgers_dataset(
         X_list.append(u0)
         y_list.append(u_T)
     return np.array(X_list), np.array(y_list)
+
+
+# Relative-L2 protocol per benchmark.  "global" = ||P-T|| / ||T|| over the whole
+# test set (pde.burgers_1d, pdebench.*, thewell.*); "median" = median of the
+# per-sample relative L2 (Li et al. 2021), with the mean reported alongside
+# (ConStellaration field benchmarks).  Used by the direct runners' definitions
+# and by the adapter/HPO paths so every execution path emits the same gate metric.
+RELATIVE_L2_PROTOCOL: dict[str, str] = {
+    "pde.burgers_1d": "global",
+    "thewell.gray_scott": "global",
+    "plasma.constellaration_modb": "median",
+    "plasma.constellaration_surfaces": "median",
+}
+_RELATIVE_L2_GLOBAL_PREFIXES = ("pdebench.", "thewell.")
+
+
+def relative_l2_metrics(benchmark_key: str, y_test, y_pred) -> dict:
+    """``test_relative_l2`` (+ ``_mean`` for per-sample protocols) for *benchmark_key*.
+
+    Returns ``{}`` for benchmarks with no relative-L2 protocol.
+    """
+    protocol = RELATIVE_L2_PROTOCOL.get(benchmark_key)
+    if protocol is None and benchmark_key.startswith(_RELATIVE_L2_GLOBAL_PREFIXES):
+        protocol = "global"
+    if protocol is None:
+        return {}
+    y_test = np.asarray(y_test, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float).reshape(y_test.shape)
+    if protocol == "global":
+        return {"test_relative_l2": float(
+            np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))}
+    from surge.metrics import relative_l2_per_sample
+
+    per_sample = relative_l2_per_sample(y_test, y_pred)
+    return {"test_relative_l2": float(np.median(per_sample)),
+            "test_relative_l2_mean": float(np.mean(per_sample))}
 
 
 def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None,
