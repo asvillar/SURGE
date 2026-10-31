@@ -122,3 +122,42 @@ def test_status_ledger_has_discipline_column(tmp_path):
     row = next(ln for ln in md.splitlines()
                if ln.startswith("| `tabular.california_housing`"))
     assert "| Environmental Sciences |" in row
+
+
+def _write_run(root, bench, model, ts, metrics):
+    d = root / bench / ts
+    d.mkdir(parents=True)
+    (d / "result.json").write_text(json.dumps({
+        "benchmark_key": bench, "model_key": model, "timestamp": ts,
+        "metrics": metrics, "passed": True, "extra": {}}))
+
+
+def _meta_file(tmp_path, ddate):
+    p = tmp_path / "m.yaml"
+    p.write_text(f"benchmarks:\n- key: b1\n  status: ready\n  shape: x\n"
+                 f"  definition_date: '{ddate}'\n")
+    return p
+
+
+def test_ledger_ignores_runs_older_than_definition_date(tmp_path):
+    root = tmp_path / "reports"
+    _write_run(root, "b1", "m1", "2026-01-01T00-00-00Z", {"test_r2": 0.9})
+    md = render_status_md(root, _meta_file(tmp_path, "2026-06-01"))
+    assert "no run since 2026-06-01" in md
+    assert "r2 0.900" not in md
+
+
+def test_ledger_shows_run_newer_than_definition_date(tmp_path):
+    root = tmp_path / "reports"
+    _write_run(root, "b1", "m1", "2026-01-01T00-00-00Z", {"test_r2": 0.9})
+    _write_run(root, "b1", "m2", "2026-07-01T00-00-00Z", {"test_r2": 0.7})
+    md = render_status_md(root, _meta_file(tmp_path, "2026-06-01"))
+    assert "r2 0.700" in md and "no run since" not in md
+
+
+def test_ledger_prefers_vpt_for_lorenz_shaped_results(tmp_path):
+    root = tmp_path / "reports"
+    _write_run(root, "b1", "m1", "2026-07-01T00-00-00Z",
+               {"test_vpt_median": 0.91, "test_nrmse": 0.011})
+    md = render_status_md(root, _meta_file(tmp_path, "2026-06-01"))
+    assert "vpt 0.910 λ" in md and "nrmse" not in md

@@ -375,3 +375,30 @@ def test_index_section_has_search_filter_and_count_controls(tmp_path: Path):
     assert 'id="idx-count"' in text
     assert "chip-toggle" in text
     assert "&uarr; index" in text  # card backlink
+
+
+def _agg(**vals):
+    return {"metrics": {k: {"mean": v, "std": 0.0} for k, v in vals.items()}}
+
+
+def test_vpt_is_primary_and_ranked_descending():
+    res = {"a": _agg(test_vpt_median=0.5, test_nrmse=0.01),
+           "b": _agg(test_vpt_median=0.9, test_nrmse=0.05)}
+    assert primary_metric_key(res) == "test_vpt_median"
+    assert rank_models(res, "test_vpt_median") == ["b", "a"]
+
+
+def test_index_json_cannot_close_script_block():
+    from surge.report.index_section import index_section_html, json_for_script
+
+    rows = [{"key": "k</script><b>", "haystack": "a & </script>", "status": "ready",
+             "category": "c", "discipline": "d", "title": "t", "models": "",
+             "value_text": "—", "gate_html": ""}]
+    payload = json_for_script([{"key": r["key"], "haystack": r["haystack"]} for r in rows])
+    assert "</script>" not in payload and "<" not in payload
+    assert json.loads(payload) == [{"key": rows[0]["key"], "haystack": rows[0]["haystack"]}]
+    try:
+        page = index_section_html(rows)
+    except KeyError:
+        return
+    assert page.count("</script>") == 1

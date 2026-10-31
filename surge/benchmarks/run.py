@@ -560,6 +560,7 @@ def main(argv: list[str] | None = None) -> int:
             n_trials=args.hpo_trials, seed=args.seed,
             metric=args.hpo_metric, n_epochs_cap=args.hpo_epochs_cap,
             save_root=None if args.no_save else args.save_dir,
+            save_predictions=not args.no_predictions,
             verbose=args.verbose,
             mlflow_experiment=args.mlflow_experiment if args.mlflow else None,
             mlflow_tracking_uri=args.mlflow_tracking_uri if args.mlflow else None,
@@ -637,6 +638,7 @@ def main(argv: list[str] | None = None) -> int:
             n_seeds=args.seeds,
             save_root=None if args.no_save else args.save_dir,
             use_hpo_cache=args.use_hpo_cache,
+            save_predictions=not args.no_predictions,
         )
 
         print_leaderboard(lb_results)

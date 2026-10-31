@@ -495,6 +495,7 @@ def run_benchmark_hpo(
     verbose: bool = False,
     mlflow_experiment: str | None = None,
     mlflow_tracking_uri: str | None = None,
+    save_predictions: bool = True,
 ) -> tuple[Any, dict[str, Any]]:
     """
     Run Optuna HPO for *model_key* on *benchmark_key*.
@@ -663,7 +664,7 @@ def run_benchmark_hpo(
 
     # Save best result.
     if save_root is not None and result is not None:
-        result.save(root=save_root)
+        result.save(root=save_root, predictions=save_predictions)
 
     # Persist best HP to a human-readable cache file for leaderboard reuse.
     if save_root is not None and best_params:

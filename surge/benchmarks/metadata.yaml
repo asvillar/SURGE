@@ -532,7 +532,9 @@ benchmarks:
   status_note: "protocol upgraded to Lyapunov-time rollout. Sweep: residual MLP 0.91 λ,
     MLP 0.68, RF 0.61, ridge 0.20 — all below the 2 λ gate; capacity sweep shows bigger
     nets LOWER VPT (512-512-256: 0.36 λ) while improving one-step NRMSE, i.e. one-step
-    accuracy is the wrong tuning target for chaotic rollouts. 50 λ probe: rollouts stay
+    accuracy is the wrong tuning target for chaotic rollouts (the ledger shows each
+    model's newest saved run, so the residual MLP appears with its last capacity-sweep
+    configuration, 0.77 λ, not the 0.91 λ default). 50 λ probe: rollouts stay
     bounded on the attractor (0/30 diverge, 100% still lobe-switching, climate error
     0.16) — the surrogate learns the climate, not the weather. Next: rollout-aware
     training (noise injection, multi-step loss) and HPO on VPT instead of NRMSE."

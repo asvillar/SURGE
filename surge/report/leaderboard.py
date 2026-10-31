@@ -36,7 +36,7 @@ _LOWER_BETTER = ("rmse", "nrmse", "rel_l2", "mae", "loss")
 
 # Display order and labels for metric columns, first match wins per benchmark.
 _PRIMARY_CANDIDATES = (
-    "test_r2", "test_r2_mean", "test_accuracy", "test_rel_l2", "test_nrmse",
+    "test_vpt_median", "test_r2", "test_r2_mean", "test_accuracy", "test_rel_l2", "test_nrmse",
     "test_nrmse_mean",
 )
 
@@ -341,13 +341,14 @@ def _metric_columns(bench_results: dict[str, dict]) -> list[str]:
     keys: set = set()
     for r in bench_results.values():
         keys.update(r["metrics"].keys())
-    order = ["test_r2", "test_r2_mean", "test_accuracy", "test_f1", "test_f1_macro",
+    order = ["test_vpt_median", "test_r2", "test_r2_mean", "test_accuracy", "test_f1", "test_f1_macro",
              "test_auroc", "test_rmse", "test_rmse_mean", "test_nrmse",
              "test_nrmse_mean", "test_rel_l2", "runtime_s", "peak_memory_mb"]
     return [k for k in order if k in keys]
 
 
 _LABELS = {
+    "test_vpt_median": "VPT (λ)",
     "test_r2": "R²", "test_r2_mean": "R̄²", "test_accuracy": "Acc",
     "test_f1": "F1", "test_f1_macro": "F1", "test_auroc": "AUROC",
     "test_rmse": "RMSE", "test_rmse_mean": "RMSE", "test_nrmse": "NRMSE",
@@ -367,6 +368,8 @@ def _fmt_value(metric: str, agg: dict | None) -> str:
     txt = fmt_metric(agg["mean"], kind)
     if metric == "peak_memory_mb":
         txt = f"{agg['mean']:.0f} MB"
+    elif metric == "test_vpt_median":
+        txt = f"{agg['mean']:.2f} λ"
     return txt
 
 

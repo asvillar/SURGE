@@ -28,7 +28,9 @@ jobs:
           uv venv /tmp/relcheck
           VIRTUAL_ENV=/tmp/relcheck uv pip install dist/*.whl
           /tmp/relcheck/bin/surge version
-          SURGE_STRICT_REGISTRY=1 /tmp/relcheck/bin/python -c "import surge"
+          # -I: isolated mode, keeps the checkout's ./surge off sys.path so the
+          # installed wheel is what gets imported
+          SURGE_STRICT_REGISTRY=1 /tmp/relcheck/bin/python -I -c "import surge"
           /tmp/relcheck/bin/surge models --verbose
           /tmp/relcheck/bin/surge bench -b synthetic.regression_1d \
             -m sklearn.random_forest --no-save
