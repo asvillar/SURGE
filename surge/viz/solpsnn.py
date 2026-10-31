@@ -382,3 +382,62 @@ def dataset_overview_figure(X_train: np.ndarray, X_test: np.ndarray,
         axg.set_title("B2 grid (104×50)", fontsize=9)
         axg.tick_params(labelsize=7)
     return _finish(fig, out_stem)
+
+
+# ------------------------------------------------------------- field gallery
+
+def te_cases_figure(te: np.ndarray, crx: np.ndarray, cry: np.ndarray, *,
+                    titles: Sequence[str] | None = None,
+                    separatrix: int | None = None,
+                    label: str = r"$\log_{10} T_e$ [eV]",
+                    mode: str = "light", out_stem=None):
+    """Row of up to six SOLPS-ITER fields on the B2 grid (``log10`` of ``te``),
+    one shared colour scale, optional separatrix ring outline (radial index of
+    the first SOL ring). Pass a normalised field (e.g. ``te / te_upstream``)
+    with a matching ``label`` to show within-case structure instead of level."""
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import PolyCollection
+    from matplotlib.colors import Normalize
+
+    from surge.viz.theme import sequential_cmap, surge_theme
+
+    te = np.asarray(te, float)[:6]
+    crx = np.asarray(crx, float)
+    cry = np.asarray(cry, float)
+    order = [0, 1, 3, 2]
+    sl = (slice(1, -1), slice(1, -1))
+    verts = np.stack([crx[sl][..., order], cry[sl][..., order]], axis=-1)
+    verts = verts.reshape(-1, 4, 2)
+    lt = np.log10(np.clip(te[:, sl[0], sl[1]], 1e-6, None))
+    vmin, vmax = np.percentile(lt, 0.5), np.percentile(lt, 99.5)
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    xmin, xmax = verts[..., 0].min(), verts[..., 0].max()
+    ymin, ymax = verts[..., 1].min(), verts[..., 1].max()
+    aspect = (ymax - ymin) / (xmax - xmin)
+    titles = list(titles) if titles is not None else [f"case {i}" for i in range(len(te))]
+
+    with surge_theme(mode) as p:
+        n = len(te)
+        h = 3.4
+        fig, axes = plt.subplots(1, n, figsize=(n * (h / aspect + 0.35) + 1.2, h + 0.9),
+                                 squeeze=False, sharey=True)
+        cmap = sequential_cmap(mode)
+        for i, ax in enumerate(axes[0]):
+            pc = PolyCollection(verts, array=lt[i].ravel(), cmap=cmap, norm=norm,
+                                edgecolors="none", antialiaseds=False)
+            ax.add_collection(pc)
+            if separatrix is not None:
+                # lower edge (corners BL, BR) of the first SOL ring = separatrix
+                xs = np.concatenate([crx[1:-1, separatrix, 0], crx[-2:-1, separatrix, 1]])
+                ys = np.concatenate([cry[1:-1, separatrix, 0], cry[-2:-1, separatrix, 1]])
+                ax.plot(xs, ys, color=p["ink2"], lw=0.7, alpha=0.8)
+            ax.set_xlim(xmin, xmax)
+            ax.set_ylim(ymin, ymax)
+            ax.set_aspect("equal")
+            ax.set_title(f"({_LETTERS[i]}) {titles[i]}", fontsize=9)
+            ax.set_xlabel("R [m]")
+            if i == 0:
+                ax.set_ylabel("Z [m]")
+        cb = fig.colorbar(pc, ax=axes[0].tolist(), fraction=0.025, pad=0.02)
+        cb.set_label(label)
+    return _finish(fig, out_stem)

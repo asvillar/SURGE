@@ -100,3 +100,12 @@ def test_dataset_overview(tmp_path):
         param_units=[""] * 8, out_stem=tmp_path / "ov")
     assert sum(ax.get_visible() for ax in fig.axes) == 12
     assert (tmp_path / "ov.png").exists()
+
+
+def test_te_cases_figure_writes_png(tmp_path):
+    from surge.viz.solpsnn import te_cases_figure
+    crx, cry = _grid()
+    te = np.exp(np.random.default_rng(0).normal(2, 1, (4, 104, 50)))
+    fig = te_cases_figure(te, crx, cry, titles=["a", "b", "c", "d"], separatrix=25,
+                          out_stem=tmp_path / "cases")
+    assert fig is not None and (tmp_path / "cases.png").exists()
