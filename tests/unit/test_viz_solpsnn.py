@@ -109,3 +109,14 @@ def test_te_cases_figure_writes_png(tmp_path):
     fig = te_cases_figure(te, crx, cry, titles=["a", "b", "c", "d"], separatrix=25,
                           out_stem=tmp_path / "cases")
     assert fig is not None and (tmp_path / "cases.png").exists()
+
+
+def test_te_atlas_figure_writes_png(tmp_path):
+    from surge.viz.solpsnn import te_atlas_figure
+    crx, cry = _grid()
+    rng = np.random.default_rng(1)
+    rows = {"type A": np.exp(rng.normal(0, 1, (3, 104, 50))), "type B": np.exp(rng.normal(1, 1, (2, 104, 50)))}
+    titles = {"type A": ["a1", "a2", "a3"], "type B": ["b1", "b2"]}
+    fig = te_atlas_figure(rows, crx, cry, titles=titles, separatrix=25, out_stem=tmp_path / "atlas")
+    assert fig is not None and (tmp_path / "atlas.png").exists()
+    assert len([a for a in fig.axes if a.get_label() != "<colorbar>"]) >= 6
