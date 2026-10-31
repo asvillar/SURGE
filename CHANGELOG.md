@@ -120,7 +120,8 @@ All notable changes to SURGE (`surge-ml`). Follows
   the climate-normalised error exceeds 0.4), plus attractor-climate error
   and one-step NRMSE. The tier-0 CLI test now accepts the benchmark's
   honest non-zero exit when every current model fails the provisional
-  VPT ≥ 2λ gate.
+  VPT ≥ 2λ gate. The benchmark stays `in_progress` and hidden from the
+  public report and index until a model passes.
 - Single model registry (`surge.model.registry`); workflow summaries now
   record the live registry (previously an empty list from a duplicate,
   never-populated registry).

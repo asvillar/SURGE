@@ -248,6 +248,7 @@ nohup.out
 
 # Cached HuggingFace / processed plasma datasets (large, re-downloadable)
 data/datasets/constellaration/
+data/datasets/solpsnn/
 
 # Benchmark runtime data cache (downloaded or generated on first run).
 # Directory skeleton (subdirs + .gitkeep files) IS tracked; data files are not.
