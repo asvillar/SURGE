@@ -101,6 +101,9 @@ def test_lorenz_diverged_trajectory_does_not_abort_batch(monkeypatch):
     assert np.isnan(seen[7][3:]).all() and np.isfinite(seen[7][:3]).all()
     assert np.isfinite(seen[6]).all()
     assert real(seen[7], 0.4, 1.0, horizon_lyapunov=9.0) == 4.0
+    # the saved median curve stays finite across all steps despite IC 7 diverging
+    curve = np.asarray(res["extra"]["median_error_curve"])
+    assert curve.shape[0] == len(seen[7]) and np.isfinite(curve).all()
 
 
 def test_climate_histogram_error_nonfinite_policy():
