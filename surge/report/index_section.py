@@ -13,6 +13,12 @@ import html
 import json
 
 
+def json_for_script(obj) -> str:
+    """``json.dumps`` safe to embed in an inline <script> (no ``</script>``)."""
+    return (json.dumps(obj).replace("<", "\\u003c").replace(">", "\\u003e")
+            .replace("&", "\\u0026"))
+
+
 def build_index_rows(results: dict[str, dict], heads: dict[str, dict],
                      meta: dict[str, dict]) -> list[dict]:
     """One row dict per key in ``results`` (already filtered to visible)."""
@@ -180,7 +186,7 @@ def index_section_html(rows: list[dict]) -> str:
     discipline_chips = "".join(
         f"<button type='button' class='chip-toggle' data-kind='discipline' data-val='{html.escape(d)}'>"
         f"{html.escape(d)}</button>" for d in disciplines)
-    data_json = json.dumps([
+    data_json = json_for_script([
         {"key": r["key"], "haystack": r["haystack"]} for r in rows
     ])
 

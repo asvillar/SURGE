@@ -62,7 +62,8 @@ uvx twine check dist/*                              # long_description renders
 uv venv /tmp/relcheck
 VIRTUAL_ENV=/tmp/relcheck uv pip install dist/*.whl
 /tmp/relcheck/bin/surge version
-SURGE_STRICT_REGISTRY=1 /tmp/relcheck/bin/python -c "import surge"
+# -I: isolated mode, so ./surge in the checkout is not imported instead of the wheel
+SURGE_STRICT_REGISTRY=1 /tmp/relcheck/bin/python -I -c "import surge"
 /tmp/relcheck/bin/surge models --verbose
 /tmp/relcheck/bin/surge bench -b synthetic.regression_1d \
     -m sklearn.random_forest --no-save

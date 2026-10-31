@@ -684,6 +684,72 @@ def _generate_lorenz_rollout_ics(
     return out
 
 
+def lorenz_rollout_metrics(
+    adapter, *, seed: int, climate_norm: float, n_eval_ics: int = 100,
+    rollout_lyapunov_times: float = 10.0,
+    x_mean: "np.ndarray | float" = 0.0, x_scale: "np.ndarray | float" = 1.0,
+) -> dict:
+    """Score a FITTED one-step Lorenz-63 adapter by Lyapunov-time rollout.
+
+    The adapter must have been trained on ``(x - x_mean) / x_scale`` pairs
+    (identity by default).  Shared by :func:`run_sequence_lorenz63` and the
+    leaderboard's ``_run_with_adapter`` so every execution path emits the
+    same gate metric.  Returns ``{"metrics": {...}, "extra": {...}}`` where
+    metrics holds ``test_vpt_median/p25/p75`` and ``test_climate_error``.
+    """
+    from surge.inference.rollout import (
+        autoregressive_rollout,
+        climate_histogram_error,
+        valid_prediction_time,
+    )
+
+    dt = 0.01
+    lyapunov_time = _lorenz_lyapunov_time()
+    dt_lyapunov = dt / lyapunov_time
+    n_rollout_steps = int(round(rollout_lyapunov_times * lyapunov_time / dt))
+    mean, scale = x_mean, x_scale
+
+    rollout_ics = _generate_lorenz_rollout_ics(
+        n_ics=n_eval_ics, n_steps=n_rollout_steps, dt=dt, seed=seed + 1_000_000)
+    truth = np.transpose(rollout_ics, (1, 0, 2))  # (n_steps + 1, n_eval_ics, 3)
+    initial_state, truths = truth[0], truth[1:]
+
+    def predict_fn(state: np.ndarray) -> np.ndarray:
+        x = (state - mean) / scale
+        out = np.asarray(adapter.predict(x)).reshape(state.shape)
+        return out * scale + mean
+
+    preds, _ = autoregressive_rollout(predict_fn, initial_state, truths)
+
+    step_err = np.linalg.norm(preds - truths, axis=-1) / climate_norm  # (n_steps, n_eval_ics)
+    vpts = np.array([
+        valid_prediction_time(step_err[:, i], _LORENZ_VPT_THRESHOLD, dt_lyapunov,
+                              horizon_lyapunov=rollout_lyapunov_times)
+        for i in range(step_err.shape[1])
+    ])
+    climate_err = climate_histogram_error(truths[..., 2], preds[..., 2])
+    metrics = {
+        "test_vpt_median": float(np.median(vpts)),
+        "test_vpt_p25": float(np.percentile(vpts, 25)),
+        "test_vpt_p75": float(np.percentile(vpts, 75)),
+        "test_climate_error": climate_err,
+    }
+    # Median-VPT IC - a representative (not cherry-picked best) rollout for figures.
+    i_ref = int(np.argsort(vpts)[len(vpts) // 2])
+    extra = {
+        "n_eval_ics": n_eval_ics, "n_rollout_steps": n_rollout_steps,
+        "dt": dt, "lyapunov_time": lyapunov_time, "dt_lyapunov": dt_lyapunov,
+        "rollout_lyapunov_times": rollout_lyapunov_times,
+        "vpt_threshold": _LORENZ_VPT_THRESHOLD, "climate_norm": climate_norm,
+        "per_ic_vpt": vpts.tolist(),
+        "median_error_curve": np.median(step_err, axis=1).tolist(),
+        "sample_truth_xyz": truth[:, i_ref, :].tolist(),
+        "sample_pred_xyz": np.vstack(
+            [initial_state[i_ref][None, :], preds[:, i_ref, :]]).tolist(),
+    }
+    return {"metrics": metrics, "extra": extra}
+
+
 def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
     model_kwargs: dict | None = None, n_trajectories: int = 1200,
     n_eval_ics: int = 100, rollout_lyapunov_times: float = 10.0) -> "BenchmarkResult":
@@ -717,16 +783,7 @@ def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
     """
     from sklearn.model_selection import train_test_split
 
-    from surge.inference.rollout import (
-        autoregressive_rollout,
-        climate_histogram_error,
-        valid_prediction_time,
-    )
-
     dt = 0.01
-    lyapunov_time = _lorenz_lyapunov_time()
-    dt_lyapunov = dt / lyapunov_time
-    n_rollout_steps = int(round(rollout_lyapunov_times * lyapunov_time / dt))
 
     X, y = _generate_lorenz_trajectories(n_trajectories=n_trajectories, dt=dt, seed=seed)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
@@ -749,39 +806,18 @@ def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
     nrmse = float(np.linalg.norm(y_pred_test - y_test) / (np.linalg.norm(y_test) + 1e-12))
     capture_predictions(y_test, y_pred_test)
 
-    # Held-out ICs for the rollout eval — disjoint draw from the training ICs.
-    rollout_ics = _generate_lorenz_rollout_ics(
-        n_ics=n_eval_ics, n_steps=n_rollout_steps, dt=dt, seed=seed + 1_000_000)
-    truth = np.transpose(rollout_ics, (1, 0, 2))  # (n_steps + 1, n_eval_ics, 3)
-    initial_state, truths = truth[0], truth[1:]
-
-    def predict_fn(state: np.ndarray) -> np.ndarray:
-        x = (state - mean) / scale
-        out = np.asarray(adapter.predict(x)).reshape(state.shape)
-        return out * scale + mean
-
-    preds, _ = autoregressive_rollout(predict_fn, initial_state, truths)
+    roll = lorenz_rollout_metrics(
+        adapter, seed=seed, n_eval_ics=n_eval_ics,
+        rollout_lyapunov_times=rollout_lyapunov_times,
+        climate_norm=climate_norm, x_mean=mean, x_scale=scale)
     elapsed = time.perf_counter() - t0
 
-    step_err = np.linalg.norm(preds - truths, axis=-1) / climate_norm  # (n_steps, n_eval_ics)
-    vpts = np.array([
-        valid_prediction_time(step_err[:, i], _LORENZ_VPT_THRESHOLD, dt_lyapunov,
-                              horizon_lyapunov=rollout_lyapunov_times)
-        for i in range(step_err.shape[1])
-    ])
-    climate_err = climate_histogram_error(truths[..., 2], preds[..., 2])
-
     metrics: dict = {
-        "test_vpt_median": float(np.median(vpts)),
-        "test_vpt_p25": float(np.percentile(vpts, 25)),
-        "test_vpt_p75": float(np.percentile(vpts, 75)),
-        "test_climate_error": climate_err,
+        **roll["metrics"],
         "test_nrmse": nrmse,
         "runtime_s": elapsed,
     }
 
-    # Median-VPT IC — a representative (not cherry-picked best) rollout for figures.
-    i_ref = int(np.argsort(vpts)[len(vpts) // 2])
     return BenchmarkResult(
         benchmark_key="sequence.lorenz63",
         model_key=adapter.name,
@@ -792,15 +828,7 @@ def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
         message="Lorenz-63 one-step surrogate, scored via 10-λ autoregressive rollout VPT",
         extra={
             "n_train": len(X_train), "n_test": len(X_test),
-            "n_eval_ics": n_eval_ics, "n_rollout_steps": n_rollout_steps,
-            "dt": dt, "lyapunov_time": lyapunov_time, "dt_lyapunov": dt_lyapunov,
-            "rollout_lyapunov_times": rollout_lyapunov_times,
-            "vpt_threshold": _LORENZ_VPT_THRESHOLD, "climate_norm": climate_norm,
-            "per_ic_vpt": vpts.tolist(),
-            "median_error_curve": np.median(step_err, axis=1).tolist(),
-            "sample_truth_xyz": truth[:, i_ref, :].tolist(),
-            "sample_pred_xyz": np.vstack(
-                [initial_state[i_ref][None, :], preds[:, i_ref, :]]).tolist(),
+            **roll["extra"],
         },
     )
 

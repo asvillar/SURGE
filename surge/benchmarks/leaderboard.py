@@ -364,6 +364,7 @@ def run_leaderboard(
     pytorch_mlp_epochs: int = 50,
     save_root: Path | None = Path("benchmark_reports"),
     use_hpo_cache: bool = False,
+    save_predictions: bool = True,
 ) -> dict[str, list[BenchmarkResult]]:
     """
     Run every compatible model against each benchmark.
@@ -444,7 +445,7 @@ def run_leaderboard(
                     stage="model_lookup",
                 )
                 if save_root is not None:
-                    res.save(root=save_root)
+                    res.save(root=save_root, predictions=save_predictions)
                 results[key].append(res)
                 print(f"  [skip] {model_key} not in MODEL_REGISTRY", file=sys.stderr)
                 continue
@@ -458,7 +459,7 @@ def run_leaderboard(
                     key, model_key, reason=mismatch, stage="task_compatibility",
                 )
                 if save_root is not None:
-                    res.save(root=save_root)
+                    res.save(root=save_root, predictions=save_predictions)
                 results[key].append(res)
                 print(f"  [skip] {mismatch}", file=sys.stderr)
                 continue
@@ -477,6 +478,11 @@ def run_leaderboard(
 
             # Per-benchmark model kwargs (e.g. image shape for vision models).
             bench_kwargs = _BENCHMARK_MODEL_KWARGS.get(key, {})
+            # Benchmark-required recipe (e.g. qlknn10d residual_mlp); explicit
+            # bench/HPO/epoch kwargs always win over these defaults.
+            bench_defaults = dict(BENCH_MODEL_DEFAULTS.get(key, {}).get(model_key, {}))
+            if bench_defaults:
+                print(f"  [defaults] {key}: {bench_defaults} (overridable via model_kwargs)")
 
             # Build training-log path for PyTorch models so loss can be tracked.
             _safe_key = key.replace(".", "_")
@@ -499,19 +505,22 @@ def run_leaderboard(
                             model_kwargs={**epoch_kwargs, **cached_hp, **_log_kwargs},
                             seed=s,
                         )
-                    elif model_key in _PYTORCH_EPOCH_CAP_MODELS or bench_kwargs:
+                    elif model_key in _PYTORCH_EPOCH_CAP_MODELS or bench_kwargs or bench_defaults:
                         # Per-benchmark cap takes precedence over per-model cap.
                         _bench_ecap = _PER_BENCHMARK_EPOCH_CAP.get(key)
                         _ecap = _bench_ecap if _bench_ecap is not None else _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
+                        _explicit_epochs = (cached_hp and "n_epochs" in cached_hp) or "n_epochs" in bench_defaults
                         epoch_kwargs = (
                             {}
-                            if cached_hp and "n_epochs" in cached_hp
+                            if _explicit_epochs
                             else ({"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {})
                         )
                         _log_kwargs = {}
                         if _log_dir is not None:
                             _log_kwargs["log_file"] = str(_log_dir / f"{_safe_model}_seed{s}.jsonl")
-                        adapter = MODEL_REGISTRY.create(model_key, **bench_kwargs, **cached_hp, **epoch_kwargs, **_log_kwargs)
+                        adapter = MODEL_REGISTRY.create(
+                            model_key, **{**bench_defaults, **bench_kwargs, **cached_hp, **epoch_kwargs, **_log_kwargs}
+                        )
                         res = _run_with_adapter(key, adapter, seed=s)
                     elif cached_hp:
                         adapter = MODEL_REGISTRY.create(model_key, **cached_hp)
@@ -520,7 +529,7 @@ def run_leaderboard(
                         res = run_benchmark(key, seed=s, model_key=model_key)
                     if res is not None:
                         if save_root is not None:
-                            res.save(root=save_root)
+                            res.save(root=save_root, predictions=save_predictions)
                         seed_results.append(res)
                 except Exception as exc:
                     res = _skip_result(
@@ -531,7 +540,7 @@ def run_leaderboard(
                         message=f"leaderboard run skipped for {model_key}",
                     )
                     if save_root is not None:
-                        res.save(root=save_root)
+                        res.save(root=save_root, predictions=save_predictions)
                     seed_results.append(res)
                     print(f"  [skip] {key}/{model_key} seed={s}: {exc}", file=sys.stderr)
 
@@ -690,8 +699,15 @@ def _run_with_adapter(
             fit_sig = inspect.signature(adapter.fit)
             if "X_val" in fit_sig.parameters:
                 fit_kwargs = {"X_val": X_val, "y_val": y_val}
-        adapter.fit(X_train, y_train, **fit_kwargs)
-        y_pred = np.asarray(adapter.predict(X_test))
+        if benchmark_key == "sequence.lorenz63":
+            # Same z-score contract as tasks.run_sequence_lorenz63.
+            lz_mean = X_train.mean(axis=0)
+            lz_scale = X_train.std(axis=0) + 1e-8
+            adapter.fit((X_train - lz_mean) / lz_scale, (y_train - lz_mean) / lz_scale)
+            y_pred = np.asarray(adapter.predict((X_test - lz_mean) / lz_scale)) * lz_scale + lz_mean
+        else:
+            adapter.fit(X_train, y_train, **fit_kwargs)
+            y_pred = np.asarray(adapter.predict(X_test))
         elapsed = time.perf_counter() - t0
     except Exception as exc:
         print(f"  [error] fit/predict failed for {benchmark_key}: {exc}", file=sys.stderr)
@@ -703,6 +719,7 @@ def _run_with_adapter(
         tracemalloc.stop()
 
     mo_extra: dict[str, Any] = {}
+    lorenz_extra: dict[str, Any] = {}
     if task_type == "regression":
         # Sequence benchmarks: compute NRMSE instead of / in addition to R².
         if benchmark_key.startswith("sequence.") or benchmark_key.startswith("pde.") or benchmark_key.startswith("pdebench."):
@@ -715,6 +732,18 @@ def _run_with_adapter(
                 metrics["test_r2"] = r2
             except Exception:
                 pass
+            if benchmark_key == "sequence.lorenz63":
+                # The gate is rollout VPT, not one-step NRMSE: score it here so
+                # every adapter path emits test_vpt_median.
+                from .tasks import lorenz_rollout_metrics
+
+                roll = lorenz_rollout_metrics(
+                    adapter, seed=seed,
+                    climate_norm=float(np.sqrt(np.mean(np.sum(np.vstack([X, y]) ** 2, axis=1)))),
+                    x_mean=lz_mean, x_scale=lz_scale,
+                )
+                metrics.update(roll["metrics"])
+                lorenz_extra = roll["extra"]
         else:
             # Support multi-output: only ravel for 1-D targets.
             y_pred_mo = y_pred.ravel() if y_test.ndim == 1 else y_pred
@@ -789,6 +818,7 @@ def _run_with_adapter(
         "resources": resource_info,
     }
     result_extra.update(mo_extra)
+    result_extra.update(lorenz_extra)
     if input_features_meta:
         result_extra.update(input_features_meta)
 
@@ -908,7 +938,14 @@ def _load_lorenz63():
     cache = _bench_data_root() / "sequence" / "lorenz63.npz"
     if cache.exists():
         d = np.load(cache)
-        return d["X"], d["y"]
+        X, y = d["X"], d["y"]
+        if X.ndim == 2 and X.shape[1] == 3 and y.shape == X.shape:
+            return X, y
+        print(
+            f"  [cache] {cache} has stale shape X{X.shape} y{y.shape} "
+            "(expected one-step 3->3 pairs); regenerating",
+            file=sys.stderr,
+        )
     from .tasks import _generate_lorenz_trajectories
     X, y = _generate_lorenz_trajectories(n_trajectories=1200, dt=0.01, seed=42)
     cache.parent.mkdir(parents=True, exist_ok=True)
@@ -1908,7 +1945,9 @@ def _check_pass(benchmark_key: str, metrics: dict) -> bool:
     metric_key, threshold = _THRESHOLDS[benchmark_key]
     val = metrics.get(metric_key)
     if val is None:
-        return True
+        # A gated benchmark without its gate metric must never PASS.
+        metrics["gate_metric_missing"] = metric_key
+        return False
     # For lower-is-better metrics, pass if val <= threshold.
     if metric_key in _LOWER_IS_BETTER or metric_key == "test_nrmse":
         return float(val) <= threshold

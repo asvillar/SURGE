@@ -29,7 +29,7 @@ STATUS_DOC = {
     "sanity": "too easy as posed or measuring a proxy; not a surrogate result.",
 }
 _PRIMARY = (
-    "test_r2_equilibrium_mean", "test_r2", "test_r2_mean", "test_accuracy",
+    "test_vpt_median", "test_r2_equilibrium_mean", "test_r2", "test_r2_mean", "test_accuracy",
     "test_rel_l2", "test_nrmse", "test_nrmse_mean")
 _LOWER_IS_BETTER = ("test_rel_l2", "test_nrmse", "test_nrmse_mean", "test_rmse")
 
@@ -168,18 +168,23 @@ def _newest_results(reports_dir: Path, meta: dict | None = None) -> dict[str, di
     out: dict[str, dict] = {}
     for key, rs in runs.items():
         ddate = (meta or {}).get(key, {}).get("definition_date")
-        cand = newest_run_per_model(rs, ddate) or rs
+        cand = newest_run_per_model(rs, ddate)
+        if not cand:  # every run predates the definition: no current result
+            continue
         out[key] = max(cand, key=lambda r: (score(r), r["_ts"]))
     return out
 
 
-def _fmt_result(r: dict | None) -> str:
+def _fmt_result(r: dict | None, definition_date: str | None = None) -> str:
     if not r:
-        return "no result on file"
+        return (f"no run since {definition_date}" if definition_date
+                else "no result on file")
     m = r.get("metrics") or {}
     for k in _PRIMARY:
         if isinstance(m.get(k), (int, float)):
             val = f"{k.removeprefix('test_')} {float(m[k]):.3f}"
+            if k == "test_vpt_median":
+                val = f"vpt {float(m[k]):.3f} λ"
             break
     else:
         val = "n/a"
@@ -241,7 +246,7 @@ def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> st
         for k in keys:
             m, r = meta[k], results.get(k)
             row = [f"`{k}`", m.get("shape", ""), m.get("discipline", "—"),
-                   _source(m, r), _fmt_result(r),
+                   _source(m, r), _fmt_result(r, m.get("definition_date")),
                    m.get("threshold", ""), _sota_cell(m), m.get("status_note", ""),
                    "✓" if is_visible(m) else "—", "✓" if is_focus(m) else "—"]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")

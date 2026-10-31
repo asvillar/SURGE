@@ -32,7 +32,9 @@ def test_benchmark_data_root_resolves_inside_repo():
     ],
 )
 def test_cached_npz_loaders_do_not_touch_generators_or_network(monkeypatch, tmp_path, loader_name, cache_rel):
-    expected_X, expected_y = _write_npz(tmp_path / cache_rel)
+    # Lorenz cache must be valid one-step 3->3 pairs (stale shapes are regenerated).
+    shapes = {"x_shape": (4, 3), "y_shape": (4, 3)} if loader_name == "_load_lorenz63" else {}
+    expected_X, expected_y = _write_npz(tmp_path / cache_rel, **shapes)
     monkeypatch.setattr(leaderboard, "_bench_data_root", lambda: tmp_path)
 
     def fail(*args, **kwargs):  # pragma: no cover - only called on regression
