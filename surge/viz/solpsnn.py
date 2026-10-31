@@ -22,7 +22,7 @@ __all__ = [
     "target_profile_figure",
 ]
 
-_LETTERS = "abcdefgh"
+_LETTERS = "abcdefghijklmnopqrstuvwxyz"
 
 
 def metrics_from_predictions(y_true, y_pred) -> dict:
@@ -182,7 +182,7 @@ def error_cdf_figure(rel_errors: dict[str, np.ndarray], *,
         ax.set_xlabel("relative error |pred − true| / |true|")
         ax.set_ylabel("cumulative fraction of test cases")
         ax.set_title("Relative-error distribution", fontsize=10)
-        ax.legend(loc="upper left", fontsize=7.5)
+        ax.legend(loc="lower right", fontsize=7.5)
     return _finish(fig, out_stem)
 
 
