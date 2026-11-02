@@ -252,6 +252,7 @@ surge version && surge models
 | `tensorflow` | TF ≥ 2.21 + tf-keras → `keras.mlp` adapter | `pip install "surge-ml[tensorflow]"` |
 | `gpflow` | TF stack for GPflow GPs (then `pip install gpflow --no-deps`) | `pip install "surge-ml[gpflow]"` |
 | `shap` | SHAP feature importance (NumPy-2 compatible) | `pip install "surge-ml[shap]"` |
+| `kumo` | NVIDIA Kumo Tabular in-context models → `kumo.tabular_*` adapters | `pip install "surge-ml[kumo]"` |
 | `all` | torch + onnx + shap + mlflow + benchmarks + tensorflow (not gpflow — no-deps trap) | `pip install "surge-ml[all]"` |
 | `dev` | pytest, ruff, h5py | `pip install "surge-ml[dev]"` |
 
