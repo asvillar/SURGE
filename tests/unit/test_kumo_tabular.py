@@ -110,3 +110,12 @@ def test_too_many_columns():
     m = _make("kumo.tabular_regressor")
     with pytest.raises(ValueError, match="100"):
         m.fit(np.zeros((10, 101)), np.zeros(10))
+
+
+def test_context_budget_caps_rows_by_columns():
+    from surge.model.backends.kumo_tabular import KumoTabularModel
+    m = KumoTabularModel(max_context_rows=60_000, max_context_cells=1_000_000)
+    assert m.effective_context_rows(9) == 60_000
+    assert m.effective_context_rows(90) == 11_111
+    assert m.effective_context_rows(100) == 10_000
+    assert KumoTabularModel(max_context_rows=500, max_context_cells=10**9).effective_context_rows(90) == 500
