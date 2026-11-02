@@ -32,10 +32,11 @@ class KumoTabularModel:
         size: str = "small",
         num_estimators: int = 4,
         max_context_rows: int = 60_000,
+        max_context_cells: int = 1_000_000,
         random_state: int = 42,
         device: str | None = None,
         target_transform: str | None = None,
-        query_batch_size: int = 4096,
+        query_batch_size: int = 1024,
     ) -> None:
         if task not in ("regression", "classification"):
             raise ValueError("task must be 'regression' or 'classification'")
@@ -47,6 +48,12 @@ class KumoTabularModel:
         self.size = size
         self.num_estimators = int(num_estimators)
         self.max_context_rows = int(max_context_rows)
+        # Memory budget: the in-context encoder materialises every context
+        # cell and the query-context attention scales with query_batch_size x
+        # context rows. rows x columns is capped so a 90-column table does not
+        # get the 60k rows a 9-column table can afford (a 60k x 90 context
+        # exhausted a 17 GB laptop).
+        self.max_context_cells = int(max_context_cells)
         self.random_state = random_state
         self.device = device
         self.target_transform = target_transform
@@ -61,7 +68,8 @@ class KumoTabularModel:
     def _kwargs(self) -> dict[str, Any]:
         return dict(
             task=self.task, size=self.size, num_estimators=self.num_estimators,
-            max_context_rows=self.max_context_rows, random_state=self.random_state,
+            max_context_rows=self.max_context_rows, max_context_cells=self.max_context_cells,
+            random_state=self.random_state,
             device=self.device, target_transform=self.target_transform,
             query_batch_size=self.query_batch_size,
         )
@@ -82,6 +90,10 @@ class KumoTabularModel:
                 f"Kumo Tabular supports at most {_MAX_COLUMNS} columns, got {X.shape[1]}"
             )
         return X
+
+    def effective_context_rows(self, n_columns: int) -> int:
+        """Context rows allowed for ``n_columns``: min(max_context_rows, max_context_cells // n_columns)."""
+        return max(1, min(self.max_context_rows, self.max_context_cells // max(1, int(n_columns))))
 
     def _build_and_fit(self) -> None:
         import torch
@@ -122,9 +134,10 @@ class KumoTabularModel:
                     raise ValueError("target_transform='log10' requires y > 0")
                 y = np.log10(y)
             y = y.astype(np.float32)
-        if len(X) > self.max_context_rows:
+        cap = self.effective_context_rows(X.shape[1])
+        if len(X) > cap:
             idx = np.random.default_rng(self.random_state).choice(
-                len(X), self.max_context_rows, replace=False
+                len(X), cap, replace=False
             )
             idx.sort()
             X, y = X[idx], y[idx]

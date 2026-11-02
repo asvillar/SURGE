@@ -51,10 +51,11 @@ class _KumoBase(BaseModelAdapter):
         "size": "small",
         "num_estimators": 4,
         "max_context_rows": 60_000,
+        "max_context_cells": 1_000_000,
         "random_state": 42,
         "device": None,
         "target_transform": None,
-        "query_batch_size": 4096,
+        "query_batch_size": 1024,
     }
 
     def _build_model(self, **kwargs: Any) -> Any:
@@ -73,7 +74,10 @@ class _KumoBase(BaseModelAdapter):
 
     def prepare_for_fit(self, *, resources=None, X_shape=None, y_shape=None, extra=None):
         n = int(X_shape[0]) if X_shape is not None else 0
-        cap = int(self.params.get("max_context_rows", self.default_params["max_context_rows"]))
+        d = int(X_shape[1]) if X_shape is not None and len(X_shape) > 1 else 1
+        rows = int(self.params.get("max_context_rows", self.default_params["max_context_rows"]))
+        cells = int(self.params.get("max_context_cells", self.default_params["max_context_cells"]))
+        cap = max(1, min(rows, cells // max(1, d)))
         merged = {
             "pretrained_backbone": "nvidia/Kumo-Tabular",
             "in_context_learning": True,
