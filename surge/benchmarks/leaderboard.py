@@ -904,8 +904,8 @@ def _run_with_adapter(
     )
 
 
-def _load_dataset(benchmark_key: str):
-    """Load the raw (X, y) arrays for a benchmark key."""
+def _dataset_loaders() -> dict[str, Any]:
+    """Map benchmark key -> zero-arg callable returning the raw ``(X, y)``."""
     from sklearn.datasets import (
         load_breast_cancer,
         load_diabetes,
@@ -957,6 +957,17 @@ def _load_dataset(benchmark_key: str):
         "vision.cifar10": lambda: _load_cifar10(),
         "vision.mnist":   lambda: _load_mnist(),
     }
+    return loaders
+
+
+def dataset_loader_keys() -> list[str]:
+    """Sorted benchmark keys that have a dataset loader (public, no data loaded)."""
+    return sorted(_dataset_loaders())
+
+
+def _load_dataset(benchmark_key: str):
+    """Load the raw (X, y) arrays for a benchmark key."""
+    loaders = _dataset_loaders()
     if benchmark_key not in loaders:
         raise KeyError(f"No dataset loader for {benchmark_key!r}")
     return loaders[benchmark_key]()
