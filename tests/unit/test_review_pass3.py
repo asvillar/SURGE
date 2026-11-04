@@ -138,3 +138,23 @@ def test_clip_lookup_per_run_dir_and_flat_only_when_allowed(tmp_path):
     assert demo._clip(other, "hpo_evolution", "dark", anim, allow_flat=True) == b"FLAT"
     # multiple runs: runB must not borrow the flat clip -> falls to render (None: no run dir)
     assert demo._clip(other, "hpo_evolution", "dark", anim, allow_flat=False) is None
+
+
+def test_load_model_compat_rebuilds_residual_mlp(tmp_path):
+    """The residual MLP saves a joblib dict (state_dict + scalers + config), not a
+    torch checkpoint; the compat loader must return a fitted adapter, not the dict."""
+    pytest.importorskip("torch")
+    import numpy as np
+    from surge.io.load_compat import load_model_compat
+    from surge.model import MODEL_REGISTRY
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(64, 4)).astype("float32")
+    y = (X @ np.array([1.0, -2.0, 0.5, 0.0])).astype("float32")
+    a = MODEL_REGISTRY.create("pytorch.residual_mlp", hidden_layers=[16, 16], n_epochs=3)
+    a.fit(X, y)
+    path = tmp_path / "res.joblib"
+    a.save(path)
+    m = load_model_compat(path, {"backend": "pytorch", "name": "pytorch.residual_mlp"})
+    assert hasattr(m, "predict")
+    np.testing.assert_allclose(np.asarray(m.predict(X)).ravel(), np.asarray(a.predict(X)).ravel(), rtol=1e-5, atol=1e-5)
