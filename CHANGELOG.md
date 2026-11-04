@@ -47,6 +47,29 @@ All notable changes to SURGE (`surge-ml`). Follows
 - **Provenance artifacts** per run: spec snapshot, git revision,
   environment capture, scalers, per-split parquet predictions, model
   card, per-epoch training logs, HPO trial logs.
+- **Fusion-first benchmark suite**: the ledger leads with the fusion
+  benchmarks (QLKNN10D and ConStellaration ready; SOLPS-NN in progress;
+  C-Mod density limit pending its rerun on the natural class balance); the
+  general tabular datasets (California housing, concrete, energy
+  efficiency, airfoil noise, superconductor) move to the tutorial tier as
+  pull-and-run demos. Relative L2 is a headline ledger metric for the
+  field benchmarks.
+- **SOLPS-NN divertor exhaust** (`plasma.solpsnn_exhaust_scalars`,
+  `plasma.solpsnn_te_field`; Dasbach & Wiesen 2023, Zenodo
+  10.5281/zenodo.19237127, CC BY 4.0): loader that extracts only the
+  needed members of the 17.6 GB record by HTTP byte ranges (~290 MB),
+  fixed Sobol-train / random-test split, thesis metric `test_median_rel_err`
+  with per-target keys, scenario-atlas and B2-grid field figures in
+  `surge.viz.solpsnn`. The scalar benchmark is public in the in-progress
+  tier; the field benchmark is hidden until its gate settles.
+- **NVIDIA Kumo Tabular** in-context adapters (`kumo.tabular_regressor`,
+  `kumo.tabular_classifier`, extra `kumo`): no training, up to 60k context
+  rows under a rows×columns memory budget, 999-quantile uncertainty. First
+  SURGE result where a tabular foundation model beats the published tuned
+  networks: 8.4 % median relative error on the SOLPS-NN peak target heat
+  flux against 13 %.
+- `surge.viz.theme.field_cmap`: perceptual (inferno) colormap for fields
+  spanning many decades.
 - **DINOv2 frozen-backbone linear probe** (`pytorch.dino_linear_probe`):
   frozen DINOv2 ViT-S/14 (`torch.hub`) features plus a logistic-regression
   head, cached per content hash and extractor identity, labelled as

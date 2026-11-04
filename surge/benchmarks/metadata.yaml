@@ -6,8 +6,8 @@
 # always come from benchmark_reports/**/result.json at render time.
 benchmarks:
 - key: tabular.california_housing
-  status: ready
-  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
+  status: tutorial
+  status_note: "General tabular demo (OpenML, n ≈ 20k): pull-and-run tutorial for trying SURGE; real runs on file, not a fusion result"
   name: California Housing
   capability: Scalar Regression
   discipline: Environmental Sciences
@@ -42,11 +42,11 @@ benchmarks:
   outputs:
   - {name: "MedHouseVal", desc: "Median house value (units of 100k$)"}
   visible: true
-  focus: true
+  focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.concrete_strength
-  status: ready
-  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
+  status: tutorial
+  status_note: "General tabular demo (UCI): pull-and-run tutorial; real runs on file, not a fusion result"
   name: Concrete Compressive Strength
   capability: Scalar Regression
   discipline: Materials Science
@@ -80,11 +80,11 @@ benchmarks:
   outputs:
   - {name: "compressive_strength", desc: "Concrete compressive strength (MPa)"}
   visible: true
-  focus: true
+  focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.energy_efficiency
-  status: ready
-  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
+  status: tutorial
+  status_note: "General tabular demo (UCI): pull-and-run tutorial; real runs on file, not a fusion result"
   name: Building Energy Efficiency
   capability: Scalar Regression
   discipline: Engineering
@@ -121,8 +121,8 @@ benchmarks:
   focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.airfoil_noise
-  status: ready
-  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
+  status: tutorial
+  status_note: "General tabular demo (UCI/NASA): pull-and-run tutorial; real runs on file, not a fusion result"
   name: NASA Airfoil Self-Noise
   capability: Scalar Regression
   discipline: Engineering
@@ -154,7 +154,7 @@ benchmarks:
   outputs:
   - {name: "scaled_sound_pressure_level", desc: "Scaled sound pressure level (dB)"}
   visible: true
-  focus: true
+  focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.yacht_dynamics
   status: tutorial
@@ -193,8 +193,8 @@ benchmarks:
   visible: true
   focus: false
 - key: tabular.superconductor
-  status: ready
-  status_note: "Real UCI/OpenML data (n ≥ 1,000 train+test) with real runs on file"
+  status: tutorial
+  status_note: "Materials-science tabular demo (UCI, n ≈ 21k): pull-and-run tutorial for trying SURGE on a larger table; real runs on file"
   name: Superconductor Critical Temperature
   capability: Scalar Regression
   discipline: Materials Science
@@ -224,7 +224,7 @@ benchmarks:
   outputs:
   - {name: "critical_temp", desc: "Superconducting critical temperature (K)"}
   visible: true
-  focus: true
+  focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.diabetes
   status: tutorial
@@ -459,11 +459,8 @@ benchmarks:
   visible: false
   focus: true
 - key: classification.plasma_stability
-  status: ready
-  status_note: "run 2026-10-20 sklearn.gradient_boosting_classifier acc 0.936 (PASS). This
-    is plainly the UCI electrical-grid-stability simulated dataset, not real fusion plasma
-    data; it is used here only as a stand-in classification proxy for plasma-control-style
-    stability decisions."
+  status: tutorial
+  status_note: "Power-grid stability classification (not fusion); hidden tutorial-tier plumbing check"
   name: Electrical Grid Stability (plasma proxy)
   capability: Scientific Classification
   discipline: Engineering
@@ -492,7 +489,7 @@ benchmarks:
   outputs:
   - {name: "stabf", desc: "Grid stability class: stable / unstable"}
   visible: false
-  focus: true
+  focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: classification.flow_regime
   status: tutorial

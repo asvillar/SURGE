@@ -172,10 +172,14 @@ def test_full_layout_expands_tail_benchmarks(tmp_path: Path):
 
 def test_synthetic_excluded_from_pass_count(tmp_path: Path):
     root = _fake_tree(tmp_path)
+    # california housing is tutorial-tier since the fusion-first re-tiering, so
+    # give the pass-count tile a ready benchmark with two real runs
+    _write_result(root, "plasma.qlknn10d", "old.model", "2026-11-01T00-00-00Z", test_r2=0.97)
+    _write_result(root, "plasma.qlknn10d", "new.model", "2026-11-02T00-00-00Z", test_r2=0.96)
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
                         demo_runs={}).read_text()
-    # fusion.m3dc1_sample is not ready/real: tiles count only ready real runs;
-    # both california models (old + new, no definition date) count, both pass
+    # fusion.m3dc1_sample is not ready/real and the tutorial california runs do
+    # not count: tiles count only ready real runs; both qlknn10d runs pass
     assert "<b>2 / 2</b>" in text
 
 

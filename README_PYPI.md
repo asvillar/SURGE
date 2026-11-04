@@ -47,16 +47,24 @@ predictions to `runs/<tag>/`.
 
 ## Benchmarks
 
-SURGE ships a curated suite of 30+ benchmarks (UCI/OpenML, PDEBench, TheWell,
-MNIST/CIFAR-10, and fusion datasets), each with a citation, a published pass
-threshold, and machine-readable `result.json` artifacts. Headline numbers
-from the ready, gated benchmarks:
+SURGE is built for the fusion energy sciences community: its benchmark
+suite leads with public fusion datasets (QLKNN10D turbulent transport,
+ConStellaration stellarator equilibria, SOLPS-NN divertor exhaust, the
+C-Mod density-limit database), followed by operator-learning fields
+(PDEBench, TheWell) and a tutorial tier of general tabular and vision
+datasets (California housing, superconductor critical temperature,
+MNIST/CIFAR-10, …) you can pull and run in a minute. Every benchmark has a
+citation, a published pass threshold and machine-readable `result.json`
+artifacts. Headline numbers from the fusion benchmarks:
 
 - **QLKNN10D plasma transport** — R² 0.989 on 200k held-out QuaLiKiz ITG
   fluxes, reproduced end-to-end from public data (gate R² ≥ 0.95).
 - **ConStellaration stellarator design** — mean R² 0.916 across 8 VMEC++
   equilibrium metrics (gate R² ≥ 0.85).
-- **Airfoil self-noise** (UCI) — R² 0.957 (gate R² ≥ 0.85).
+- **SOLPS-NN divertor exhaust** (in progress) — an in-context tabular
+  foundation model (`kumo.tabular_regressor`) reaches 9.3 % median relative
+  error on the peak target heat flux with no training, against the
+  published 13 % from tuned five-fold networks.
 
 Full ledger with per-benchmark status: [docs/benchmarks/README.md](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/benchmarks/README.md).
 
