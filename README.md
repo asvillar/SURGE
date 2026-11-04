@@ -80,6 +80,12 @@ SURGE ships a curated suite of 30+ benchmarks, each with a citation, a published
 
 **[Full benchmark ledger with per-benchmark status → docs/benchmarks/README.md](docs/benchmarks/README.md)**
 
+The ledger documents 28 benchmark cards in five tiers (ready, in progress, needs rerun,
+tutorial, sanity); 21 are public in the HTML report and 7 stay hidden while their data
+pipeline or gate is still being established. Every card carries its data citation and
+the published state-of-the-art line it is scored against — the sources are collected in
+[References](#references) below.
+
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/leaderboard.png"><img src="docs/assets/readme/leaderboard.png" width="820"
        alt="QLKNN plasma-transport leaderboard: 10 models, test R² mean ± std over repeated seeds against the published 0.90 threshold, with runtime panel"/></picture>
@@ -493,7 +499,8 @@ writes the spec, trains, and reports test metrics against a baseline.
 | First-run walkthrough (HPC) | [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md) |
 | Install reference | [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) |
 | Codebase tour | [`docs/SURGE_OVERVIEW.md`](docs/SURGE_OVERVIEW.md) |
-| Benchmark definitions & citations | [`docs/BENCHMARK_VERIFICATION_BRIEF.md`](docs/BENCHMARK_VERIFICATION_BRIEF.md) |
+| Benchmark definitions & citations | [`docs/BENCHMARK_VERIFICATION_BRIEF.md`](docs/BENCHMARK_VERIFICATION_BRIEF.md), [ledger](docs/benchmarks/README.md), [References](#references) |
+| Release notes | [`CHANGELOG.md`](CHANGELOG.md), [`docs/RELEASING.md`](docs/RELEASING.md) |
 | Architecture roadmap | [`docs/design/ARCHITECTURE_RECOMMENDATIONS.md`](docs/design/ARCHITECTURE_RECOMMENDATIONS.md) |
 | Doc index | [`docs/README.md`](docs/README.md) |
 
@@ -512,6 +519,92 @@ surrogate-modeling work by the SURGE authors:
 Software citation: [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819),
 DOI [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5),
 [`CITATION.cff`](CITATION.cff).
+
+---
+
+## References
+
+Data sources and methods behind the benchmarks and model adapters. Each
+benchmark card in the [ledger](docs/benchmarks/README.md) names the entry it
+scores against; adapters list their references under `surge models --verbose`.
+
+**Fusion and plasma data**
+
+- K. L. van de Plassche *et al.*, Fast modeling of turbulent transport in fusion
+  plasmas using neural networks, *Phys. Plasmas* **27**, 022310 (2020),
+  [doi:10.1063/1.5134126](https://doi.org/10.1063/1.5134126); QLKNN10D training
+  table, Zenodo [10.5281/zenodo.3497066](https://doi.org/10.5281/zenodo.3497066)
+  — `plasma.qlknn10d`, `plasma.qlknn_transport`.
+- S. Cadena *et al.*, ConStellaration: a dataset of QI-like stellarator plasma
+  boundaries and optimization benchmarks, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)
+  (2025); S. P. Hirshman and J. C. Whitson, VMEC, *Phys. Fluids* **26**, 3553 (1983)
+  — `plasma.constellaration_*`.
+- M. Greenwald, Density limits in toroidal plasmas, *Plasma Phys. Control. Fusion*
+  **44**, R27 (2002) — `plasma.cmod_density_limit`.
+
+**Tabular, vision and operator-learning data**
+
+- R. K. Pace and R. Barry, Sparse spatial autoregressions, *Stat. Probab. Lett.*
+  **33**, 291 (1997) — `tabular.california_housing`.
+- I.-C. Yeh, Modeling of strength of high-performance concrete using artificial
+  neural networks, *Cem. Concr. Res.* **28**, 1797 (1998) — `tabular.concrete_strength`.
+- A. Tsanas and A. Xifara, Accurate quantitative estimation of energy performance
+  of residential buildings, *Energy Build.* **49**, 560 (2012) — `tabular.energy_efficiency`.
+- T. F. Brooks, D. S. Pope and M. A. Marcolini, Airfoil self-noise and prediction,
+  NASA (1989) — `tabular.airfoil_noise`.
+- K. Hamidieh, A data-driven statistical model for predicting the critical
+  temperature of a superconductor, *Comput. Mater. Sci.* **154**, 346 (2018)
+  — `tabular.superconductor`.
+- L. Grinsztajn, E. Oyallon and G. Varoquaux, Why do tree-based models still
+  outperform deep learning on typical tabular data?, NeurIPS 2022,
+  [arXiv:2207.08815](https://arxiv.org/abs/2207.08815) — CTR-23 thresholds.
+- Y. LeCun, L. Bottou, Y. Bengio and P. Haffner, Gradient-based learning applied
+  to document recognition, *Proc. IEEE* **86**, 2278 (1998) — `vision.mnist`;
+  A. Krizhevsky, Learning multiple layers of features from tiny images (2009)
+  — `vision.cifar10`.
+- M. Takamoto *et al.*, PDEBench: an extensive benchmark for scientific machine
+  learning, NeurIPS 2022, [arXiv:2210.07182](https://arxiv.org/abs/2210.07182)
+  — `pdebench.*`; R. Ohana *et al.*, The Well: a large-scale collection of diverse
+  physics simulations, NeurIPS 2024, [arXiv:2412.00568](https://arxiv.org/abs/2412.00568)
+  — `thewell.*`.
+- E. N. Lorenz, Deterministic nonperiodic flow, *J. Atmos. Sci.* **20**, 130 (1963)
+  — `sequence.lorenz63`.
+
+**Model architectures**
+
+- Z. Li *et al.*, Fourier neural operator for parametric partial differential
+  equations, ICLR 2021, [arXiv:2010.08895](https://arxiv.org/abs/2010.08895) — `pytorch.fno1d/2d`.
+- L. Lu, P. Jin, G. Pang, Z. Zhang and G. E. Karniadakis, Learning nonlinear
+  operators via DeepONet, *Nat. Mach. Intell.* **3**, 218 (2021) — `pytorch.deeponet`.
+- K. He, X. Zhang, S. Ren and J. Sun, Deep residual learning for image recognition,
+  CVPR 2016, [arXiv:1512.03385](https://arxiv.org/abs/1512.03385) — `pytorch.resnet*`,
+  `pytorch.residual_mlp`.
+- A. Dosovitskiy *et al.*, An image is worth 16×16 words, ICLR 2021,
+  [arXiv:2010.11929](https://arxiv.org/abs/2010.11929) — `pytorch.vit`.
+- M. Oquab *et al.*, DINOv2: learning robust visual features without supervision,
+  [arXiv:2304.07193](https://arxiv.org/abs/2304.07193) (2023) — `pytorch.dino_linear_probe`.
+- O. Ronneberger, P. Fischer and T. Brox, U-Net, MICCAI 2015,
+  [arXiv:1505.04597](https://arxiv.org/abs/1505.04597) — `pytorch.unet`.
+- J. Ho, A. Jain and P. Abbeel, Denoising diffusion probabilistic models, NeurIPS
+  2020, [arXiv:2006.11239](https://arxiv.org/abs/2006.11239) — `pytorch.ddpm`;
+  M. Mirza and S. Osindero, Conditional generative adversarial nets,
+  [arXiv:1411.1784](https://arxiv.org/abs/1411.1784) (2014) — `pytorch.cgan`;
+  D. P. Kingma and M. Welling, Auto-encoding variational Bayes, ICLR 2014,
+  [arXiv:1312.6114](https://arxiv.org/abs/1312.6114) — `pytorch.vae`.
+- B. Lakshminarayanan, A. Pritzel and C. Blundell, Simple and scalable predictive
+  uncertainty estimation using deep ensembles, NeurIPS 2017,
+  [arXiv:1612.01474](https://arxiv.org/abs/1612.01474) — ensemble uncertainty.
+- N. Hollmann *et al.*, Accurate predictions on small data with a tabular
+  foundation model, *Nature* **637**, 319 (2025) — `tabpfn.*`.
+
+**Software**
+
+- F. Pedregosa *et al.*, Scikit-learn: machine learning in Python, *JMLR* **12**,
+  2825 (2011); A. Paszke *et al.*, PyTorch, NeurIPS 2019; T. Chen and C. Guestrin,
+  XGBoost, KDD 2016; G. Ke *et al.*, LightGBM, NeurIPS 2017; A. G. de G. Matthews
+  *et al.*, GPflow, *JMLR* **18**, 1 (2017); T. Akiba *et al.*, Optuna, KDD 2019;
+  S. M. Lundberg and S.-I. Lee, A unified approach to interpreting model
+  predictions (SHAP), NeurIPS 2017.
 
 ---
 

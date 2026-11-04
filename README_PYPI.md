@@ -66,6 +66,8 @@ Full ledger with per-benchmark status: [docs/benchmarks/README.md](https://githu
 
 - [Full README](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md) — architecture, highlights, visualization system, all 40+ model adapters
 - [Getting started](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/GETTING_STARTED.md)
+- [Benchmark ledger](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/benchmarks/README.md) — status, gates and data citations per benchmark
+- [References](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md#references) — the datasets, architectures and software behind the suite
 - [Changelog](https://github.com/asvillar/SURGE/blob/v0.1.0/CHANGELOG.md)
 - [Citation](https://github.com/asvillar/SURGE/blob/v0.1.0/CITATION.cff) — DOE CODE 179819, DOI [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
 
