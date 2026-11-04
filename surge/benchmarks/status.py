@@ -28,10 +28,13 @@ STATUS_DOC = {
     "tutorial": "small or self-referential dataset; checks plumbing, not scientific capability.",
     "sanity": "too easy as posed or measuring a proxy; not a surrogate result.",
 }
+# Order matters: the first key present is the ledger's headline number, so
+# gated field metrics (relative L2) come before the generic R2.
 _PRIMARY = (
-    "test_vpt_median", "test_median_rel_err", "test_r2_equilibrium_mean", "test_r2", "test_r2_mean", "test_accuracy",
-    "test_rel_l2", "test_nrmse", "test_nrmse_mean")
-_LOWER_IS_BETTER = ("test_median_rel_err", "test_rel_l2", "test_nrmse", "test_nrmse_mean", "test_rmse")
+    "test_vpt_median", "test_median_rel_err", "test_r2_equilibrium_mean", "test_relative_l2",
+    "test_r2", "test_r2_mean", "test_accuracy", "test_rel_l2", "test_nrmse", "test_nrmse_mean")
+_LOWER_IS_BETTER = ("test_median_rel_err", "test_relative_l2", "test_relative_l2_mean", "test_rel_l2",
+                    "test_nrmse", "test_nrmse_mean", "test_rmse")
 
 
 def _is_lower_better(metric_key: str) -> bool:
@@ -187,6 +190,8 @@ def _fmt_result(r: dict | None, definition_date: str | None = None) -> str:
                 val = f"vpt {float(m[k]):.3f} λ"
             elif k == "test_median_rel_err":
                 val = f"median rel. err. {100 * float(m[k]):.1f} %"
+            elif k == "test_relative_l2":
+                val = f"rel-L2 {float(m[k]):.3f}"
             break
     else:
         val = "n/a"

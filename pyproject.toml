@@ -84,10 +84,10 @@ surge-benchmark = "surge.benchmarks.run:main"
 surge = "surge.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/S-Villar/SURGE"
-Documentation = "https://github.com/S-Villar/SURGE/blob/main/docs/README.md"
-Repository = "https://github.com/S-Villar/SURGE"
-Issues = "https://github.com/S-Villar/SURGE/issues"
+Homepage = "https://github.com/asvillar/SURGE"
+Documentation = "https://github.com/asvillar/SURGE/blob/main/docs/README.md"
+Repository = "https://github.com/asvillar/SURGE"
+Issues = "https://github.com/asvillar/SURGE/issues"
 
 # Single source of truth for the version: read from surge/__init__.py
 # instead of duplicating it here (pairs with `dynamic = ["version"]` above).

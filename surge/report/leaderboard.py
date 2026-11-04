@@ -32,12 +32,12 @@ from surge.report.dataset_previews import preview_svg
 from surge.viz.theme import PALETTES, fmt_metric, surge_theme
 
 # Metrics where lower is better (everything else: higher is better).
-_LOWER_BETTER = ("rmse", "nrmse", "rel_l2", "mae", "loss", "median_rel_err")
+_LOWER_BETTER = ("rmse", "nrmse", "rel_l2", "relative_l2", "mae", "loss", "median_rel_err")
 
 # Display order and labels for metric columns, first match wins per benchmark.
 _PRIMARY_CANDIDATES = (
-    "test_vpt_median", "test_median_rel_err", "test_r2", "test_r2_mean", "test_accuracy",
-    "test_rel_l2", "test_nrmse", "test_nrmse_mean",
+    "test_vpt_median", "test_median_rel_err", "test_relative_l2", "test_r2", "test_r2_mean",
+    "test_accuracy", "test_rel_l2", "test_nrmse", "test_nrmse_mean",
 )
 
 
@@ -341,7 +341,7 @@ def _metric_columns(bench_results: dict[str, dict]) -> list[str]:
     keys: set = set()
     for r in bench_results.values():
         keys.update(r["metrics"].keys())
-    order = ["test_vpt_median", "test_median_rel_err", "test_r2", "test_r2_mean", "test_accuracy", "test_f1", "test_f1_macro",
+    order = ["test_vpt_median", "test_median_rel_err", "test_relative_l2", "test_r2", "test_r2_mean", "test_accuracy", "test_f1", "test_f1_macro",
              "test_auroc", "test_rmse", "test_rmse_mean", "test_nrmse",
              "test_nrmse_mean", "test_rel_l2", "runtime_s", "peak_memory_mb"]
     return [k for k in order if k in keys]
@@ -352,7 +352,7 @@ _LABELS = {
     "test_r2": "R²", "test_r2_mean": "R̄²", "test_accuracy": "Acc",
     "test_f1": "F1", "test_f1_macro": "F1", "test_auroc": "AUROC",
     "test_rmse": "RMSE", "test_rmse_mean": "RMSE", "test_nrmse": "NRMSE",
-    "test_nrmse_mean": "NRMSE", "test_rel_l2": "RelL2",
+    "test_nrmse_mean": "NRMSE", "test_rel_l2": "RelL2", "test_relative_l2": "rel-L2",
     "runtime_s": "Runtime", "peak_memory_mb": "Peak mem",
 }
 
