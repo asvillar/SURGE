@@ -158,6 +158,16 @@ def _load_tabpfn():
     register_model(TabPFNClassifierAdapter, key='tabpfn.classifier', aliases=['tabpfn_clf'])
 
 
+def _load_kumo():
+    import sdm  # noqa: F401
+
+    from .adapters.kumo_tabular import KumoTabularClassifierAdapter, KumoTabularRegressorAdapter
+    register_model(KumoTabularRegressorAdapter, key='kumo.tabular_regressor',
+                   aliases=['kumo', 'kumo_tabular', 'kumo_regressor'])
+    register_model(KumoTabularClassifierAdapter, key='kumo.tabular_classifier',
+                   aliases=['kumo_classifier'])
+
+
 def _load_keras():
     import tensorflow  # noqa: F401 - fail HERE with the real reason
 
@@ -179,6 +189,7 @@ _register_optional(('catboost.regressor', 'catboost.classifier'), ('catboost',),
 _register_optional(('xgboost.xgbregressor', 'xgboost.xgbclassifier'), ('xgboost',), _load_xgboost)
 _register_optional(('botorch.gp', 'botorch.sparse_gp'), ('torch', 'botorch'), _load_botorch)
 _register_optional(('tabpfn.regressor', 'tabpfn.classifier'), ('tabpfn',), _load_tabpfn)
+_register_optional(('kumo.tabular_regressor', 'kumo.tabular_classifier'), ('sdm',), _load_kumo)
 _register_optional(('keras.mlp',), ('tensorflow',), _load_keras)
 
 _TORCH_GROUPS = [

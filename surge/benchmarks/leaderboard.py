@@ -98,6 +98,9 @@ try:
     if _importlib_util.find_spec("tabpfn") is not None:
         _REGRESSION_MODELS.append("tabpfn.regressor")
         _CLASSIFICATION_MODELS.append("tabpfn.classifier")
+    if _importlib_util.find_spec("sdm") is not None:
+        _REGRESSION_MODELS.append("kumo.tabular_regressor")
+        _CLASSIFICATION_MODELS.append("kumo.tabular_classifier")
 except Exception:
     pass
 
