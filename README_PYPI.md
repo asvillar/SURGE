@@ -61,6 +61,9 @@ artifacts. Headline numbers from the fusion benchmarks:
   fluxes, reproduced end-to-end from public data (gate R² ≥ 0.95).
 - **ConStellaration stellarator design** — mean R² 0.916 across 8 VMEC++
   equilibrium metrics (gate R² ≥ 0.85).
+- **C-Mod density-limit precursor detection** — discharge-grouped split of the
+  MIT-PSFC open database on the natural 1.4 % imbalance: random forest AUROC
+  0.9999 against 0.973 for the Greenwald-fraction scaling (gate AUROC ≥ 0.99).
 - **SOLPS-NN divertor exhaust** (in progress) — an in-context tabular
   foundation model (`kumo.tabular_regressor`) reaches 9.3 % median relative
   error on the peak target heat flux with no training, against the

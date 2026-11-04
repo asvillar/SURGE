@@ -19,7 +19,6 @@ The on-file result is the best of each model's newest run on or after the benchm
 ## Focus
 
 - `pde.burgers_1d`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
-- `plasma.cmod_density_limit`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
 - `plasma.constellaration_multioutput`: MAybe look at the one its publsished already in the website?
 - `plasma.constellaration_paper`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
 - `plasma.qlknn10d`: Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?
@@ -31,6 +30,7 @@ The on-file result is the best of each model's newest run on or after the benchm
 
 | benchmark | task shape | discipline | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |
 |---|---|---|---|---|---|---|---|---|---|
+| `plasma.cmod_density_limit` | 6 → 2 (211,647 train / 52,738 test slices, grouped by discharge) | Fusion & Plasma Physics | MIT-PSFC/open_density_limit_database; CC BY (data), MIT (code) | AUROC 0.9999 ✓ (sklearn.random_forest_classifier, 2026-11-04) | AUROC ≥ 0.99 | 0.973 AUROC [same] | Re-posed: discharge-grouped split of the MIT-PSFC open database, natural class imbalance (1.4 % positive slices, 78 of 2,333 discharges), scored by AUROC with the Greenwald-fraction scaling as the physics baseline (0.973 on the same split). State classification of the precursor phase, not a forecast; a warning-time variant is planned. | ✓ | — |
 | `plasma.constellaration_multioutput` | 90 → 8 | Fusion & Plasma Physics | proxima-fusion/constellaration on HuggingFace; upstream dataset terms | r2_equilibrium_mean 0.917 ✓ (pytorch.residual_mlp, 2026-10-20) | equilibrium mean R² ≥ 0.85 | 0.99 R² (mean) [diff] | 90→8 equilibrium metrics; run 2026-09-25 mean R² 0.916, QI 0.935 | ✓ | ✓ |
 | `plasma.qlknn10d` | 9 → 1 | Fusion & Plasma Physics | QLKNN10D Zenodo 10.5281/zenodo.3497066; CC-BY 4.0 | r2 0.990 ✓ (pytorch.residual_mlp, 2026-10-21) | R² ≥ 0.95 | — | surge bench run 2026-10-21: residual MLP R² 0.9898 on 200k held-out QuaLiKiz fluxes (gate 0.95); trained with the benchmark-declared hyperparameters (batch 4096, 60 epochs) | ✓ | ✓ |
 
@@ -50,7 +50,6 @@ The on-file result is the best of each model's newest run on or after the benchm
 |---|---|---|---|---|---|---|---|---|---|
 | `classification.covertype` | 54 → 7 | Environmental Sciences | Blackard & Dean (1999) Computers & Electronics in Agriculture | accuracy 0.759 ✗ (sklearn.gradient_boosting_classifier, 2026-10-20) | Acc ≥ 0.85 | 0.95 Accuracy [diff] | run 2026-10-20 gradient boosting acc 0.760 FAIL on 20k subsample; full 581k not yet tried | — | ✓ |
 | `fusion.m3dc1_sample` | 13 → 1 | Fusion & Plasma Physics | M3DC1 Group — NSTX-U experimental data, PPPL | r2 0.998 ✓ (synthetic fixture) (sklearn.ridge, 2026-05-22) | R² ≥ 0.85 | — | on-file result is the synthetic fallback fixture | — | — |
-| `plasma.cmod_density_limit` | ~10 → 2 | Fusion & Plasma Physics | Greenwald et al. (2002) Plasma Phys. Control. Fusion | accuracy 0.997 ✓ (lgbm.classifier, 2026-05-18) | Acc ≥ 0.90 | — | accuracy on resampled data; field convention is ROC/FPR | ✓ | ✓ |
 | `plasma.constellaration` | 90 → 1 | Fusion & Plasma Physics | Cadena et al. (2025) arXiv:2506.19583 — ConStellaration dataset | r2 0.899 ✓ (sklearn.mlp, 2026-05-23) | R² ≥ 0.85 | 0.982 R² [diff] | code gate fixed to 0.85 (was 0.50); rerun in progress 2026-10-20 | — | ✓ |
 | `plasma.constellaration_paper` | 90 → 12 | Fusion & Plasma Physics | Cadena et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol | r2_mean 0.928 ✗ (pytorch.residual_mlp, 2026-05-23) | mean R² ≥ 0.85 | 0.99 R² (mean) [diff] | paper protocol, mean R² 0.929 vs paper 0.97 — parity check, honest fail | ✓ | ✓ |
 
