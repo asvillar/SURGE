@@ -98,10 +98,13 @@ def _print_list(
     task_type: str | None = None,
     include_smoke: bool = False,
     tier: str | None = None,
+    only_keys: list[str] | None = None,
 ) -> None:
     keys = list_benchmarks(
         category=category, task_type=task_type, include_smoke=include_smoke, tier=tier
     )
+    if only_keys is not None:
+        keys = [k for k in keys if k in set(only_keys)]
     if not keys:
         print("No benchmarks match the specified filters.")
         return
