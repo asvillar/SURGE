@@ -123,10 +123,13 @@ def newest_sweep(bench_results: dict[str, dict],
     return out
 
 
-def primary_metric_key(bench_results: dict[str, dict]) -> str | None:
+def primary_metric_key(bench_results: dict[str, dict], info: dict | None = None) -> str | None:
     present: set = set()
     for model in bench_results.values():
         present.update(model["metrics"].keys())
+    pm = (info or {}).get("primary_metric")
+    if isinstance(pm, str) and pm.startswith("test_") and pm in present:
+        return pm
     for cand in _PRIMARY_CANDIDATES:
         if cand in present:
             return cand
@@ -161,7 +164,7 @@ def spider_svg(category: str, benches: list[str], results: dict[str, dict[str, d
 
     per_axis: dict[str, dict[str, float]] = {}
     for b in axes_keys:
-        pm = primary_metric_key(results[b])
+        pm = primary_metric_key(results[b], meta.get(b))
         if pm is None:
             continue
         vals = {m: r["metrics"][pm]["mean"]
@@ -342,7 +345,7 @@ def _metric_columns(bench_results: dict[str, dict]) -> list[str]:
     for r in bench_results.values():
         keys.update(r["metrics"].keys())
     order = ["test_vpt_median", "test_median_rel_err", "test_relative_l2", "test_r2", "test_r2_mean", "test_accuracy", "test_f1", "test_f1_macro",
-             "test_auroc", "test_rmse", "test_rmse_mean", "test_nrmse",
+             "test_auroc", "test_average_precision", "test_tpr_at_fpr05", "test_rmse", "test_rmse_mean", "test_nrmse",
              "test_nrmse_mean", "test_rel_l2", "runtime_s", "peak_memory_mb"]
     return [k for k in order if k in keys]
 
@@ -351,6 +354,7 @@ _LABELS = {
     "test_vpt_median": "VPT (λ)", "test_median_rel_err": "median rel. err.",
     "test_r2": "R²", "test_r2_mean": "R̄²", "test_accuracy": "Acc",
     "test_f1": "F1", "test_f1_macro": "F1", "test_auroc": "AUROC",
+    "test_average_precision": "AP", "test_tpr_at_fpr05": "TPR@5%FPR",
     "test_rmse": "RMSE", "test_rmse_mean": "RMSE", "test_nrmse": "NRMSE",
     "test_nrmse_mean": "NRMSE", "test_rel_l2": "RelL2", "test_relative_l2": "rel-L2",
     "runtime_s": "Runtime", "peak_memory_mb": "Peak mem",
@@ -543,7 +547,7 @@ def _bench_card(key: str, meta: dict[str, dict],
     info = meta.get(key, {})
     status = _status_of(info)
     history = history if history is not None else bench_results
-    pm = primary_metric_key(bench_results)
+    pm = primary_metric_key(bench_results, info)
     cols = _metric_columns(bench_results)
     synthetic = bool(bench_results) and all(r.get("synthetic") for r in bench_results.values())
 
@@ -574,7 +578,7 @@ def _bench_card(key: str, meta: dict[str, dict],
     hist_block = ""
     if n_hist > sum(r["n_runs"] for r in bench_results.values()):
         hist_block = (f"<details class='io'><summary>run history (all {n_hist} results)"
-                      f"</summary>{_table(history, primary_metric_key(history), _metric_columns(history), info)}"
+                      f"</summary>{_table(history, primary_metric_key(history, info), _metric_columns(history), info)}"
                       "</details>")
 
     rec = []

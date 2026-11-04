@@ -712,37 +712,41 @@ benchmarks:
   visible: false
   focus: false
 - key: plasma.cmod_density_limit
-  status: needs_rerun
-  status_note: "accuracy on resampled data; field convention is ROC/FPR"
+  status: ready
+  status_note: "Re-posed: discharge-grouped split of the MIT-PSFC open database, natural class imbalance (1.4 % positive slices, 78 of 2,333 discharges), scored by AUROC with the Greenwald-fraction scaling as the physics baseline (0.973 on the same split). State classification of the precursor phase, not a forecast; a warning-time variant is planned."
   name: C-Mod Greenwald Density Limit
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
   tier: 2
-  citation: Greenwald et al. (2002) Plasma Phys. Control. Fusion
-  url: https://doi.org/10.1088/0741-3335/44/8/325
-  shape: ~10 → 2
-  n: ~5,000
-  primary_metric: Accuracy
-  threshold: Acc ≥ 0.90
-  description: Predict density-limit disruption precursor (Greenwald limit) from Alcator C-Mod
-    plasma signals.
-  task_explainer: "Alcator C-Mod plasma signals (density relative to the Greenwald limit, current, field, and related quantities) are mapped to whether the discharge is near a density-limit disruption. A surrogate gives a real-time disruption-risk flag. SURGE reports accuracy on a re-balanced set, whereas the field reports ROC operating points on the natural ~1.4% positive rate."
-  published_in: "Greenwald et al., Plasma Phys. Control. Fusion 44 (2002); Montes et al., Nucl. Fusion (2019); MIT C-Mod database, local cache"
+  citation: "Maris, Rea, Trevisan & the Alcator C-Mod Team, The Open Density Limit Database, MIT PSFC (2025; data CC BY, code MIT); Maris et al., Correlation of the L-mode density limit with edge collisionality, Nucl. Fusion (2024) doi:10.1088/1741-4326/ad90f0; Greenwald et al., Plasma Phys. Control. Fusion 44, R27 (2002)"
+  url: https://github.com/MIT-PSFC/open_density_limit_database
+  shape: 6 → 2 (211,647 train / 52,738 test slices, grouped by discharge)
+  n: 264,385 slices / 2,333 discharges
+  primary_metric: test_auroc
+  threshold: AUROC ≥ 0.99
+  threshold_note: "Gate = beat the physics scaling by a margin. On the same fixed split the Greenwald fraction n/n_G alone gives AUROC 0.973 (AP 0.694, TPR 0.82 at 5 % FPR) and logistic regression 0.981."
+  description: Classify whether an Alcator C-Mod 10 ms time slice is in the density-limit precursor phase from six plasma signals. Split is grouped by discharge (StratifiedGroupKFold, 5 folds, seed 42, fold 0 = test) so no discharge straddles train and test, on the natural 1.4 % positive rate. Reported as AUROC, average precision and TPR at 5 % / 1 % FPR.
+  task_explainer: "Six C-Mod signals per 10 ms slice (line-averaged density, elongation, minor radius, plasma current, toroidal field, triangularity) are mapped to whether the discharge has entered the density-limit precursor phase. The split holds out whole discharges and keeps the natural imbalance (78 of 2,333 discharges reach the phase), so the score is the field-standard ranking quality (AUROC, TPR at fixed FPR) rather than accuracy. The Greenwald fraction n/(I_p/(pi a^2)) is the physics baseline. This is state classification, not a forecast of time-to-limit."
+  published_in: "Maris et al., Nucl. Fusion (2024) doi:10.1088/1741-4326/ad90f0; Greenwald et al., Plasma Phys. Control. Fusion 44, R27 (2002); MIT-PSFC Open Density Limit Database"
   sota:
-    value: null
-    metric: "ROC / FPR at fixed TPR"
-    model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
-    url: null
-    protocol_match: "different"
-    note: "no verified published number for this exact split/protocol; Montes et al. 2019 report e.g. 2.3% FPR at 95% TPR on the natural class imbalance, not accuracy on a resampled set"
+    value: 0.973
+    metric: "AUROC"
+    model: "Greenwald fraction n/n_G"
+    source: "Greenwald fraction n/n_G on the fixed discharge-grouped test split (this work); Maris et al. 2024 for the physics"
+    url: https://doi.org/10.1088/1741-4326/ad90f0
+    protocol_match: "same"
+    note: "same split: physics-scaling baseline computed on exactly these test slices, not a published ML number"
   inputs:
-  - {name: "plasma_signals[0:~10]", desc: "C-Mod discharge signals incl. Greenwald fraction n/n_G (a.u.)"}
+  - {name: density, desc: "Line-averaged electron density (1e20 m^-3)"}
+  - {name: elongation, desc: "Plasma elongation kappa (dimensionless)"}
+  - {name: minor_radius, desc: "Plasma minor radius a (m)"}
+  - {name: plasma_current, desc: "Plasma current I_p (MA)"}
+  - {name: toroidal_B_field, desc: "Toroidal magnetic field B_T (T)"}
+  - {name: triangularity, desc: "Plasma triangularity delta (dimensionless)"}
   outputs:
-  - {name: "density_limit_flag", desc: "Class: approaching density limit (1) / stable (0)"}
+  - {name: density_limit_phase, desc: "Class: slice is in the density-limit precursor phase (1) / not (0); models are scored on the positive-class probability"}
   visible: true
-  focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
+  focus: false
 - key: plasma.constellaration
   status: needs_rerun
   status_note: "code gate fixed to 0.85 (was 0.50); rerun in progress 2026-10-20"

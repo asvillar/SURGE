@@ -37,6 +37,15 @@ _LOWER_IS_BETTER = ("test_median_rel_err", "test_relative_l2", "test_relative_l2
                     "test_nrmse", "test_nrmse_mean", "test_rmse")
 
 
+def _primary_for(card: dict | None) -> tuple[str, ...]:
+    """Headline-metric search order: the card's ``primary_metric`` (when it names a
+    ``test_*`` result key) first, then the global order."""
+    pm = (card or {}).get("primary_metric")
+    if isinstance(pm, str) and pm.startswith("test_"):
+        return (pm,) + tuple(k for k in _PRIMARY if k != pm)
+    return _PRIMARY
+
+
 def _is_lower_better(metric_key: str) -> bool:
     return metric_key in _LOWER_IS_BETTER
 _repo_root = paths.repo_root()
@@ -160,9 +169,9 @@ def _newest_results(reports_dir: Path, meta: dict | None = None) -> dict[str, di
         d["_ts"] = _ts(d, rj)
         runs.setdefault(key, []).append(d)
 
-    def score(r):
+    def score(r, order=_PRIMARY):
         m = r.get("metrics") or {}
-        for k in _PRIMARY:
+        for k in order:
             if isinstance(m.get(k), (int, float)):
                 v = float(m[k])
                 return -v if _is_lower_better(k) else v
@@ -174,22 +183,26 @@ def _newest_results(reports_dir: Path, meta: dict | None = None) -> dict[str, di
         cand = newest_run_per_model(rs, ddate)
         if not cand:  # every run predates the definition: no current result
             continue
-        out[key] = max(cand, key=lambda r: (score(r), r["_ts"]))
+        order = _primary_for((meta or {}).get(key))
+        out[key] = max(cand, key=lambda r: (score(r, order), r["_ts"]))
     return out
 
 
-def _fmt_result(r: dict | None, definition_date: str | None = None) -> str:
+def _fmt_result(r: dict | None, definition_date: str | None = None,
+                card: dict | None = None) -> str:
     if not r:
         return (f"no run since {definition_date}" if definition_date
                 else "no result on file")
     m = r.get("metrics") or {}
-    for k in _PRIMARY:
+    for k in _primary_for(card):
         if isinstance(m.get(k), (int, float)):
             val = f"{k.removeprefix('test_')} {float(m[k]):.3f}"
             if k == "test_vpt_median":
                 val = f"vpt {float(m[k]):.3f} λ"
             elif k == "test_median_rel_err":
                 val = f"median rel. err. {100 * float(m[k]):.1f} %"
+            elif k == "test_auroc":
+                val = f"AUROC {float(m[k]):.4f}"
             elif k == "test_relative_l2":
                 val = f"rel-L2 {float(m[k]):.3f}"
             break
@@ -253,7 +266,7 @@ def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> st
         for k in keys:
             m, r = meta[k], results.get(k)
             row = [f"`{k}`", m.get("shape", ""), m.get("discipline", "—"),
-                   _source(m, r), _fmt_result(r, m.get("definition_date")),
+                   _source(m, r), _fmt_result(r, m.get("definition_date"), m),
                    m.get("threshold", ""), _sota_cell(m), m.get("status_note", ""),
                    "✓" if is_visible(m) else "—", "✓" if is_focus(m) else "—"]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")

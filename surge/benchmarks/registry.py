@@ -240,10 +240,11 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "M3DC1 equilibrium surrogate — 13 MHD params → stability metric",
     ),
     "plasma.cmod_density_limit": (
-        None, "plasma", "classification", "6→2 (n=264,385)",
-        "Alcator C-Mod density limit disruption — 6 plasma signals → binary label. "
-        "MIT-PSFC open_density_limit_database. Greenwald limit physics. "
-        "[MIT-PSFC/open_density_limit_database, GitHub]",
+        None, "plasma", "classification", "6→2 (211,647 train / 52,738 test slices, grouped by discharge)",
+        "Alcator C-Mod density-limit precursor — 6 plasma signals → binary state, "
+        "discharge-grouped split on the natural class imbalance, scored by AUROC "
+        "(Greenwald-fraction baseline). "
+        "[MIT-PSFC Open Density Limit Database, CC BY, Maris et al. 2024]",
     ),
     "plasma.qlknn_transport": (
         None, "plasma", "regression", "10→1 (n≈7,475 post mask)",
@@ -445,9 +446,9 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "plasma.cmod_density_limit": {
         "dataset_source": "MIT-PSFC/open_density_limit_database",
-        "license": "upstream GitHub repository terms",
+        "license": "CC BY (data), MIT (code)",
         "access": "download_cached",
-        "cache_path": "data/datasets/benchmarks/plasma/cmod_density_limit.npz",
+        "cache_path": "data/datasets/benchmarks/plasma/cmod_density_limit_grouped.npz",
         "sample_count": 264385,
         "feature_shape": "6",
         "target_shape": "2 classes",

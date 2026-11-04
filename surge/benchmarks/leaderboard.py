@@ -636,6 +636,7 @@ BENCH_MODEL_DEFAULTS: dict[str, dict[str, dict]] = {
 _FIXED_SPLIT_LOADERS: dict[str, str] = {
     "plasma.solpsnn_exhaust_scalars": "_load_solpsnn_exhaust_scalars",
     "plasma.solpsnn_te_field": "_load_solpsnn_te_field",
+    "plasma.cmod_density_limit": "_load_cmod_density_limit",
 }
 
 # Benchmarks whose loader applies a target transform: inverse applied to
@@ -843,6 +844,14 @@ def _run_with_adapter(
             except Exception:
                 pass
         metrics = _clf_metrics(y_test, y_pred, y_prob)
+        if benchmark_key == "plasma.cmod_density_limit" and y_prob is not None:
+            from .tasks import disruption_metrics
+
+            _yp = np.asarray(y_prob)
+            _score = _yp[:, 1] if _yp.ndim > 1 else _yp
+            _dm, _base = disruption_metrics(X_test, y_test, _score)
+            metrics.update(_dm)
+            lorenz_extra.update(_base)
 
     metrics["runtime_s"] = elapsed
     metrics["peak_memory_mb"] = float(peak_memory / (1024 * 1024))
@@ -934,7 +943,7 @@ def _load_dataset(benchmark_key: str):
         "ctr23.brazilian_houses": lambda: _load_ctr23_brazilian_houses(),
         # DOE fusion plasma benchmarks
         "fusion.m3dc1_sample":        lambda: _load_fusion_m3dc1_sample(),
-        "plasma.cmod_density_limit":  lambda: _load_cmod_density_limit(),
+        "plasma.cmod_density_limit":  lambda: _concat_fixed(_load_cmod_density_limit()),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
         "plasma.qlknn10d":            lambda: _load_qlknn10d(),
         "plasma.solpsnn_exhaust_scalars": lambda: _concat_fixed(_load_solpsnn_exhaust_scalars()),
@@ -1334,55 +1343,75 @@ def _load_ctr23_brazilian_houses():
 # DOE Fusion plasma dataset loaders
 # ---------------------------------------------------------------------------
 
+_CMOD_URL = ("https://raw.githubusercontent.com/MIT-PSFC/"
+             "open_density_limit_database/main/data/DL_DataFrame.csv")
+_CMOD_FEATURES = ["density", "elongation", "minor_radius",
+                  "plasma_current", "toroidal_B_field", "triangularity"]
+
+
+def _cmod_grouped_split(X, y, groups, *, n_splits: int = 5, seed: int = 42):
+    """Discharge-grouped, class-stratified split: fold 0 of a shuffled
+    ``StratifiedGroupKFold`` is the test set.  No discharge straddles the split
+    and the natural class imbalance is kept."""
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    cv = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    tr, te = next(iter(cv.split(X, y, groups)))
+    return X[tr], y[tr], X[te], y[te], groups[tr], groups[te]
+
+
+def _download_cmod_csv(dest) -> None:
+    import os
+    import ssl
+    import urllib.request
+
+    cafile = os.environ.get("SURGE_CA_BUNDLE")
+    if not cafile:
+        try:
+            import certifi
+
+            cafile = certifi.where()
+        except ImportError:
+            cafile = None
+    ctx = ssl.create_default_context(cafile=cafile)
+    with urllib.request.urlopen(_CMOD_URL, timeout=120, context=ctx) as resp:
+        data = resp.read()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+
+
 def _load_cmod_density_limit():
-    """Alcator C-Mod density limit disruption classification.
+    """Alcator C-Mod density-limit precursor, fixed discharge-grouped split.
 
-    Binary classification: predict whether the plasma has entered the
-    Greenwald density limit phase (disruption precursor).
-
-    Source: MIT-PSFC open_density_limit_database
-    URL:    https://github.com/MIT-PSFC/open_density_limit_database
-    n = 264,385 time-slices from C-Mod discharges (highly imbalanced: 1.4% positive).
-    Features: density, elongation, minor_radius, plasma_current, toroidal_B_field,
-              triangularity  (6 normalised physics signals per time-slice).
-
-    We balance the dataset to 50/50 by downsampling the majority class to
-    keep n ≤ 40k for fast leaderboard runs.
+    Returns ``(X_train, y_train, X_test, y_test)``.  Source: MIT-PSFC Open
+    Density Limit Database (data CC BY, code MIT; Maris et al., Nucl. Fusion
+    2024).  264,385 10-ms slices of 2,333 discharges, 78 of which enter the
+    density-limit phase (1.36 % positive slices).  X = (density [1e20 m^-3],
+    elongation, minor_radius [m], plasma_current [MA], toroidal_B_field [T],
+    triangularity); y = ``density_limit_phase``.  The split is
+    ``StratifiedGroupKFold(5, shuffle, seed 42)`` grouped by ``discharge_ID``,
+    fold 0 = test, on the NATURAL class imbalance (no balancing).
     """
-    cache = _bench_data_root() / "plasma" / "cmod_density_limit.npz"
+    root = _bench_data_root() / "plasma"
+    cache = root / "cmod_density_limit_grouped.npz"
     if cache.exists():
         d = np.load(cache)
-        return d["X"], d["y"]
+        return d["X_train"], d["y_train"], d["X_test"], d["y_test"]
 
-    import io
-    import urllib.request
     import pandas as pd
 
-    url = (
-        "https://raw.githubusercontent.com/MIT-PSFC/"
-        "open_density_limit_database/main/data/DL_DataFrame.csv"
-    )
-    raw = urllib.request.urlopen(url, timeout=60).read()
-    df = pd.read_csv(io.BytesIO(raw))
-
-    feature_cols = ["density", "elongation", "minor_radius",
-                    "plasma_current", "toroidal_B_field", "triangularity"]
-    X = df[feature_cols].values.astype(float)
-    y = df["density_limit_phase"].values.astype(int)
-
-    # Balance: sample min(all positive, 20k) from each class.
-    rng = np.random.default_rng(42)
-    pos_idx = np.where(y == 1)[0]
-    neg_idx = np.where(y == 0)[0]
-    n_per_class = min(len(pos_idx), 20_000)
-    chosen_pos = rng.choice(pos_idx, size=n_per_class, replace=False)
-    chosen_neg = rng.choice(neg_idx, size=n_per_class, replace=False)
-    idx = np.concatenate([chosen_pos, chosen_neg])
-    rng.shuffle(idx)
-    X_out, y_out = X[idx], y[idx]
+    raw = root / "cmod_raw" / "DL_DataFrame.csv"
+    if not raw.exists():
+        _download_cmod_csv(raw)
+    df = pd.read_csv(raw)
+    X = df[_CMOD_FEATURES].to_numpy(dtype=float)
+    y = df["density_limit_phase"].to_numpy(dtype=int)
+    groups = df["discharge_ID"].to_numpy()
+    Xtr, ytr, Xte, yte, gtr, gte = _cmod_grouped_split(X, y, groups)
     cache.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(cache, X=X_out, y=y_out)
-    return X_out, y_out
+    np.savez_compressed(cache, X_train=Xtr, y_train=ytr, X_test=Xte, y_test=yte,
+                        groups_train=gtr, groups_test=gte)
+    return Xtr, ytr, Xte, yte
 
 
 def _load_fusion_m3dc1_sample():
@@ -2025,7 +2054,7 @@ _GATE_THRESHOLDS: dict[str, tuple[str, float]] = {
     # Threshold set at 91.0% to allow ±0.25% seed variance.
     "vision.cifar10": ("test_accuracy", 0.910),
     # DOE fusion plasma benchmarks
-    "plasma.cmod_density_limit": ("test_accuracy", 0.85),
+    "plasma.cmod_density_limit": ("test_auroc", 0.99),  # Greenwald scaling gives 0.973 on this split
     "plasma.qlknn_transport": ("test_r2", 0.90),
     "plasma.qlknn10d": ("test_r2", 0.95),
     "plasma.constellaration": ("test_r2", 0.85),

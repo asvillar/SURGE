@@ -951,6 +951,47 @@ def relative_l2_metrics(benchmark_key: str, y_test, y_pred) -> dict:
             "test_relative_l2_mean": float(np.mean(per_sample))}
 
 
+def _tpr_at_fpr(y_true, score, fpr_max: float) -> float:
+    """Best TPR on the ROC curve with FPR <= ``fpr_max``."""
+    from sklearn.metrics import roc_curve
+
+    fpr, tpr, _ = roc_curve(y_true, score)
+    return float(tpr[fpr <= fpr_max].max())
+
+
+def disruption_metrics(X_test, y_test, y_proba) -> tuple[dict, dict]:
+    """Rare-event (density-limit precursor) metrics on the natural class balance.
+
+    Returns ``(metrics, baseline)``.  ``metrics``: ``test_auroc``,
+    ``test_average_precision``, ``test_tpr_at_fpr05``, ``test_tpr_at_fpr01``
+    (TPR at FPR <= 5 % / 1 %).  ``baseline``: the same ROC quantities for the
+    Greenwald fraction n / (I_p / (pi a^2)) computed from the feature columns
+    ``density`` (0), ``plasma_current`` (3) and ``minor_radius`` (2), as
+    ``baseline_greenwald_auroc`` / ``baseline_greenwald_tpr_at_fpr05``.
+    """
+    from sklearn.metrics import average_precision_score, roc_auc_score
+
+    X = np.asarray(X_test, dtype=float)
+    y = np.asarray(y_test).astype(int).ravel()
+    s = np.asarray(y_proba, dtype=float)
+    if s.ndim > 1:
+        s = s[:, 1]
+    metrics = {
+        "test_auroc": float(roc_auc_score(y, s)),
+        "test_average_precision": float(average_precision_score(y, s)),
+        "test_tpr_at_fpr05": _tpr_at_fpr(y, s, 0.05),
+        "test_tpr_at_fpr01": _tpr_at_fpr(y, s, 0.01),
+    }
+    with np.errstate(divide="ignore", invalid="ignore"):
+        n_g = X[:, 3] / (np.pi * X[:, 2] ** 2)
+        gf = np.nan_to_num(X[:, 0] / n_g, nan=0.0, posinf=0.0, neginf=0.0)
+    baseline = {
+        "baseline_greenwald_auroc": float(roc_auc_score(y, gf)),
+        "baseline_greenwald_tpr_at_fpr05": _tpr_at_fpr(y, gf, 0.05),
+    }
+    return metrics, baseline
+
+
 def solpsnn_scalar_metrics(y_test, y_pred, names=None) -> dict:
     """SOLPS-NN metrics on PHYSICAL (already inverted) values.
 
