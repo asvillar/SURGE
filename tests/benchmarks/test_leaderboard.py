@@ -271,6 +271,21 @@ def test_cli_compare_models(capsys, tmp_path):
     assert "test_accuracy" in out
 
 
+def test_cli_model_accepts_comma_list(capsys):
+    """`-m a,b` is what users type; it must behave like --compare-models."""
+    from surge.benchmarks.run import main
+
+    code = main([
+        "--benchmark", "synthetic.classification_binary",
+        "-m", "sklearn.random_forest_classifier,sklearn.logistic_regression",
+        "--no-save",
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "sklearn.random_forest_classifier" in out
+    assert "sklearn.logistic_regression" in out
+
+
 def test_cli_leaderboard_saves_results(tmp_path):
     from surge.benchmarks.run import main
 
