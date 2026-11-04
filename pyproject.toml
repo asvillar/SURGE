@@ -64,6 +64,7 @@ shap = ["shap>=0.46"]
 mlflow = ["mlflow>=2.0.0"]
 benchmarks = ["h5py>=3.0"]  # optuna is already a core dependency (see deps above)
 tabpfn = ["tabpfn>=2.0"]
+kumo = ["structured-data-models>=0.2"]
 thewell = ["the-well"]
 # Convenience bundle pulling in SURGE's own other extras. Deliberately
 # excludes gpflow (its published metadata pins numpy<2, unresolvable next
