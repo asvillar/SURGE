@@ -26,7 +26,6 @@ def test_benchmark_data_root_resolves_inside_repo():
     [
         ("_load_burgers_1d", "pde/burgers_1d.npz"),
         ("_load_lorenz63", "sequence/lorenz63.npz"),
-        ("_load_cmod_density_limit", "plasma/cmod_density_limit.npz"),
         ("_load_qlknn_transport", "plasma/qlknn_transport.npz"),
         ("_load_plasma_stability", "classification/plasma_stability.npz"),
     ],
@@ -47,6 +46,24 @@ def test_cached_npz_loaders_do_not_touch_generators_or_network(monkeypatch, tmp_
     X, y = getattr(leaderboard, loader_name)()
     np.testing.assert_array_equal(X, expected_X)
     np.testing.assert_array_equal(y, expected_y)
+
+
+def test_cached_cmod_grouped_split_does_not_touch_network(monkeypatch, tmp_path):
+    """The re-posed C-Mod loader is a fixed-split loader with its own cache layout."""
+    cache = tmp_path / "plasma" / "cmod_density_limit_grouped.npz"
+    cache.parent.mkdir(parents=True)
+    arrays = {k: np.arange(i, i + 6, dtype=float).reshape(3, 2) if k.startswith("X") else np.arange(i, i + 3, dtype=float)
+              for i, k in enumerate(("X_train", "y_train", "X_test", "y_test"))}
+    np.savez_compressed(cache, **arrays)
+    monkeypatch.setattr(leaderboard, "_bench_data_root", lambda: tmp_path)
+
+    def fail(*args, **kwargs):  # pragma: no cover - only called on regression
+        raise AssertionError("cache hit should not call generator, network, or optional package")
+
+    monkeypatch.setattr("urllib.request.urlopen", fail)
+    X_train, y_train, X_test, y_test = leaderboard._load_cmod_density_limit()
+    np.testing.assert_array_equal(X_train, arrays["X_train"])
+    np.testing.assert_array_equal(y_test, arrays["y_test"])
 
 
 def test_benchmark_info_exposes_structured_metadata():
