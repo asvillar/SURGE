@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -11,11 +12,18 @@ from ..dataset import SurrogateDataset
 
 def _get_m3dc1_loaders() -> tuple[Any, Any]:
     """Import M3DC1 loader modules. Raises ImportError if unavailable."""
-    scripts_m3dc1 = Path(__file__).resolve().parent.parent.parent / "scripts" / "m3dc1"
+    # The M3D-C1 HDF5 readers are facility-specific and are not distributed
+    # with SURGE. Point SURGE_M3DC1_SCRIPTS at a directory containing
+    # dataset_complex_v2.py / eigenmode_features.py (a checkout may also keep
+    # them under scripts/m3dc1/, which is ignored by git).
+    env = os.environ.get("SURGE_M3DC1_SCRIPTS")
+    scripts_m3dc1 = (Path(env) if env
+                     else Path(__file__).resolve().parent.parent.parent / "scripts" / "m3dc1")
     if not scripts_m3dc1.exists():
         raise ImportError(
-            "M3DC1 scripts not found. Expected scripts/m3dc1/ in SURGE repo. "
-            "Ensure you are running from the SURGE repository root."
+            "M3D-C1 loader scripts not found. They are facility-specific and not "
+            "part of the surge-ml distribution: set SURGE_M3DC1_SCRIPTS to the "
+            "directory holding dataset_complex_v2.py and eigenmode_features.py."
         )
     if str(scripts_m3dc1) not in sys.path:
         sys.path.insert(0, str(scripts_m3dc1))
@@ -24,7 +32,7 @@ def _get_m3dc1_loaders() -> tuple[Any, Any]:
         from dataset_complex_v2 import load_complex_v2_for_surge
     except ImportError as e:
         raise ImportError(
-            "Could not import load_complex_v2_for_surge from scripts/m3dc1/dataset_complex_v2. "
+            "Could not import load_complex_v2_for_surge (dataset_complex_v2.py in SURGE_M3DC1_SCRIPTS). "
             "Ensure h5py is installed: pip install h5py"
         ) from e
 
@@ -32,7 +40,7 @@ def _get_m3dc1_loaders() -> tuple[Any, Any]:
         from loader import convert_sdata_complex_v2_to_dataframe
     except ImportError as e:
         raise ImportError(
-            "Could not import convert_sdata_complex_v2_to_dataframe from scripts/m3dc1/loader. "
+            "Could not import convert_sdata_complex_v2_to_dataframe (loader.py in SURGE_M3DC1_SCRIPTS). "
             "Ensure h5py is installed: pip install h5py"
         ) from e
 

@@ -1,13 +1,17 @@
-# `scripts/` — optional and application-specific
+# `scripts/` — optional utilities
 
-Most **reusable** library code lives under `surge/`. This folder holds **ad hoc**
-utilities (batch jobs, M3D-C1 helpers, HPC launchers) that are **not** part of
-the importable `surge` API.
+Reusable library code lives under `surge/`. This folder holds small helper
+scripts that are **not** part of the importable `surge` API:
 
-- **M3D-C1 / SPARC** batch pipelines and interfaces live under `scripts/m3dc1/`.
-- **XGC-oriented** one-off scripts were removed from the public-release tree;
-  develop those privately or in a separate application repo if they contain
-  collaboration-specific paths or data assumptions.
+- `benchmark_scale.py` — measure the scaling levers (device, threads, batch
+  fan-out) and cache the numbers behind the scale figure.
+- `dataset_explorer.py` — quick look at a dataset's columns and distributions.
+- `extract_benchmark_metadata.py` — the one-off that seeded
+  `surge/benchmarks/metadata.yaml`.
+- `plot_training.py`, `utils/show_surge_training_progress.py` — live/offline
+  training-loss viewers for a run.
+- `utils/check_installation.py` — verify an install.
 
-For installable, documented behavior, use **`surge`** from Python or the
-**YAML workflow** (`run_surrogate_workflow`). See `docs/SURGE_OVERVIEW.md`.
+Facility-specific batch pipelines and launchers (M3D-C1, Slurm) are kept out
+of the public tree; use `surge` from Python or the YAML workflow for
+installable, documented behaviour. See `docs/SURGE_OVERVIEW.md`.

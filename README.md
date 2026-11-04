@@ -27,8 +27,7 @@ databases lead the benchmark suite — on a pipeline that is domain-agnostic.
        width="900"/></picture>
 </p>
 <p align="center"><sub><em>The workflow by functionality — every thumbnail is a
-real SURGE output, regenerated from run artifacts
-(<code>python scripts/make_architecture_poster.py</code>).</em></sub></p>
+real SURGE output, regenerated from run artifacts.</em></sub></p>
 
 <p align="center">
   <img src="docs/assets/readme/surge_end_to_end.gif" width="900"
@@ -508,26 +507,8 @@ Device selection is deliberately conservative: the default stays
 cuda→cpu, and the Apple GPU is **opt-in** (`SURGE_DEVICE=auto`) because
 not every architecture is MPS-safe — convolutional and spectral models
 are (identical R² to CPU), recurrent models are not. The safety table
-lives in [`docs/design/RESOURCE_MANAGEMENT.md`](docs/design/RESOURCE_MANAGEMENT.md),
+lives in,
 with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
-
-## Agentic workflows (Claude Code skills)
-
-The repo ships seven skills under [`.claude/skills/`](.claude/skills) that
-teach an AI assistant to drive SURGE correctly — spec conventions, the
-figure system, benchmark protocols:
-
-| Skill | What it does |
-|---|---|
-| `surge-wizard` | Q&A → generates a commented `spec.yaml` from your data file and runs it — no YAML by hand |
-| `surge-scale` | device selection (MPS safety table), `--parallel` budgeting, long-run monitoring |
-| `surge-build-surrogate` | end-to-end playbook: characterize → pick models by task shape → HPO → report |
-| `surge-run` / `surge-benchmark` | run workflows / reproduce leaderboard numbers |
-| `surge-viz` / `surge-add-model` | figure-system rules / add a new model adapter end-to-end |
-
-Example: point Claude Code at this repo, type `/surge-wizard` with any
-CSV, answer three questions (target column, goal, time budget), and it
-writes the spec, trains, and reports test metrics against a baseline.
 
 ## Documentation
 
@@ -535,13 +516,11 @@ writes the spec, trains, and reports test metrics against a baseline.
 |-------|------|
 | **Getting started (one page)** | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
 | Build your own surrogate | [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md) |
-| First-run walkthrough (HPC) | [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md) |
 | Install reference | [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) |
 | Codebase tour | [`docs/SURGE_OVERVIEW.md`](docs/SURGE_OVERVIEW.md) |
-| Benchmark definitions & citations | [`docs/BENCHMARK_VERIFICATION_BRIEF.md`](docs/BENCHMARK_VERIFICATION_BRIEF.md), [ledger](docs/benchmarks/README.md), [References](#references) |
+| Benchmark definitions & citations | [ledger](docs/benchmarks/README.md), [`surge/benchmarks/metadata.yaml`](surge/benchmarks/metadata.yaml), [References](#references) |
 | Release notes | [`CHANGELOG.md`](CHANGELOG.md), [`docs/RELEASING.md`](docs/RELEASING.md) |
 | Colab notebook | [`examples/notebooks/surge_fusion_quickstart.ipynb`](examples/notebooks/surge_fusion_quickstart.ipynb) |
-| Architecture roadmap | [`docs/design/ARCHITECTURE_RECOMMENDATIONS.md`](docs/design/ARCHITECTURE_RECOMMENDATIONS.md) |
 | Doc index | [`docs/README.md`](docs/README.md) |
 
 ## SURGE in publications
