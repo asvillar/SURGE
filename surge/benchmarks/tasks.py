@@ -919,6 +919,8 @@ def _generate_burgers_dataset(
 # (ConStellaration field benchmarks).  Used by the direct runners' definitions
 # and by the adapter/HPO paths so every execution path emits the same gate metric.
 RELATIVE_L2_PROTOCOL: dict[str, str] = {
+    # SOLPS-NN Te field: computed on log10(Te) (the benchmark's training space).
+    "plasma.solpsnn_te_field": "global",
     "pde.burgers_1d": "global",
     "thewell.gray_scott": "global",
     "plasma.constellaration_modb": "median",
@@ -947,6 +949,45 @@ def relative_l2_metrics(benchmark_key: str, y_test, y_pred) -> dict:
     per_sample = relative_l2_per_sample(y_test, y_pred)
     return {"test_relative_l2": float(np.median(per_sample)),
             "test_relative_l2_mean": float(np.mean(per_sample))}
+
+
+def solpsnn_scalar_metrics(y_test, y_pred, names=None) -> dict:
+    """SOLPS-NN metrics on PHYSICAL (already inverted) values.
+
+    ``test_median_rel_err_<name>`` = median(|y_pred - y| / |y|) per column and
+    ``test_median_rel_err`` = max over columns (the gated quantity, lower is
+    better); ``test_r2_log10_<name>`` / ``test_r2_log10`` (mean) are R^2 of
+    log10(values).  With ``names=None`` (field benchmark) all entries are pooled:
+    one median relative error and one R^2 over every cell.
+    """
+    from sklearn.metrics import r2_score
+
+    y = np.asarray(y_test, dtype=float)
+    p = np.asarray(y_pred, dtype=float).reshape(y.shape)
+
+    def _rel(a, b):
+        return float(np.median(np.abs(b - a) / np.maximum(np.abs(a), 1e-300)))
+
+    def _r2(a, b):
+        return float(r2_score(np.log10(np.maximum(a, 1e-300)),
+                              np.log10(np.maximum(b, 1e-300))))
+
+    if names is None:
+        return {"test_median_rel_err": _rel(y.ravel(), p.ravel()),
+                "test_r2_log10": _r2(y.ravel(), p.ravel())}
+    y2, p2 = y.reshape(len(y), -1), p.reshape(len(y), -1)
+    if y2.shape[1] != len(names):
+        raise ValueError(f"expected {len(names)} columns, got {y2.shape[1]}")
+    out: dict[str, float] = {}
+    rel, r2 = [], []
+    for j, n in enumerate(names):
+        rel.append(_rel(y2[:, j], p2[:, j]))
+        r2.append(_r2(y2[:, j], p2[:, j]))
+        out[f"test_median_rel_err_{n}"] = rel[-1]
+        out[f"test_r2_log10_{n}"] = r2[-1]
+    out["test_median_rel_err"] = float(max(rel))
+    out["test_r2_log10"] = float(np.mean(r2))
+    return out
 
 
 def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None,

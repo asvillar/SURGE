@@ -182,6 +182,11 @@ _BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
         "pytorch.mlp",
         "sklearn.random_forest",
     ],
+    # SOLPS-NN exhaust: the scalar benchmark uses the default tabular regression
+    # sweep (incl. kumo.tabular_regressor when installed); the 5200-output field
+    # excludes tree ensembles (an RF stores n_nodes x 5200 values per tree and
+    # exhausted a 17 GB laptop).
+    "plasma.solpsnn_te_field": ["pytorch.mlp", "pytorch.residual_mlp", "sklearn.ridge"],
     # Sequence / time-series benchmarks — include temporal models
     "sequence.lorenz63":         _SEQUENCE_MODELS,
     # Inline PDE benchmark (64-pt grid, no download) — operator models + generative
@@ -272,6 +277,7 @@ def _default_models_for(task_type: str, benchmark_key: str | None = None) -> lis
 # Metrics where lower is better (used to decide which direction to highlight).
 _LOWER_IS_BETTER: frozenset[str] = frozenset({
     "runtime_s", "test_rmse", "test_nrmse", "test_relative_l2",
+    "test_median_rel_err",
     # UQ: lower = sharper / better calibrated
     "uq_mpiw", "uq_crps", "uq_nll",
     # Plasma paper metrics
@@ -600,6 +606,10 @@ def _aggregate_seed_results(results: list[BenchmarkResult]) -> BenchmarkResult:
 # meaningful at its data scale (documented in the benchmark's status_note /
 # the reproduction study). Applied by `surge bench` when the user does not
 # override them; recorded in result.extra["model_defaults_applied"].
+_SOLPSNN_RESIDUAL_MLP = {"hidden_layers": [1000] * 8, "n_epochs": 300,
+                         "learning_rate": 1e-4, "dropout_rate": 0.0,
+                         "patience": 10_000, "batch_size": 64}
+
 BENCH_MODEL_DEFAULTS: dict[str, dict[str, dict]] = {
     "plasma.qlknn10d": {
         # examples/qlknn10d_study.py: 2.2M rows need large batches; registry
@@ -609,6 +619,30 @@ BENCH_MODEL_DEFAULTS: dict[str, dict[str, dict]] = {
                                   "batch_size": 4096, "patience": 15,
                                   "patience_window": 5},
     },
+    # SOLPS-NN: thesis recipe (Dasbach 2023). Targets are log10-transformed by
+    # the loader, so Kumo's own target_transform must stay None (no double log).
+    "plasma.solpsnn_exhaust_scalars": {
+        "pytorch.residual_mlp": dict(_SOLPSNN_RESIDUAL_MLP),
+        "kumo.tabular_regressor": {"target_transform": None},
+    },
+    "plasma.solpsnn_te_field": {
+        "pytorch.residual_mlp": dict(_SOLPSNN_RESIDUAL_MLP),
+    },
+}
+
+# Benchmarks whose loader returns a FIXED (X_train, y_train, X_test, y_test)
+# split (no seed-dependent resampling) -- looked up at call time so tests can
+# monkeypatch the loader functions.
+_FIXED_SPLIT_LOADERS: dict[str, str] = {
+    "plasma.solpsnn_exhaust_scalars": "_load_solpsnn_exhaust_scalars",
+    "plasma.solpsnn_te_field": "_load_solpsnn_te_field",
+}
+
+# Benchmarks whose loader applies a target transform: inverse applied to
+# y_test and y_pred before benchmark-specific physical-unit metrics.
+_TARGET_INVERSE: dict[str, Any] = {
+    "plasma.solpsnn_exhaust_scalars": lambda z: 10.0 ** np.asarray(z, dtype=float),
+    "plasma.solpsnn_te_field": lambda z: 10.0 ** np.asarray(z, dtype=float),
 }
 
 
@@ -635,8 +669,14 @@ def _run_with_adapter(
     task_type = info["task_type"]
     model_key = getattr(adapter, "name", adapter.__class__.__name__)
 
+    fixed_split = None
     try:
-        X, y = _load_dataset(benchmark_key)
+        if benchmark_key in _FIXED_SPLIT_LOADERS:
+            fixed_split = globals()[_FIXED_SPLIT_LOADERS[benchmark_key]]()
+            X = np.vstack([fixed_split[0], fixed_split[2]])
+            y = np.concatenate([fixed_split[1], fixed_split[3]], axis=0)
+        else:
+            X, y = _load_dataset(benchmark_key)
     except Exception as exc:
         print(f"  [error] could not load {benchmark_key}: {exc}", file=sys.stderr)
         return _skip_result(benchmark_key, model_key, reason=str(exc), stage="data_load")
@@ -669,6 +709,8 @@ def _run_with_adapter(
         X_train, X_val, y_train, y_val = train_test_split(
             X_tr, y_tr, test_size=0.1, random_state=seed, stratify=y_tr
         )
+    elif fixed_split is not None:
+        X_train, y_train, X_test, y_test = fixed_split
     elif benchmark_key == "plasma.constellaration_multioutput":
         # Canonical paper split (Appendix A.4) — identical indices to the
         # per-metric constellaration_paper runner (same filtered cache order).
@@ -768,6 +810,15 @@ def _run_with_adapter(
             )
             metrics.update(mo_metrics)
             metrics.update(relative_l2_metrics(benchmark_key, y_test, y_pred_mo))
+            inverse = _TARGET_INVERSE.get(benchmark_key)
+            if inverse is not None:
+                # Loader targets are log10; physical-unit metrics follow.
+                from .loaders.solpsnn import SCALAR_TARGETS
+                from .tasks import solpsnn_scalar_metrics
+
+                names = list(SCALAR_TARGETS) if benchmark_key.endswith("scalars") else None
+                metrics.update(solpsnn_scalar_metrics(
+                    inverse(y_test), inverse(y_pred_mo), names))
 
         # UQ metrics — computed when the model exposes predict_with_uncertainty.
         _uq_model = getattr(adapter, "_model", adapter)
@@ -886,6 +937,8 @@ def _load_dataset(benchmark_key: str):
         "plasma.cmod_density_limit":  lambda: _load_cmod_density_limit(),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
         "plasma.qlknn10d":            lambda: _load_qlknn10d(),
+        "plasma.solpsnn_exhaust_scalars": lambda: _concat_fixed(_load_solpsnn_exhaust_scalars()),
+        "plasma.solpsnn_te_field":        lambda: _concat_fixed(_load_solpsnn_te_field()),
         "plasma.constellaration":              lambda: _load_constellaration(),
         "plasma.constellaration_multioutput":  lambda: _load_constellaration_multioutput(),
         "plasma.constellaration_modb":         lambda: _load_constellaration_modb(),
@@ -898,6 +951,48 @@ def _load_dataset(benchmark_key: str):
     if benchmark_key not in loaders:
         raise KeyError(f"No dataset loader for {benchmark_key!r}")
     return loaders[benchmark_key]()
+
+
+def _concat_fixed(split):
+    """(X_tr, y_tr, X_te, y_te) -> pooled (X, y) for callers that re-split."""
+    return (np.vstack([split[0], split[2]]),
+            np.concatenate([split[1], split[3]], axis=0))
+
+
+def _load_solpsnn_exhaust_scalars():
+    """SOLPS-NN exhaust scalars, fixed split: ``(X_train, y_train, X_test, y_test)``.
+
+    X = the 8 scan parameters (log10 on the three gas rates); y = log10 of
+    (psol, pwmxap, fnixap) -- targets span up to 12 decades, so the benchmark
+    trains in log space and ``_TARGET_INVERSE`` restores physical units before
+    the gated ``test_median_rel_err``.  Train = Sobol split (5756), test = random
+    split (1465).  Do NOT also enable a model's own log10 option (double log).
+    """
+    from .loaders.solpsnn import SCALAR_TARGETS, load_solpsnn
+
+    out = []
+    for split in ("train", "test"):
+        s = load_solpsnn(split, with_te=False)
+        y = np.column_stack([np.log10(np.asarray(s.scalars[k], dtype=float))
+                             for k in SCALAR_TARGETS])
+        out += [np.asarray(s.X_log, dtype=float), y]
+    return out[0], out[1], out[2], out[3]
+
+
+def _load_solpsnn_te_field():
+    """SOLPS-NN electron-temperature field, fixed split, 8 -> 5200.
+
+    y = log10(Te[eV]) flattened over the 104 x 50 grid (floor 1e-6 eV).
+    """
+    from .loaders.solpsnn import load_solpsnn
+
+    out = []
+    for split in ("train", "test"):
+        s = load_solpsnn(split, with_te=True)
+        te = np.asarray(s.te, dtype=float)
+        y = np.log10(np.maximum(te.reshape(len(te), -1), 1e-6))
+        out += [np.asarray(s.X_log, dtype=float), y]
+    return out[0], out[1], out[2], out[3]
 
 
 def _synthetic_regression_1d():
@@ -1945,6 +2040,8 @@ _GATE_THRESHOLDS: dict[str, tuple[str, float]] = {
     "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
     # Field benchmarks — PROVISIONAL, set from the 500-row smoke cache;
     # to be re-set from the first full (26,897-row) leaderboard run.
+    "plasma.solpsnn_exhaust_scalars": ("test_median_rel_err", 0.20),  # lower is better
+    "plasma.solpsnn_te_field": ("test_median_rel_err", 0.10),  # lower is better, PROVISIONAL
     "plasma.constellaration_modb": ("test_relative_l2", 0.05),
     "plasma.constellaration_surfaces": ("test_relative_l2", 0.02),
 }

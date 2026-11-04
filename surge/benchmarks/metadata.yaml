@@ -1063,3 +1063,83 @@ benchmarks:
   visible: true
   focus: true
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
+- key: plasma.solpsnn_exhaust_scalars
+  status: in_progress
+  status_note: "SOLPS-ITER exhaust scalars from the SOLPS-NN record (Dasbach & Wiesen 2023); fixed Sobol-train / random-test split. In-context Kumo Tabular reaches 8.6 % median relative error on the peak target heat flux against the published 13 % (five-fold tuned networks); the benchmark card, per-regime metrics and the gate are provisional."
+  name: SOLPS-NN divertor exhaust scalars
+  capability: Multi-output Regression
+  discipline: Fusion & Plasma Physics
+  tier: 2
+  citation: "Dasbach & Wiesen (2023) Nucl. Mater. Energy 34, 101396; Dasbach PhD thesis (2023); Zenodo 10.5281/zenodo.19237127 (CC BY 4.0)"
+  url: https://zenodo.org/records/19237127
+  shape: 8 → 3
+  n: 5,756 train / 1,465 test
+  primary_metric: median rel. err.
+  threshold: median rel. err. ≤ 0.20 (peak target heat flux)
+  threshold_note: "Gate = worst of the three per-target median relative errors, on physical units. Thesis numbers (direct networks, Table 8.11): P_SOL 0.76 %, q_peak 13 %, Γ 15 %; XGBoost-style trees 25-30 %. Provisional."
+  description: 'Predict the SOLPS-ITER divertor exhaust (power crossing the separatrix, peak outer-target heat flux, integrated outer-target particle flux) from 8 scan parameters. Targets span up to 12 decades: the loader returns log10(targets) and metrics are computed after inverting to physical units. Do not also enable a model-level log10 option.'
+  data_note: "fluid-neutral SOLPS-ITER; private-flux-region temperature-spike artefact present in most detached runs (thesis §7.5)"
+  inputs:
+  - {name: R, desc: Major radius (m), range: "1-10"}
+  - {name: B, desc: Magnetic field (T), range: "1-10"}
+  - {name: P_in, desc: Input power (W), range: "1e7-2e8"}
+  - {name: D_puff, desc: Divertor D2 puff rate (atoms/s, log10 input), range: "1e18-1e24"}
+  - {name: N_puff, desc: Nitrogen puff rate (atoms/s, log10 input), range: "1e18-1e23"}
+  - {name: D_core, desc: Core D fuelling rate (atoms/s, log10 input), range: "1e19-1e24"}
+  - {name: D_perp, desc: Radial particle diffusivity (m²/s), range: "0.1-2"}
+  - {name: chi_perp, desc: Radial heat diffusivity (m²/s), range: "0.1-2"}
+  outputs:
+  - {name: psol, desc: Power crossing the separatrix (W)}
+  - {name: pwmxap, desc: Peak heat flux at the outer target (W/m²)}
+  - {name: fnixap, desc: Integrated D+ flux to the outer target (atoms/s)}
+  task_explainer: "Eight edge-plasma scan parameters are mapped to three scalar exhaust quantities from SOLPS-ITER. The error is the median of |prediction - truth| / |truth| in physical units; the gate takes the worst of the three targets."
+  published_in: "Dasbach & Wiesen, Nucl. Mater. Energy 34, 101396 (2023); Dasbach PhD thesis, HHU Duesseldorf (2023)"
+  sota:
+    value: 0.13
+    metric: "median rel. err. (q_peak)"
+    model: "direct NN (five-fold tuned)"
+    source: "Dasbach (2023) thesis Table 8.11, direct NN"
+    url: "https://zenodo.org/records/19237127"
+    protocol_match: "same"
+    note: "Thesis direct networks: P_SOL 0.76 %, q_peak 13 %, Γ 15 %; XGBoost-style trees 25-30 %. SURGE uses the dataset's own Sobol-train / random-test split."
+  visible: true
+  focus: false
+- key: plasma.solpsnn_te_field
+  status: in_progress
+  status_note: "SOLPS-ITER electron-temperature field (104x50 B2 grid) from the SOLPS-NN record; hidden and provisional. Rel-L2 is computed on log10(Te); the gate uses median relative error on physical Te over all cells."
+  name: SOLPS-NN electron temperature field
+  capability: Multi-output Regression
+  discipline: Fusion & Plasma Physics
+  tier: 2
+  citation: "Dasbach & Wiesen (2023) Nucl. Mater. Energy 34, 101396; Dasbach PhD thesis (2023); Zenodo 10.5281/zenodo.19237127 (CC BY 4.0)"
+  url: https://zenodo.org/records/19237127
+  shape: 8 → 5200
+  n: 5,756 train / 1,465 test
+  primary_metric: median rel. err.
+  threshold: median rel. err. ≤ 0.10 (all cells)
+  threshold_note: "PROVISIONAL. Published reference: NN2D 6.5 % vs XGBoost 25 % (Dasbach thesis). Tree ensembles are excluded from the sweep (memory: n_nodes x 5200 values per tree)."
+  description: 'Predict log10 electron temperature on the 104x50 SOLPS-ITER grid from 8 scan parameters. Same data and split as plasma.solpsnn_exhaust_scalars.'
+  data_note: "fluid-neutral SOLPS-ITER; private-flux-region temperature-spike artefact present in most detached runs (thesis §7.5)"
+  inputs:
+  - {name: R, desc: Major radius (m), range: "1-10"}
+  - {name: B, desc: Magnetic field (T), range: "1-10"}
+  - {name: P_in, desc: Input power (W), range: "1e7-2e8"}
+  - {name: D_puff, desc: Divertor D2 puff rate (atoms/s, log10 input), range: "1e18-1e24"}
+  - {name: N_puff, desc: Nitrogen puff rate (atoms/s, log10 input), range: "1e18-1e23"}
+  - {name: D_core, desc: Core D fuelling rate (atoms/s, log10 input), range: "1e19-1e24"}
+  - {name: D_perp, desc: Radial particle diffusivity (m²/s), range: "0.1-2"}
+  - {name: chi_perp, desc: Radial heat diffusivity (m²/s), range: "0.1-2"}
+  outputs:
+  - {name: te, desc: "Electron temperature on the 104x50 grid, flattened to 5200 (eV; trained as log10)"}
+  task_explainer: "Eight edge-plasma scan parameters are mapped to the full 104x50 electron-temperature field of a SOLPS-ITER run, trained in log10(Te). Rel-L2 is on log10 Te; the gate is the median relative error on physical Te over all cells."
+  published_in: "Dasbach & Wiesen, Nucl. Mater. Energy 34, 101396 (2023); Dasbach PhD thesis (2023)"
+  sota:
+    value: 0.065
+    metric: "median rel. err. (Te field)"
+    model: "NN2D"
+    source: "Dasbach (2023) thesis (NN2D 6.5 % vs XGBoost 25 %)"
+    url: "https://zenodo.org/records/19237127"
+    protocol_match: "unknown"
+    note: "NN2D 6.5 % vs XGBoost 25 %; protocol details (cell weighting) not verified."
+  visible: false
+  focus: false

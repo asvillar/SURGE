@@ -262,6 +262,20 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "van de Plassche et al. PoP 27, 022310 (2020); Zenodo "
         "10.5281/zenodo.3497066 (CC-BY 4.0). [13.3 GB open download]",
     ),
+    "plasma.solpsnn_exhaust_scalars": (
+        None, "plasma", "regression", "8→3 (n=5,756 train / 1,465 test)",
+        "SOLPS-ITER divertor exhaust scalars (P_SOL, peak target heat flux, target "
+        "particle flux) from 8 scan parameters (R, B, P, D_puff, N_puff, D_core, "
+        "D_perp, chi_perp); fixed Sobol-train / random-test split, log10 targets, "
+        "gate on median relative error. Dasbach & Wiesen 2023; Zenodo "
+        "10.5281/zenodo.19237127 (CC BY 4.0). [290 MB subset of a 17.6 GB record]",
+    ),
+    "plasma.solpsnn_te_field": (
+        None, "plasma", "regression", "8→5200 (n=5,756 train / 1,465 test)",
+        "SOLPS-ITER electron-temperature field Te(104x50 B2 grid) from the same 8 scan "
+        "parameters; log10(Te) targets, fixed split. HIDDEN/provisional. "
+        "Dasbach & Wiesen 2023; Zenodo 10.5281/zenodo.19237127 (CC BY 4.0).",
+    ),
     "plasma.constellaration": (
         None, "plasma", "regression", "90→1 (10k subsample)",
         "ConStellaration boundary → log₁₀(qi). Subsamples 10k from paper-filtered cache (26,897 rows). "
@@ -335,6 +349,9 @@ _SHORT_ALIASES: dict[str, str] = {
     "qlknn":                "plasma.qlknn_transport",
     "qlknn10d":             "plasma.qlknn10d",
     "cmod":                 "plasma.cmod_density_limit",
+    "solpsnn":              "plasma.solpsnn_exhaust_scalars",
+    "solps_scalars":        "plasma.solpsnn_exhaust_scalars",
+    "solps_te":             "plasma.solpsnn_te_field",
     "constellaration":      "plasma.constellaration",
     "constellaration_paper":"plasma.constellaration_paper",
     "constellaration_multi":"plasma.constellaration_multioutput",
@@ -435,6 +452,30 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "feature_shape": "6",
         "target_shape": "2 classes",
         "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": []},
+    },
+    "plasma.solpsnn_exhaust_scalars": {
+        "dataset_source": "SOLPS-NN, Dasbach & Wiesen 2023, Zenodo 10.5281/zenodo.19237127",
+        "license": "CC BY 4.0",
+        "access": "download_cached",
+        "cache_path": "data/datasets/solpsnn/",
+        "size": "290 MB subset of a 17.6 GB record",
+        "url": "https://zenodo.org/records/19237127",
+        "sample_count": 7221,
+        "feature_shape": "8",
+        "target_shape": "3",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "plasma.solpsnn_te_field": {
+        "dataset_source": "SOLPS-NN, Dasbach & Wiesen 2023, Zenodo 10.5281/zenodo.19237127",
+        "license": "CC BY 4.0",
+        "access": "download_cached",
+        "cache_path": "data/datasets/solpsnn/",
+        "size": "290 MB subset of a 17.6 GB record",
+        "url": "https://zenodo.org/records/19237127",
+        "sample_count": 7221,
+        "feature_shape": "8",
+        "target_shape": "5200",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": []},
     },
     "plasma.qlknn10d": {
         "dataset_source": "QLKNN10D Zenodo 10.5281/zenodo.3497066",

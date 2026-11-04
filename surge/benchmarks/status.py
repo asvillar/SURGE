@@ -29,9 +29,9 @@ STATUS_DOC = {
     "sanity": "too easy as posed or measuring a proxy; not a surrogate result.",
 }
 _PRIMARY = (
-    "test_vpt_median", "test_r2_equilibrium_mean", "test_r2", "test_r2_mean", "test_accuracy",
+    "test_vpt_median", "test_median_rel_err", "test_r2_equilibrium_mean", "test_r2", "test_r2_mean", "test_accuracy",
     "test_rel_l2", "test_nrmse", "test_nrmse_mean")
-_LOWER_IS_BETTER = ("test_rel_l2", "test_nrmse", "test_nrmse_mean", "test_rmse")
+_LOWER_IS_BETTER = ("test_median_rel_err", "test_rel_l2", "test_nrmse", "test_nrmse_mean", "test_rmse")
 
 
 def _is_lower_better(metric_key: str) -> bool:
@@ -185,6 +185,8 @@ def _fmt_result(r: dict | None, definition_date: str | None = None) -> str:
             val = f"{k.removeprefix('test_')} {float(m[k]):.3f}"
             if k == "test_vpt_median":
                 val = f"vpt {float(m[k]):.3f} λ"
+            elif k == "test_median_rel_err":
+                val = f"median rel. err. {100 * float(m[k]):.1f} %"
             break
     else:
         val = "n/a"
