@@ -153,6 +153,7 @@ def test_init_bad_target_errors(csv_file: Path, tmp_path: Path):
 def test_wizard_pins_inputs_and_outputs(tmp_path: Path):
     """A wide numeric table must not let the run-time heuristic reassign the
     target: the spec carries explicit metadata_overrides."""
+    import importlib.util
     import numpy as np
     import pandas as pd
     import yaml
@@ -171,4 +172,6 @@ def test_wizard_pins_inputs_and_outputs(tmp_path: Path):
     spec = yaml.safe_load(out.read_text())
     assert spec["metadata_overrides"]["outputs"] == ["flux"]
     assert spec["metadata_overrides"]["inputs"] == cols
-    assert spec["models"][1]["hpo"]["n_trials"] == 10
+    hpo_blocks = [m["hpo"] for m in spec["models"] if "hpo" in m]
+    if importlib.util.find_spec("torch") is not None:   # headline model needs torch
+        assert hpo_blocks and hpo_blocks[0]["n_trials"] == 10
