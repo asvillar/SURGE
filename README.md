@@ -7,6 +7,7 @@
 [![MLflow](https://img.shields.io/badge/MLflow-integrated-0194E2?logo=mlflow&logoColor=white)](docs/GETTING_STARTED.md)
 [![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
 [![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asvillar/SURGE/blob/release/0.1.0/examples/notebooks/surge_fusion_quickstart.ipynb)
 
 **Surrogate Unified Robust Generation Engine** — train, tune, evaluate, and
 export scientific surrogate models from a single declarative workflow.
@@ -298,6 +299,11 @@ surge version && surge models
 
 ## Try it — copy-paste examples
 
+No install? The [fusion quickstart notebook](examples/notebooks/surge_fusion_quickstart.ipynb)
+replays the end-to-end video on QLKNN transport — ingest, an Optuna HPO campaign with the
+mission-control dashboard, leaderboard, report, deploy — then runs SOLPS-NN divertor exhaust
+with an in-context foundation model, all inside Google Colab.
+
 All runs write artifacts to `runs/<tag>/` (`metrics.json`, trained models,
 scalers, predictions, spec snapshot).
 
@@ -534,6 +540,7 @@ writes the spec, trains, and reports test metrics against a baseline.
 | Codebase tour | [`docs/SURGE_OVERVIEW.md`](docs/SURGE_OVERVIEW.md) |
 | Benchmark definitions & citations | [`docs/BENCHMARK_VERIFICATION_BRIEF.md`](docs/BENCHMARK_VERIFICATION_BRIEF.md), [ledger](docs/benchmarks/README.md), [References](#references) |
 | Release notes | [`CHANGELOG.md`](CHANGELOG.md), [`docs/RELEASING.md`](docs/RELEASING.md) |
+| Colab notebook | [`examples/notebooks/surge_fusion_quickstart.ipynb`](examples/notebooks/surge_fusion_quickstart.ipynb) |
 | Architecture roadmap | [`docs/design/ARCHITECTURE_RECOMMENDATIONS.md`](docs/design/ARCHITECTURE_RECOMMENDATIONS.md) |
 | Doc index | [`docs/README.md`](docs/README.md) |
 

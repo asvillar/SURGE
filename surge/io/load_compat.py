@@ -47,9 +47,9 @@ def _load_torch_model(
     """Load a PyTorch model saved with torch.save (avoids joblib/pickle protocol 0 issues)."""
     try:
         import torch
-        import torch.nn as nn
-        import numpy as np
-        from sklearn.preprocessing import StandardScaler
+        import torch.nn as nn  # noqa: F401  (availability probe)
+        import numpy as np  # noqa: F401
+        from sklearn.preprocessing import StandardScaler  # noqa: F401
     except ImportError:
         return None
     try:
@@ -247,6 +247,20 @@ def _load_dino_probe(obj: dict, path: Path) -> Any:
     return adapter
 
 
+_RESIDUAL_MLP_KEYS = {"state_dict", "scaler_X", "scaler_y", "config"}
+
+
+def _load_residual_mlp(path: Path) -> Any:
+    """Rebuild a ``pytorch.residual_mlp`` adapter from its joblib payload
+    (``state_dict`` + scalers + ``config``), which is not a torch checkpoint."""
+    from ..model import MODEL_REGISTRY
+
+    adapter = MODEL_REGISTRY.create("pytorch.residual_mlp")
+    adapter.load(str(path))
+    adapter.mark_fitted()
+    return adapter
+
+
 def load_model_compat(
     model_path: Path,
     model_entry: Optional[dict] = None,
@@ -277,6 +291,8 @@ def load_model_compat(
             "surge.dino_linear_probe"
         ):
             return _load_dino_probe(obj, Path(model_path))
+        if isinstance(obj, dict) and _RESIDUAL_MLP_KEYS <= set(obj):
+            return _load_residual_mlp(Path(model_path))
         # If we got a dict (torch checkpoint) or thin adapter without fit, use torch loader
         if isinstance(obj, dict) and "model_state_dict" in obj:
             adapter = _load_torch_model(model_path, model_entry, for_finetune=for_finetune)
