@@ -189,10 +189,29 @@ error against the published 6.5 %:
 surge bench -b plasma.solpsnn_exhaust_scalars -m kumo.tabular_regressor,pytorch.residual_mlp,sklearn.random_forest
 ```
 
-Next in the fusion set: the Alcator C-Mod Greenwald density-limit
-classifier (`plasma.cmod_density_limit`, MIT-PSFC open database) stays
-*needs rerun* until it is scored on the natural class imbalance with the
-field's ROC conventions.
+**Density-limit precursor detection on Alcator C-Mod** — the MIT-PSFC Open
+Density Limit Database (Maris, Rea, Trevisan & the C-Mod team; CC BY;
+physics in Maris *et al.*, *Nucl. Fusion* 2024): 264,385 time slices from
+2,333 discharges on a 10 ms timebase, 78 of which enter the Greenwald
+density-limit precursor phase (1.4 % of slices). `plasma.cmod_density_limit`
+splits by discharge, keeps the natural imbalance and scores the way a
+disruption predictor is judged: AUROC and the true-positive rate at 1 % and
+5 % false-alarm rates. The physics baseline, the Greenwald fraction
+$n/n_G$ with $n_G = I_p/\pi a^2$, is scored on the same slices (**AUROC
+0.973**, 71 % of precursor slices caught at 1 % false alarms); a random
+forest on the six raw signals reaches **AUROC 0.9999** and catches every
+precursor slice at 1 % false alarms, gradient boosting 0.998. This is a
+state classifier for the precursor phase, not a forecast; a warning-time
+variant is the planned follow-up.
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/cmod_roc.png"><img src="docs/assets/readme/cmod_roc.png" width="900"
+       alt="C-Mod density-limit precursor detection: ROC curves for logistic regression, gradient boosting and random forest against the Greenwald-fraction physics baseline, with the low-false-alarm zoom"/></picture>
+</p>
+
+```bash
+surge bench -b plasma.cmod_density_limit -m sklearn.logistic_regression,sklearn.random_forest_classifier,sklearn.gradient_boosting_classifier
+```
 
 **When chaos caps pointwise accuracy, forecast the distribution** — on the TheWell turbulent radiative layer (non-square 64×192 grid, log-density, Δt = 8) every neural operator beats persistence, but only modestly: **U-Net 0.250 vs persistence 0.355**
 ([`examples/thewell_turbulence_study.py`](examples/thewell_turbulence_study.py)).

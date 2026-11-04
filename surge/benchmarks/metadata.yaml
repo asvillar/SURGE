@@ -713,6 +713,7 @@ benchmarks:
   focus: false
 - key: plasma.cmod_density_limit
   status: ready
+  definition_date: 2026-11-04  # re-posed: discharge-grouped split, natural imbalance, AUROC gate
   status_note: "Re-posed: discharge-grouped split of the MIT-PSFC open database, natural class imbalance (1.4 % positive slices, 78 of 2,333 discharges), scored by AUROC with the Greenwald-fraction scaling as the physics baseline (0.973 on the same split). State classification of the precursor phase, not a forecast; a warning-time variant is planned."
   name: C-Mod Greenwald Density Limit
   capability: Scientific Domain

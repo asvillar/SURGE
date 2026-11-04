@@ -48,8 +48,8 @@ All notable changes to SURGE (`surge-ml`). Follows
   environment capture, scalers, per-split parquet predictions, model
   card, per-epoch training logs, HPO trial logs.
 - **Fusion-first benchmark suite**: the ledger leads with the fusion
-  benchmarks (QLKNN10D and ConStellaration ready; SOLPS-NN in progress;
-  C-Mod density limit pending its rerun on the natural class balance); the
+  benchmarks (QLKNN10D, ConStellaration and the re-posed C-Mod density
+  limit ready; SOLPS-NN in progress); the
   general tabular datasets (California housing, concrete, energy
   efficiency, airfoil noise, superconductor) move to the tutorial tier as
   pull-and-run demos. Relative L2 is a headline ledger metric for the
@@ -62,6 +62,13 @@ All notable changes to SURGE (`surge-ml`). Follows
   with per-target keys, scenario-atlas and B2-grid field figures in
   `surge.viz.solpsnn`. The scalar benchmark is public in the in-progress
   tier; the field benchmark is hidden until its gate settles.
+- **C-Mod density limit re-posed** (`plasma.cmod_density_limit`, MIT-PSFC
+  Open Density Limit Database, CC BY): fixed discharge-grouped split on the
+  natural class imbalance, scored by AUROC, average precision and TPR at
+  1 %/5 % false-alarm rate with the Greenwald-fraction scaling as the
+  physics baseline (0.973 AUROC on the same slices); random forest 0.9999,
+  gradient boosting 0.998 against the 0.99 gate. Cards may declare a
+  `primary_metric`. New `surge.viz.disruption.roc_figure`.
 - **NVIDIA Kumo Tabular** in-context adapters (`kumo.tabular_regressor`,
   `kumo.tabular_classifier`, extra `kumo`): no training, up to 60k context
   rows under a rows×columns memory budget, 999-quantile uncertainty. First
