@@ -36,7 +36,7 @@ def build_index_rows(results: dict[str, dict], heads: dict[str, dict],
         cat = _category_of(key, meta)
         discipline = _discipline_of(key, meta)
         status = _status_of(info)
-        pm = primary_metric_key(bench_heads)
+        pm = primary_metric_key(bench_heads, info)
         ranked = rank_models(bench_heads, pm) if pm else sorted(bench_heads)
         best_model = ranked[0] if ranked else None
         best_agg = bench_heads.get(best_model, {}).get("metrics", {}).get(pm) \

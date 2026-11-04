@@ -2013,6 +2013,24 @@ def solpsnn_figures(mode: str, seed: int = 0):
     }
 
 
+# ------------------------------------------------------- disruption (synthetic)
+
+def disruption_figure(mode: str, seed: int = 0):
+    """ROC figure for a density-limit classifier from SYNTHETIC scores."""
+    from surge.viz.disruption import roc_figure
+
+    rng = np.random.default_rng(seed)
+    n = 20000
+    y = (rng.random(n) < 0.015).astype(int)
+
+    def score(shift):
+        return shift * y + rng.logistic(size=n)
+
+    return roc_figure(
+        {"MLP": (y, score(6.0)), "Transformer": (y, score(9.0))},
+        baseline=("Greenwald fraction n/n_G", y, score(5.0)), mode=mode)
+
+
 # -------------------------------------------------------------------- main\n
 
 def main():
@@ -2048,6 +2066,7 @@ def main():
         "constellaration": constellaration_figure,
         "scale": scale_figure,
         "solpsnn": solpsnn_figures,
+        "disruption": disruption_figure,
         "parity_singles": lambda m: parity_figure(Path(args.run), m, singles=True),
         "trio_singles": lambda m: trio_figure(m, singles=True),
         "field2d_singles": lambda m: field2d_figure(m, singles=True),
