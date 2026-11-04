@@ -350,16 +350,25 @@ python -c "import json; print(json.load(open('runs/diabetes_rf/metrics.json'))['
 python -m examples.quickstart --dataset california --model mlp --n-trials 5 --infer
 ```
 
-### 3 · Scientific case — QLKNN plasma transport, two models, HPO
+### 3 · Scientific case — QLKNN plasma transport with HPO, monitoring and the dashboard
 
-Predict **electron ITG heat flux** (`efeITG`) from 10 gyrokinetic inputs;
-one workflow trains **Random Forest + Residual MLP**, each with its own
-Optuna search (first run generates the dataset via `fusion_surrogates`):
+Predict **electron ITG heat flux** (`efeITG`) from 10 gyrokinetic inputs.
+Everything below is the installed CLI; the dataset is generated once from the
+published QLKNN network via `fusion_surrogates`:
 
 ```bash
-pip install fusion_surrogates
-python examples/qlknn_multi_hpo_workflow.py --hpo-trials 10 --overwrite
+pip install "surge-ml[torch]" fusion_surrogates
+surge data export plasma.qlknn_transport qlknn.csv          # 7,475 rows x 10 inputs + efeITG
+surge init --data qlknn.csv --target efeITG --goal accuracy --budget standard --yes --out qlknn.yaml
+surge run qlknn.yaml                                        # RF + residual MLP, 10-trial Optuna search
+surge monitor runs/qlknn --watch 30                         # second terminal: trials, epochs, best so far
+surge viz runs/qlknn --units gB                             # mission control, HPO, training, parity
+surge bench -b plasma.qlknn_transport -m all --seeds 3      # leaderboard against the published gate
+surge report --out leaderboard.html
 ```
+
+`--budget thorough` runs 40 trials (the README figures come from a 200-trial
+campaign); `surge init` without `--yes` asks the same questions interactively.
 
 ### 4 · Mix backends in one spec — sklearn vs PyTorch vs Keras
 
@@ -466,11 +475,17 @@ Gallery of every figure type: `python examples/viz_theme_gallery.py`.
 
 ## Run monitoring — mission control
 
-Every HPO campaign leaves machine-readable artifacts, and the gallery renders them as a one-look dashboard (figure in [Highlights](#highlights)):
+Every campaign leaves machine-readable artifacts in `runs/<tag>/`: the trial
+manifest, per-trial training histories, metrics, predictions and model cards.
+Two CLI verbs read them:
 
 ```bash
-python examples/viz_theme_gallery.py --only mission_control --hpo-run runs/qlknn_hpo_200_best
+surge monitor runs/qlknn --watch 30      # live text status: trials, epochs, best so far, final metrics
+surge viz runs/qlknn --modes light dark  # mission control, HPO convergence, training curves, parity
 ```
+
+The mission-control dashboard (figure in [Highlights](#highlights)) is the
+`surge viz` output for the 200-trial campaign.
 
 ## Experiment tracking (MLflow)
 

@@ -496,6 +496,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tier", metavar="TIER", help=argparse.SUPPRESS)
 
     args = ap.parse_args(argv)
+    # `-m a,b,c` is what people type; treat it as --compare-models.
+    if args.model and "," in args.model and not args.compare_models:
+        args.compare_models = args.model
+        args.model = None
 
     if args.apply_selection:
         from surge.benchmarks.status import apply_selection

@@ -33,17 +33,31 @@ Requires Python 3.10–3.12.
 
 ## Quickstart
 
+Your own table, three commands:
+
 ```bash
-surge init --data my_data.csv --target y --yes --out spec.yaml   # write a commented spec
+surge init --data my_data.csv --target y --yes --out spec.yaml   # inspect the data, write a commented spec
 surge validate spec.yaml                                         # schema-check it
-surge run spec.yaml                                               # train + evaluate
-surge models                                                      # list registered adapters
-surge bench -b tabular.california_housing -m all --seeds 5       # leaderboard, mean ± std
-surge report --out leaderboard.html                               # self-contained HTML dashboard
+surge run spec.yaml                                               # train, tune, evaluate -> runs/<tag>/
 ```
 
-Every run writes `metrics.json`, trained models, scalers, and per-split
-predictions to `runs/<tag>/`.
+A fusion surrogate end to end — QLKNN turbulent transport with an Optuna
+HPO campaign, live monitoring and the mission-control dashboard:
+
+```bash
+pip install "surge-ml[torch]" fusion_surrogates
+surge data export plasma.qlknn_transport qlknn.csv          # 10 gyrokinetic inputs -> efeITG
+surge init --data qlknn.csv --target efeITG --goal accuracy --budget standard --yes --out qlknn.yaml
+surge run qlknn.yaml                                        # RF + residual MLP, 10-trial search
+surge monitor runs/qlknn --watch 30                         # second terminal
+surge viz runs/qlknn --units gB                             # mission control, HPO, training, parity
+surge bench -b plasma.qlknn_transport -m all --seeds 3      # leaderboard against the published gate
+surge report --out leaderboard.html                         # self-contained HTML dashboard
+```
+
+Every run writes `metrics.json`, trained models, scalers, per-split
+predictions and model cards to `runs/<tag>/`; `surge models` lists the
+registered adapters.
 
 ## Benchmarks
 
