@@ -17,7 +17,7 @@ try:
 except AttributeError:
     pass
 
-from .base import BenchmarkResult
+from .base import BenchmarkResult, capture_predictions
 
 # Default model keys per benchmark (used when the caller passes no model_key).
 _DEFAULTS: dict[str, str] = {
@@ -132,6 +132,8 @@ def _fit_predict_classification(adapter: Any, X_train, y_train, X_test):
 def _clf_metrics(y_test, y_pred, y_prob) -> dict[str, float]:
     from sklearn.metrics import accuracy_score, f1_score
 
+    capture_predictions(y_test, y_pred, y_prob if hasattr(y_prob, "ndim") else None)
+
     metrics: dict[str, float] = {
         "test_accuracy": float(accuracy_score(y_test, y_pred)),
         "test_f1_macro": float(f1_score(y_test, y_pred, average="macro", zero_division=0)),
@@ -156,6 +158,7 @@ def _clf_metrics(y_test, y_pred, y_prob) -> dict[str, float]:
 def _reg_metrics(y_test, y_pred) -> dict[str, float]:
     from sklearn.metrics import mean_squared_error, r2_score
 
+    capture_predictions(y_test, y_pred)
     r2 = float(r2_score(y_test, y_pred))
     rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
     return {"test_r2": r2, "test_rmse": rmse}
@@ -611,86 +614,248 @@ def _lorenz_rk4_step(state: np.ndarray, dt: float, sigma: float = 10.0, rho: flo
     return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
 
+# Lyapunov-time convention for σ=10, ρ=28, β=8/3 (Lorenz 1963): the largest
+# Lyapunov exponent is λ_max ≈ 0.9056, so one Lyapunov time ≈ 1/0.9056 ≈
+# 1.104 time units ≈ 110 RK-4 steps at dt=0.01. Used to define both the
+# training transient to drop and the rollout horizon/VPT scoring below.
+_LORENZ_LAMBDA_MAX = 0.9056
+_LORENZ_TRANSIENT_TIME_UNITS = 10.0
+_LORENZ_VPT_THRESHOLD = 0.4
+
+
+def _lorenz_lyapunov_time() -> float:
+    """Lyapunov time (time units) for the standard σ=10, ρ=28, β=8/3 attractor."""
+    return 1.0 / _LORENZ_LAMBDA_MAX
+
+
 def _generate_lorenz_trajectories(
     n_trajectories: int,
-    T_in: int,
-    T_out: int,
     dt: float = 0.01,
-    warmup: int = 500,
+    transient_time_units: float = _LORENZ_TRANSIENT_TIME_UNITS,
     seed: int = 42,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Generate ``n_trajectories`` Lorenz-63 windows.
+    """Generate one-step ``x(t) -> x(t + dt)`` pairs sampled from the attractor.
+
+    Each of ``n_trajectories`` independent random initial conditions is
+    integrated with RK-4 past a ``transient_time_units``-long transient
+    (dropped, so every pair sits on the chaotic attractor rather than on the
+    way to it) and contributes exactly one ``(x(t), x(t+dt))`` pair.
 
     Returns
     -------
-    X : (n_trajectories, T_in * 3)  — input windows (flattened)
-    y : (n_trajectories, T_out * 3) — prediction targets (flattened)
+    X, y : ``(n_trajectories, 3)`` arrays — state at ``t`` and at ``t + dt``.
     """
     rng = np.random.default_rng(seed)
-    n_state = 3
-    X_list, y_list = [], []
-    for _ in range(n_trajectories):
-        # Random IC near the attractor.
-        state = rng.uniform(low=-10.0, high=10.0, size=(n_state,))
-        # Warm-up to attract to the chaotic attractor.
+    warmup = int(round(transient_time_units / dt))
+    X = np.empty((n_trajectories, 3))
+    y = np.empty((n_trajectories, 3))
+    for i in range(n_trajectories):
+        state = rng.uniform(low=-10.0, high=10.0, size=(3,))
         for _ in range(warmup):
             state = _lorenz_rk4_step(state, dt)
-        # Collect T_in + T_out steps.
-        total = T_in + T_out
-        traj = np.empty((total, n_state))
-        for t in range(total):
-            traj[t] = state
+        X[i] = state
+        y[i] = _lorenz_rk4_step(state, dt)
+    return X, y
+
+
+def _generate_lorenz_rollout_ics(
+    n_ics: int,
+    n_steps: int,
+    dt: float = 0.01,
+    transient_time_units: float = _LORENZ_TRANSIENT_TIME_UNITS,
+    seed: int = 0,
+) -> np.ndarray:
+    """``n_ics`` on-attractor trajectories of ``n_steps + 1`` RK-4 states.
+
+    Returns ``(n_ics, n_steps + 1, 3)``; index 0 along axis 1 is the
+    post-transient initial condition each trajectory is rolled out from.
+    """
+    rng = np.random.default_rng(seed)
+    warmup = int(round(transient_time_units / dt))
+    out = np.empty((n_ics, n_steps + 1, 3))
+    for i in range(n_ics):
+        state = rng.uniform(low=-10.0, high=10.0, size=(3,))
+        for _ in range(warmup):
             state = _lorenz_rk4_step(state, dt)
-        X_list.append(traj[:T_in].ravel())
-        y_list.append(traj[T_in:].ravel())
-    return np.array(X_list), np.array(y_list)
+        out[i, 0] = state
+        for t in range(1, n_steps + 1):
+            state = _lorenz_rk4_step(state, dt)
+            out[i, t] = state
+    return out
+
+
+def lorenz_rollout_metrics(
+    adapter, *, seed: int, climate_norm: float, n_eval_ics: int = 100,
+    rollout_lyapunov_times: float = 10.0,
+    x_mean: "np.ndarray | float" = 0.0, x_scale: "np.ndarray | float" = 1.0,
+) -> dict:
+    """Score a FITTED one-step Lorenz-63 adapter by Lyapunov-time rollout.
+
+    The adapter must have been trained on ``(x - x_mean) / x_scale`` pairs
+    (identity by default).  Shared by :func:`run_sequence_lorenz63` and the
+    leaderboard's ``_run_with_adapter`` so every execution path emits the
+    same gate metric.  Returns ``{"metrics": {...}, "extra": {...}}`` where
+    metrics holds ``test_vpt_median/p25/p75`` and ``test_climate_error``.
+    """
+    from surge.inference.rollout import (
+        autoregressive_rollout,
+        climate_histogram_error,
+        valid_prediction_time,
+    )
+
+    dt = 0.01
+    lyapunov_time = _lorenz_lyapunov_time()
+    dt_lyapunov = dt / lyapunov_time
+    n_rollout_steps = int(round(rollout_lyapunov_times * lyapunov_time / dt))
+    mean, scale = x_mean, x_scale
+
+    rollout_ics = _generate_lorenz_rollout_ics(
+        n_ics=n_eval_ics, n_steps=n_rollout_steps, dt=dt, seed=seed + 1_000_000)
+    truth = np.transpose(rollout_ics, (1, 0, 2))  # (n_steps + 1, n_eval_ics, 3)
+    initial_state, truths = truth[0], truth[1:]
+
+    def predict_fn(state: np.ndarray) -> np.ndarray:
+        # Diverged trajectories (any non-finite component) are not fed to the
+        # adapter (sklearn raises on NaN); they stay NaN so the batch survives
+        # and valid_prediction_time scores them as crossed.
+        out = np.full(state.shape, np.nan, dtype=float)
+        ok = np.all(np.isfinite(state), axis=1)
+        if ok.any():
+            x = (state[ok] - mean) / scale
+            pred = np.asarray(adapter.predict(x)).reshape(x.shape)
+            out[ok] = pred * scale + mean
+        return out
+
+    preds, _ = autoregressive_rollout(predict_fn, initial_state, truths)
+
+    step_err = np.linalg.norm(preds - truths, axis=-1) / climate_norm  # (n_steps, n_eval_ics)
+    vpts = np.array([
+        valid_prediction_time(step_err[:, i], _LORENZ_VPT_THRESHOLD, dt_lyapunov,
+                              horizon_lyapunov=rollout_lyapunov_times)
+        for i in range(step_err.shape[1])
+    ])
+    climate_err = climate_histogram_error(truths[..., 2], preds[..., 2])
+    metrics = {
+        "test_vpt_median": float(np.median(vpts)),
+        "test_vpt_p25": float(np.percentile(vpts, 25)),
+        "test_vpt_p75": float(np.percentile(vpts, 75)),
+        "test_climate_error": climate_err,
+    }
+    # Median-VPT IC - a representative (not cherry-picked best) rollout for figures.
+    i_ref = int(np.argsort(vpts)[len(vpts) // 2])
+    extra = {
+        "n_eval_ics": n_eval_ics, "n_rollout_steps": n_rollout_steps,
+        "dt": dt, "lyapunov_time": lyapunov_time, "dt_lyapunov": dt_lyapunov,
+        "rollout_lyapunov_times": rollout_lyapunov_times,
+        "vpt_threshold": _LORENZ_VPT_THRESHOLD, "climate_norm": climate_norm,
+        "per_ic_vpt": vpts.tolist(),
+        # nanmedian: a diverged trajectory must not blank the curve for everyone
+        "median_error_curve": np.nanmedian(step_err, axis=1).tolist(),
+        "sample_truth_xyz": truth[:, i_ref, :].tolist(),
+        "sample_pred_xyz": np.vstack(
+            [initial_state[i_ref][None, :], preds[:, i_ref, :]]).tolist(),
+    }
+    return {"metrics": metrics, "extra": extra}
+
+
+def lorenz_adapter_run(
+    adapter, X_train, y_train, X_test, *, seed: int, climate_norm: float,
+    n_eval_ics: int = 100, rollout_lyapunov_times: float = 10.0,
+) -> dict:
+    """Z-score fit + predict + rollout scoring of a one-step Lorenz-63 adapter.
+
+    The single code path shared by ``run_sequence_lorenz63``, the leaderboard
+    adapter runner and the HPO trial runner, so each emits the gate metric
+    ``test_vpt_median``.  Returns ``{"y_pred": de-standardised test
+    predictions, "metrics": {...vpt/climate...}, "extra": {...}}``.
+    """
+    X_train = np.asarray(X_train)
+    y_train = np.asarray(y_train)
+    X_test = np.asarray(X_test)
+    mean = X_train.mean(axis=0)
+    scale = X_train.std(axis=0) + 1e-8
+    adapter.fit((X_train - mean) / scale, (y_train - mean) / scale)
+    y_pred = np.asarray(adapter.predict((X_test - mean) / scale)) * scale + mean
+    roll = lorenz_rollout_metrics(
+        adapter, seed=seed, n_eval_ics=n_eval_ics,
+        rollout_lyapunov_times=rollout_lyapunov_times,
+        climate_norm=climate_norm, x_mean=mean, x_scale=scale)
+    return {"y_pred": y_pred, "metrics": roll["metrics"], "extra": roll["extra"]}
 
 
 def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
-    model_kwargs: dict | None = None) -> "BenchmarkResult":
-    """Lorenz-63 one-step and short-horizon prediction (Tier 0, inline ODE).
+    model_kwargs: dict | None = None, n_trajectories: int = 1200,
+    n_eval_ics: int = 100, rollout_lyapunov_times: float = 10.0) -> "BenchmarkResult":
+    """Lorenz-63 one-step surrogate, scored by Lyapunov-time rollout VPT (Tier 0).
 
-    Data
-    ----
-    1 200 trajectories of the Lorenz-63 attractor integrated with RK-4
-    (dt=0.01).  Input = 20-step window (T_in=20), target = next 20 steps
-    (T_out=20), state dim = 3.  Total feature dim: 60 → 60.
+    Protocol (definition_date 2026-10-21 — see ``metadata.yaml``; replaces the
+    earlier fixed 20-step-window NRMSE, which a random forest saturated at
+    0.026 without needing to track the attractor's dynamics):
 
-    Metric
-    ------
-    ``test_nrmse`` = ||y_pred - y_true||_F / ||y_true||_F  (lower is better).
-    Pass threshold: NRMSE < 0.30 (well above random, reachable by RF).
+    - Train a one-step surrogate ``x(t) -> x(t + dt)`` (dt=0.01) on
+      ``n_trajectories`` attractor samples, each from an independent random
+      IC with a 10-time-unit transient dropped
+      (:func:`_generate_lorenz_trajectories`).
+    - Evaluate on ``n_eval_ics`` held-out attractor ICs, rolled out
+      autoregressively (:func:`surge.inference.rollout.autoregressive_rollout`)
+      for ``rollout_lyapunov_times`` Lyapunov times (λ_max ≈ 0.9056 for
+      σ=10, ρ=28, β=8/3 → 1 λ-time ≈ 1.104 time units ≈ 110 steps at
+      dt=0.01).
+    - Per-IC valid prediction time (VPT,
+      :func:`surge.inference.rollout.valid_prediction_time`): first λ-time at
+      which the climate-normalised error ``||x̂ - x|| / sqrt(mean ||x||²)``
+      exceeds 0.4 (``rollout_lyapunov_times`` if it never does).
+
+    Metrics
+    -------
+    ``test_vpt_median`` (primary, higher better), ``test_vpt_p25``,
+    ``test_vpt_p75``, ``test_climate_error`` (relative error of the rolled-out
+    z-coordinate histogram vs. truth,
+    :func:`surge.inference.rollout.climate_histogram_error`), ``test_nrmse``
+    (one-step, secondary). Pass threshold: ``test_vpt_median >= 2.0``.
     """
     from sklearn.model_selection import train_test_split
 
-    T_in, T_out = 20, 20
-    X, y = _generate_lorenz_trajectories(
-        n_trajectories=1200, T_in=T_in, T_out=T_out, dt=0.01, warmup=500, seed=seed
-    )
+    dt = 0.01
+
+    X, y = _generate_lorenz_trajectories(n_trajectories=n_trajectories, dt=dt, seed=seed)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+
+    # Climate (attractor) normalisation constant for VPT/rollout error — one
+    # scale shared by every model and every eval IC, not re-derived per run.
+    climate_norm = float(np.sqrt(np.mean(np.sum(np.vstack([X, y]) ** 2, axis=1))))
 
     key = model_key or "sklearn.random_forest"
     from surge.model.registry import MODEL_REGISTRY
-    adapter = MODEL_REGISTRY.create(key)
+    adapter = MODEL_REGISTRY.create(key, **(model_kwargs or {}))
 
     t0 = time.perf_counter()
-    adapter.fit(X_train, y_train)
-    y_pred = np.asarray(adapter.predict(X_test))
+    roll = lorenz_adapter_run(
+        adapter, X_train, y_train, X_test, seed=seed, climate_norm=climate_norm,
+        n_eval_ics=n_eval_ics, rollout_lyapunov_times=rollout_lyapunov_times)
+    y_pred_test = roll["y_pred"]
+    nrmse = float(np.linalg.norm(y_pred_test - y_test) / (np.linalg.norm(y_test) + 1e-12))
+    capture_predictions(y_test, y_pred_test)
     elapsed = time.perf_counter() - t0
 
-    # NRMSE over all predicted steps and state dimensions.
-    nrmse = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
-    metrics: dict = {"test_nrmse": nrmse, "runtime_s": elapsed}
+    metrics: dict = {
+        **roll["metrics"],
+        "test_nrmse": nrmse,
+        "runtime_s": elapsed,
+    }
+
     return BenchmarkResult(
         benchmark_key="sequence.lorenz63",
         model_key=adapter.name,
         tier="0",
         task_type="regression",
         metrics=metrics,
-        passed=nrmse < 0.30,
-        message="Lorenz-63 RK-4 short-horizon prediction (inline, no download)",
-        extra={"n_train": len(X_train), "n_test": len(X_test), "T_in": T_in, "T_out": T_out},
+        passed=metrics["test_vpt_median"] >= 2.0,
+        message="Lorenz-63 one-step surrogate, scored via 10-λ autoregressive rollout VPT",
+        extra={
+            "n_train": len(X_train), "n_test": len(X_test),
+            **roll["extra"],
+        },
     )
 
 
@@ -746,6 +911,124 @@ def _generate_burgers_dataset(
         X_list.append(u0)
         y_list.append(u_T)
     return np.array(X_list), np.array(y_list)
+
+
+# Relative-L2 protocol per benchmark.  "global" = ||P-T|| / ||T|| over the whole
+# test set (pde.burgers_1d, pdebench.*, thewell.*); "median" = median of the
+# per-sample relative L2 (Li et al. 2021), with the mean reported alongside
+# (ConStellaration field benchmarks).  Used by the direct runners' definitions
+# and by the adapter/HPO paths so every execution path emits the same gate metric.
+RELATIVE_L2_PROTOCOL: dict[str, str] = {
+    # SOLPS-NN Te field: computed on log10(Te) (the benchmark's training space).
+    "plasma.solpsnn_te_field": "global",
+    "pde.burgers_1d": "global",
+    "thewell.gray_scott": "global",
+    "plasma.constellaration_modb": "median",
+    "plasma.constellaration_surfaces": "median",
+}
+_RELATIVE_L2_GLOBAL_PREFIXES = ("pdebench.", "thewell.")
+
+
+def relative_l2_metrics(benchmark_key: str, y_test, y_pred) -> dict:
+    """``test_relative_l2`` (+ ``_mean`` for per-sample protocols) for *benchmark_key*.
+
+    Returns ``{}`` for benchmarks with no relative-L2 protocol.
+    """
+    protocol = RELATIVE_L2_PROTOCOL.get(benchmark_key)
+    if protocol is None and benchmark_key.startswith(_RELATIVE_L2_GLOBAL_PREFIXES):
+        protocol = "global"
+    if protocol is None:
+        return {}
+    y_test = np.asarray(y_test, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float).reshape(y_test.shape)
+    if protocol == "global":
+        return {"test_relative_l2": float(
+            np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))}
+    from surge.metrics import relative_l2_per_sample
+
+    per_sample = relative_l2_per_sample(y_test, y_pred)
+    return {"test_relative_l2": float(np.median(per_sample)),
+            "test_relative_l2_mean": float(np.mean(per_sample))}
+
+
+def _tpr_at_fpr(y_true, score, fpr_max: float) -> float:
+    """Best TPR on the ROC curve with FPR <= ``fpr_max``."""
+    from sklearn.metrics import roc_curve
+
+    fpr, tpr, _ = roc_curve(y_true, score)
+    return float(tpr[fpr <= fpr_max].max())
+
+
+def disruption_metrics(X_test, y_test, y_proba) -> tuple[dict, dict]:
+    """Rare-event (density-limit precursor) metrics on the natural class balance.
+
+    Returns ``(metrics, baseline)``.  ``metrics``: ``test_auroc``,
+    ``test_average_precision``, ``test_tpr_at_fpr05``, ``test_tpr_at_fpr01``
+    (TPR at FPR <= 5 % / 1 %).  ``baseline``: the same ROC quantities for the
+    Greenwald fraction n / (I_p / (pi a^2)) computed from the feature columns
+    ``density`` (0), ``plasma_current`` (3) and ``minor_radius`` (2), as
+    ``baseline_greenwald_auroc`` / ``baseline_greenwald_tpr_at_fpr05``.
+    """
+    from sklearn.metrics import average_precision_score, roc_auc_score
+
+    X = np.asarray(X_test, dtype=float)
+    y = np.asarray(y_test).astype(int).ravel()
+    s = np.asarray(y_proba, dtype=float)
+    if s.ndim > 1:
+        s = s[:, 1]
+    metrics = {
+        "test_auroc": float(roc_auc_score(y, s)),
+        "test_average_precision": float(average_precision_score(y, s)),
+        "test_tpr_at_fpr05": _tpr_at_fpr(y, s, 0.05),
+        "test_tpr_at_fpr01": _tpr_at_fpr(y, s, 0.01),
+    }
+    with np.errstate(divide="ignore", invalid="ignore"):
+        n_g = X[:, 3] / (np.pi * X[:, 2] ** 2)
+        gf = np.nan_to_num(X[:, 0] / n_g, nan=0.0, posinf=0.0, neginf=0.0)
+    baseline = {
+        "baseline_greenwald_auroc": float(roc_auc_score(y, gf)),
+        "baseline_greenwald_tpr_at_fpr05": _tpr_at_fpr(y, gf, 0.05),
+    }
+    return metrics, baseline
+
+
+def solpsnn_scalar_metrics(y_test, y_pred, names=None) -> dict:
+    """SOLPS-NN metrics on PHYSICAL (already inverted) values.
+
+    ``test_median_rel_err_<name>`` = median(|y_pred - y| / |y|) per column and
+    ``test_median_rel_err`` = max over columns (the gated quantity, lower is
+    better); ``test_r2_log10_<name>`` / ``test_r2_log10`` (mean) are R^2 of
+    log10(values).  With ``names=None`` (field benchmark) all entries are pooled:
+    one median relative error and one R^2 over every cell.
+    """
+    from sklearn.metrics import r2_score
+
+    y = np.asarray(y_test, dtype=float)
+    p = np.asarray(y_pred, dtype=float).reshape(y.shape)
+
+    def _rel(a, b):
+        return float(np.median(np.abs(b - a) / np.maximum(np.abs(a), 1e-300)))
+
+    def _r2(a, b):
+        return float(r2_score(np.log10(np.maximum(a, 1e-300)),
+                              np.log10(np.maximum(b, 1e-300))))
+
+    if names is None:
+        return {"test_median_rel_err": _rel(y.ravel(), p.ravel()),
+                "test_r2_log10": _r2(y.ravel(), p.ravel())}
+    y2, p2 = y.reshape(len(y), -1), p.reshape(len(y), -1)
+    if y2.shape[1] != len(names):
+        raise ValueError(f"expected {len(names)} columns, got {y2.shape[1]}")
+    out: dict[str, float] = {}
+    rel, r2 = [], []
+    for j, n in enumerate(names):
+        rel.append(_rel(y2[:, j], p2[:, j]))
+        r2.append(_r2(y2[:, j], p2[:, j]))
+        out[f"test_median_rel_err_{n}"] = rel[-1]
+        out[f"test_r2_log10_{n}"] = r2[-1]
+    out["test_median_rel_err"] = float(max(rel))
+    out["test_r2_log10"] = float(np.mean(r2))
+    return out
 
 
 def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None,
@@ -1430,18 +1713,23 @@ def run_fusion_m3dc1_sample(*, seed: int = 42, model_key: str | None = None,
 
     Data
     ----
-    Tries to load from ``data/datasets/M3DC1/m3dc1_sample.hdf5`` (13→1
-    regression on normalized MHD equilibrium parameters).  Falls back to a
-    synthetic inline fixture (same shape / difficulty) if the HDF5 is absent
-    so that CI and tests run without the large dataset.
+    Tries the unified benchmark cache (``<bench_data_root>/fusion/m3dc1/
+    m3dc1_sample.hdf5``), then the legacy ``<repo>/data/datasets/M3DC1/
+    m3dc1_sample.hdf5`` path inside a checkout.  Falls back to a synthetic
+    inline fixture (same shape / difficulty) if neither is present, so that
+    CI and tests run without the large dataset.
 
     Shape: 13 input features → 1 stability metric (R²).
     Pass threshold: R² ≥ 0.70.
     """
-    from pathlib import Path
     from sklearn.model_selection import train_test_split
+    from surge.benchmarks import paths  # local import avoids an import cycle
 
-    H5_PATH = Path(__file__).parent.parent.parent / "data" / "datasets" / "M3DC1" / "m3dc1_sample.hdf5"
+    PRIMARY_H5_PATH = paths.bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5"
+    if PRIMARY_H5_PATH.exists():
+        H5_PATH = PRIMARY_H5_PATH
+    else:
+        H5_PATH = paths.datasets_root() / "M3DC1" / "m3dc1_sample.hdf5"
 
     X, y = None, None
 
@@ -1483,7 +1771,7 @@ def run_fusion_m3dc1_sample(*, seed: int = 42, model_key: str | None = None,
 
     metrics = _reg_metrics(y_test, y_pred)
     metrics["runtime_s"] = elapsed
-    note = "(synthetic inline fixture — place real data at data/datasets/M3DC1/m3dc1_sample.hdf5)" if _is_synthetic else ""
+    note = f"(synthetic inline fixture — place real data at {PRIMARY_H5_PATH})" if _is_synthetic else ""
     return BenchmarkResult(
         benchmark_key="fusion.m3dc1_sample",
         model_key=adapter.name,
@@ -1730,6 +2018,7 @@ def _run_constellaration_field_benchmark(
     y_pred = np.asarray(adapter.predict(X_pred)).reshape(y_test.shape)
     elapsed = time.perf_counter() - t0
 
+    capture_predictions(y_test, y_pred)
     per_sample = relative_l2_per_sample(y_test, y_pred)
     rel_l2 = float(np.median(per_sample))
     metrics: dict = {

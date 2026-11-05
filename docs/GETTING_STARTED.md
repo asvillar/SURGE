@@ -100,7 +100,7 @@ pytest -q                                    # full suite
 | `pytorch.*` models absent | Install the extra: `uv pip install -e ".[torch]"`. |
 | GPflow models (any platform) | `uv pip install -e ".[gpflow]"` then `uv pip install gpflow --no-deps`. gpflow's published metadata pins `numpy<2` (and the dead `tensorflow-macos` on Apple Silicon), which no modern resolver can satisfy next to TF ≥ 2.21 — but gpflow 2.11 runs fine on NumPy 2.x. The `[gpflow]` extra provides the full TF stack **and** gpflow's pure-Python deps (check_shapes, tabulate, …), so `--no-deps` is safe. Verified: TF 2.21 + GPflow 2.11.1 + NumPy 2.5. |
 | Keras/TensorFlow models absent | Install `.[tensorflow]` (or `.[gpflow]`); `keras.mlp` then appears in `surge models`. |
-| Grouped samples (shots, trajectories) | Splits are random-only today — leakage risk. Track the split-strategy roadmap in `docs/design/ARCHITECTURE_RECOMMENDATIONS.md` (R4). |
+| Grouped samples (shots, trajectories) | Workflow splits are random today; benchmarks that need it (e.g. `plasma.cmod_density_limit`) implement a grouped split in their loader. Group-aware workflow splits are planned. |
 
 
 ## Editor autocomplete for spec files

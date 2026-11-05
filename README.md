@@ -1,18 +1,22 @@
 # <img src="data/logos/surge_logo_os.png" width="56" alt="" align="absmiddle"/>&nbsp;&nbsp;SURGE
 
-[![CI](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml/badge.svg)](https://github.com/S-Villar/SURGE/actions/workflows/ci.yml)
+[![CI](https://github.com/asvillar/SURGE/actions/workflows/ci.yml/badge.svg)](https://github.com/asvillar/SURGE/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](./pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](./pyproject.toml)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![MLflow](https://img.shields.io/badge/MLflow-integrated-0194E2?logo=mlflow&logoColor=white)](docs/GETTING_STARTED.md)
 [![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
 [![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asvillar/SURGE/blob/release/0.1.0/examples/notebooks/surge_fusion_quickstart.ipynb)
 
 **Surrogate Unified Robust Generation Engine** — train, tune, evaluate, and
 export scientific surrogate models from a single declarative workflow.
 One YAML spec (or Python API) covers
 **load → schema → split → train → HPO → metrics → UQ → artifacts → figures**,
 with every run reproducible from its own `runs/<tag>/` directory.
+Built with and for the fusion energy sciences community — turbulent
+transport, stellarator equilibria, divertor exhaust and disruption
+databases lead the benchmark suite — on a pipeline that is domain-agnostic.
 
 **v0.1.0** · [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819) ·
 [DOI 10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
@@ -23,8 +27,7 @@ with every run reproducible from its own `runs/<tag>/` directory.
        width="900"/></picture>
 </p>
 <p align="center"><sub><em>The workflow by functionality — every thumbnail is a
-real SURGE output, regenerated from run artifacts
-(<code>python scripts/make_architecture_poster.py</code>).</em></sub></p>
+real SURGE output, regenerated from run artifacts.</em></sub></p>
 
 <p align="center">
   <img src="docs/assets/readme/surge_end_to_end.gif" width="900"
@@ -49,7 +52,8 @@ parity, and the leaderboard gaining models against the published gate.
   (**XGBoost / LightGBM / CatBoost**), **PyTorch** (MLP families,
   FNO / DeepONet / U-Net operator learners, LSTM/GRU,
   CNN/ResNet/ViT vision, KAN, FT-Transformer, VAE/DDPM/CGAN,
-  **Simformer** all-in-one simulation-based inference),
+  Simformer simulation-based inference), in-context tabular foundation
+  models (**TabPFN**, **NVIDIA Kumo Tabular**),
   **TensorFlow/Keras** (`keras.mlp`, or **bring your own compiled
   `tf.keras` model** via `build_fn`), and Gaussian processes with
   predictive uncertainty (sklearn GPR, BoTorch exact/sparse, GPflow).
@@ -79,6 +83,15 @@ parity, and the leaderboard gaining models against the published gate.
 SURGE ships a curated suite of 30+ benchmarks, each with a citation, a published pass threshold and mandatory baselines, and every run writes machine-readable `result.json` artifacts (repeated seeds, mean ± std, runtime). Not every benchmark is equally mature, so the ledger states per-benchmark status plainly.
 
 **[Full benchmark ledger with per-benchmark status → docs/benchmarks/README.md](docs/benchmarks/README.md)**
+
+The ledger documents 28 benchmark cards in five tiers (ready, in progress, needs rerun,
+tutorial, sanity); 21 are public in the HTML report and 7 stay hidden while their data
+pipeline or gate is still being established. Every card carries its data citation and
+the published state-of-the-art line it is scored against — the sources are collected in
+[References](#references) below. The fusion benchmarks are the point of the
+suite; the general tabular datasets (California housing, concrete strength,
+superconductor critical temperature, …) sit in the tutorial tier as pull-and-run
+demos for trying SURGE in a minute.
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/leaderboard.png"><img src="docs/assets/readme/leaderboard.png" width="820"
@@ -140,6 +153,66 @@ physics-informed inputs. Last closed flux surface rendered in 3D:
 surge bench -b constellaration_multi -m pytorch.residual_mlp --seeds 3
 ```
 
+**Divertor exhaust from a SOLPS-ITER scan — SOLPS-NN** (Dasbach & Wiesen 2023,
+[Zenodo 10.5281/zenodo.19237127](https://doi.org/10.5281/zenodo.19237127), CC BY 4.0).
+A conformally size-scaled JET single-null plasma, 5,756 converged
+fluid-neutral simulations on a Sobol design plus a 1,465-run random test
+design, eight machine and control parameters in: power into the SOL, peak
+heat flux and particle flux at the outer target out, and the full
+electron-temperature field on the $104\times 50$ B2 grid. The loader pulls
+only the members a task needs from the 17.6 GB archive by HTTP byte ranges
+(about 290 MB). The in-progress `plasma.solpsnn_exhaust_scalars` benchmark
+is the first SURGE task where an in-context tabular foundation model
+(`kumo.tabular_regressor`, NVIDIA Kumo Tabular, no training) beats the
+published tuned five-fold networks: **median relative error 9.3 % on the
+peak target heat flux against the published 13 %**, in 25 s on a laptop
+CPU; a tuned residual MLP reaches 18 %:
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/solpsnn_parity.png"><img src="docs/assets/readme/solpsnn_parity.png"
+       alt="SOLPS-NN exhaust scalars: Kumo Tabular in-context parity on the 1,465 random test simulations for P_SOL, peak target heat flux and target particle flux"/></picture>
+</p>
+
+The same record carries the plasma regimes a divertor surrogate has to
+span — sheath-limited, attached, detached and cold-core — which the
+electron-temperature atlas (relative to each case's upstream separatrix
+value) makes visible; the 2-D field task (`plasma.solpsnn_te_field`, hidden
+until its gate settles) scores a residual MLP at 11.7 % median relative
+error against the published 6.5 %:
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/solpsnn_atlas.png"><img src="docs/assets/readme/solpsnn_atlas.png" width="820"
+       alt="SOLPS-NN scenario atlas: five test cases per regime (sheath-limited, attached, detached, cold core) on the JET B2 grid, electron temperature relative to the upstream separatrix value"/></picture>
+</p>
+
+```bash
+surge bench -b plasma.solpsnn_exhaust_scalars -m kumo.tabular_regressor,pytorch.residual_mlp,sklearn.random_forest
+```
+
+**Density-limit precursor detection on Alcator C-Mod** — the MIT-PSFC Open
+Density Limit Database (Maris, Rea, Trevisan & the C-Mod team; CC BY;
+physics in Maris *et al.*, *Nucl. Fusion* 2024): 264,385 time slices from
+2,333 discharges on a 10 ms timebase, 78 of which enter the Greenwald
+density-limit precursor phase (1.4 % of slices). `plasma.cmod_density_limit`
+splits by discharge, keeps the natural imbalance and scores the way a
+disruption predictor is judged: AUROC and the true-positive rate at 1 % and
+5 % false-alarm rates. The physics baseline, the Greenwald fraction
+$n/n_G$ with $n_G = I_p/\pi a^2$, is scored on the same slices (**AUROC
+0.973**, 71 % of precursor slices caught at 1 % false alarms); a random
+forest on the six raw signals reaches **AUROC 0.9999** and catches every
+precursor slice at 1 % false alarms, gradient boosting 0.998. This is a
+state classifier for the precursor phase, not a forecast; a warning-time
+variant is the planned follow-up.
+
+<p align="center">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/cmod_roc.png"><img src="docs/assets/readme/cmod_roc.png" width="900"
+       alt="C-Mod density-limit precursor detection: ROC curves for logistic regression, gradient boosting and random forest against the Greenwald-fraction physics baseline, with the low-false-alarm zoom"/></picture>
+</p>
+
+```bash
+surge bench -b plasma.cmod_density_limit -m sklearn.logistic_regression,sklearn.random_forest_classifier,sklearn.gradient_boosting_classifier
+```
+
 **When chaos caps pointwise accuracy, forecast the distribution** — on the TheWell turbulent radiative layer (non-square 64×192 grid, log-density, Δt = 8) every neural operator beats persistence, but only modestly: **U-Net 0.250 vs persistence 0.355**
 ([`examples/thewell_turbulence_study.py`](examples/thewell_turbulence_study.py)).
 A 7-lever study (architecture, capacity, loss, features, …) showed this
@@ -156,6 +229,12 @@ is uncertain
        alt="Probabilistic turbulence forecasting: calibrated ensemble CRPS beats deterministic forecasts; spread-skill correlation 0.88; ensemble members fan out at the uncertain mixing interface"/></picture>
 </p>
 
+Operator-learning depth comes in steps: the inline 64-point Burgers task
+(`pde.burgers_1d`, a sanity-tier check where FNO1d reaches relative-L2 0.019
+and plain MLPs fail the 0.10 gate), then the PDEBench and TheWell fields
+(`pdebench.*`, `thewell.*`), registered and runnable but without a public
+ledger card in this release.
+
 **A 200-trial HPO campaign** — Optuna TPE over residual-MLP depth, per-block width, learning rate, batch size and dropout on the public QLKNN transport task (1 h 48 min on a laptop CPU). Best validation R² **0.977** (found at trial 134); the refit model reaches **test R² 0.974 vs 0.959** for the earlier 10-trial run. The same artifacts feed the one-look mission-control dashboard (all trial curves, convergence with the starred best, parameter sensitivity, test parity):
 
 <p align="center">
@@ -171,7 +250,7 @@ is uncertain
 python examples/viz_theme_gallery.py --only mission_control --hpo-run runs/qlknn_hpo_200_best
 ```
 
-**Uncertainty and inference** — GP surrogates carry calibrated credible bands that widen where data is absent (96% truth coverage), deep ensembles (`pytorch.mlp_ensemble`) give mean ± 2σ predictions with honest calibration, and the Simformer does simulation-based inference with one network:
+**Uncertainty and inference** — GP surrogates carry calibrated credible bands that widen where data is absent (96% truth coverage), deep ensembles (`pytorch.mlp_ensemble`) give mean ± 2σ predictions with honest calibration.
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/uncertainty.png"><img src="docs/assets/readme/uncertainty.png" width="520" alt="GP surrogate with 68/95% credible bands, 96% truth coverage"/></picture>
@@ -186,28 +265,6 @@ on a held-out split recovers near-Gaussian coverage:
        alt="Deep-ensemble UQ: mean ± 2 sigma parity, spread vs error, raw vs calibrated coverage"/></picture>
 </p>
 
-
-`pytorch.simformer` is an independent PyTorch implementation of the
-Simformer ([Gloeckler et al., ICML 2024](https://arxiv.org/abs/2404.09636)):
-one score-based transformer trained on the **joint** p(θ, x) of
-simulation parameters and observables. Because the condition mask is a
-model input, the same trained network samples the posterior p(θ|x), the
-likelihood p(x|θ), or **any conditional** — including inference with
-missing observables. Validated against the one SBI problem with a known
-closed-form posterior:
-
-<p align="center">
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/simformer_sbi.png"><img src="docs/assets/readme/simformer_sbi.png"
-       alt="Simformer validation: sampled posterior matches the analytic 1-and-2-sigma ellipses; the same network samples the likelihood and the joint"/></picture>
-</p>
-
-```python
-model = MODEL_REGISTRY.create("pytorch.simformer")
-model.fit(x, theta)                        # learns the joint p(theta, x)
-model.sample_posterior(x_obs, 1000)        # amortized Bayesian inversion
-model.sample_likelihood(theta_0, 1000)     # forward surrogate, same net
-model.predict_with_uncertainty(X)          # registry contract: mean, std
-```
 
 Regenerate everything above from your own runs — full gallery per
 problem type in [`docs/gallery.md`](docs/gallery.md):
@@ -227,7 +284,7 @@ import name: **`surge`**.
 With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git && cd SURGE
+git clone https://github.com/asvillar/SURGE.git && cd SURGE
 uv venv && source .venv/bin/activate
 uv pip install -e ".[torch,dev]"
 surge version && surge models
@@ -236,24 +293,34 @@ surge version && surge models
 With plain pip: `python3.11 -m venv .venv && source .venv/bin/activate &&
 pip install -e ".[torch,dev]"`.
 
-> PyPI release of `surge-ml` is prepared (`uv build` produces clean
-> artifacts — see [`docs/RELEASING.md`](docs/RELEASING.md)); until it is
-> published, install from the repository as above.
+**From PyPI** — no clone needed:
+
+```bash
+pip install surge-ml
+surge version && surge models
+```
 
 | Extra | Adds | Install |
 |-------|------|---------|
-| *(base)* | sklearn, pandas, Optuna, plotting | `pip install -e .` |
-| `torch` | PyTorch model families | `pip install -e ".[torch]"` |
-| `onnx` | ONNX export + runtime parity tests | `pip install -e ".[onnx]"` |
-| `benchmarks` | h5py, Optuna for the benchmark suite | `pip install -e ".[benchmarks]"` |
-| `tensorflow` | TF ≥ 2.21 + tf-keras → `keras.mlp` adapter | `pip install -e ".[tensorflow]"` |
-| `gpflow` | TF stack for GPflow GPs (then `pip install gpflow --no-deps`) | `pip install -e ".[gpflow]"` |
-| `shap` | SHAP feature importance (NumPy-2 compatible) | `pip install -e ".[shap]"` |
-| `dev` | pytest, ruff, h5py | `pip install -e ".[dev]"` |
+| *(base)* | sklearn, pandas, Optuna, plotting | `pip install surge-ml` |
+| `torch` | PyTorch model families | `pip install "surge-ml[torch]"` |
+| `onnx` | ONNX export + runtime parity tests | `pip install "surge-ml[onnx]"` |
+| `benchmarks` | h5py for the benchmark suite | `pip install "surge-ml[benchmarks]"` |
+| `tensorflow` | TF ≥ 2.21 + tf-keras → `keras.mlp` adapter | `pip install "surge-ml[tensorflow]"` |
+| `gpflow` | TF stack for GPflow GPs (then `pip install gpflow --no-deps`) | `pip install "surge-ml[gpflow]"` |
+| `shap` | SHAP feature importance (NumPy-2 compatible) | `pip install "surge-ml[shap]"` |
+| `kumo` | NVIDIA Kumo Tabular in-context models → `kumo.tabular_*` adapters | `pip install "surge-ml[kumo]"` |
+| `all` | torch + onnx + shap + mlflow + benchmarks + tensorflow (not gpflow — no-deps trap) | `pip install "surge-ml[all]"` |
+| `dev` | pytest, ruff, h5py | `pip install "surge-ml[dev]"` |
 
 ---
 
 ## Try it — copy-paste examples
+
+No install? The [fusion quickstart notebook](examples/notebooks/surge_fusion_quickstart.ipynb)
+replays the end-to-end video on QLKNN transport — ingest, an Optuna HPO campaign with the
+mission-control dashboard, leaderboard, report, deploy — then runs SOLPS-NN divertor exhaust
+with an in-context foundation model, all inside Google Colab.
 
 All runs write artifacts to `runs/<tag>/` (`metrics.json`, trained models,
 scalers, predictions, spec snapshot).
@@ -283,16 +350,25 @@ python -c "import json; print(json.load(open('runs/diabetes_rf/metrics.json'))['
 python -m examples.quickstart --dataset california --model mlp --n-trials 5 --infer
 ```
 
-### 3 · Scientific case — QLKNN plasma transport, two models, HPO
+### 3 · Scientific case — QLKNN plasma transport with HPO, monitoring and the dashboard
 
-Predict **electron ITG heat flux** (`efeITG`) from 10 gyrokinetic inputs;
-one workflow trains **Random Forest + Residual MLP**, each with its own
-Optuna search (first run generates the dataset via `fusion_surrogates`):
+Predict **electron ITG heat flux** (`efeITG`) from 10 gyrokinetic inputs.
+Everything below is the installed CLI; the dataset is generated once from the
+published QLKNN network via `fusion_surrogates`:
 
 ```bash
-pip install fusion_surrogates
-python examples/qlknn_multi_hpo_workflow.py --hpo-trials 10 --overwrite
+pip install "surge-ml[torch]" fusion_surrogates
+surge data export plasma.qlknn_transport qlknn.csv          # 7,475 rows x 10 inputs + efeITG
+surge init --data qlknn.csv --target efeITG --goal accuracy --budget standard --yes --out qlknn.yaml
+surge run qlknn.yaml                                        # RF + residual MLP, 10-trial Optuna search
+surge monitor runs/qlknn --watch 30                         # second terminal: trials, epochs, best so far
+surge viz runs/qlknn --units gB                             # mission control, HPO, training, parity
+surge bench -b plasma.qlknn_transport -m all --seeds 3      # leaderboard against the published gate
+surge report --out leaderboard.html
 ```
+
+`--budget thorough` runs 40 trials (the README figures come from a 200-trial
+campaign); `surge init` without `--yes` asks the same questions interactively.
 
 ### 4 · Mix backends in one spec — sklearn vs PyTorch vs Keras
 
@@ -399,11 +475,17 @@ Gallery of every figure type: `python examples/viz_theme_gallery.py`.
 
 ## Run monitoring — mission control
 
-Every HPO campaign leaves machine-readable artifacts, and the gallery renders them as a one-look dashboard (figure in [Highlights](#highlights)):
+Every campaign leaves machine-readable artifacts in `runs/<tag>/`: the trial
+manifest, per-trial training histories, metrics, predictions and model cards.
+Two CLI verbs read them:
 
 ```bash
-python examples/viz_theme_gallery.py --only mission_control --hpo-run runs/qlknn_hpo_200_best
+surge monitor runs/qlknn --watch 30      # live text status: trials, epochs, best so far, final metrics
+surge viz runs/qlknn --modes light dark  # mission control, HPO convergence, training curves, parity
 ```
+
+The mission-control dashboard (figure in [Highlights](#highlights)) is the
+`surge viz` output for the 200-trial campaign.
 
 ## Experiment tracking (MLflow)
 
@@ -459,26 +541,8 @@ Device selection is deliberately conservative: the default stays
 cuda→cpu, and the Apple GPU is **opt-in** (`SURGE_DEVICE=auto`) because
 not every architecture is MPS-safe — convolutional and spectral models
 are (identical R² to CPU), recurrent models are not. The safety table
-lives in [`docs/design/RESOURCE_MANAGEMENT.md`](docs/design/RESOURCE_MANAGEMENT.md),
+lives in,
 with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
-
-## Agentic workflows (Claude Code skills)
-
-The repo ships seven skills under [`.claude/skills/`](.claude/skills) that
-teach an AI assistant to drive SURGE correctly — spec conventions, the
-figure system, benchmark protocols:
-
-| Skill | What it does |
-|---|---|
-| `surge-wizard` | Q&A → generates a commented `spec.yaml` from your data file and runs it — no YAML by hand |
-| `surge-scale` | device selection (MPS safety table), `--parallel` budgeting, long-run monitoring |
-| `surge-build-surrogate` | end-to-end playbook: characterize → pick models by task shape → HPO → report |
-| `surge-run` / `surge-benchmark` | run workflows / reproduce leaderboard numbers |
-| `surge-viz` / `surge-add-model` | figure-system rules / add a new model adapter end-to-end |
-
-Example: point Claude Code at this repo, type `/surge-wizard` with any
-CSV, answer three questions (target column, goal, time budget), and it
-writes the spec, trains, and reports test metrics against a baseline.
 
 ## Documentation
 
@@ -486,11 +550,11 @@ writes the spec, trains, and reports test metrics against a baseline.
 |-------|------|
 | **Getting started (one page)** | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
 | Build your own surrogate | [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md) |
-| First-run walkthrough (HPC) | [`docs/setup/WALKTHROUGH.md`](docs/setup/WALKTHROUGH.md) |
 | Install reference | [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) |
 | Codebase tour | [`docs/SURGE_OVERVIEW.md`](docs/SURGE_OVERVIEW.md) |
-| Benchmark definitions & citations | [`docs/BENCHMARK_VERIFICATION_BRIEF.md`](docs/BENCHMARK_VERIFICATION_BRIEF.md) |
-| Architecture roadmap | [`docs/design/ARCHITECTURE_RECOMMENDATIONS.md`](docs/design/ARCHITECTURE_RECOMMENDATIONS.md) |
+| Benchmark definitions & citations | [ledger](docs/benchmarks/README.md), [`surge/benchmarks/metadata.yaml`](surge/benchmarks/metadata.yaml), [References](#references) |
+| Release notes | [`CHANGELOG.md`](CHANGELOG.md), [`docs/RELEASING.md`](docs/RELEASING.md) |
+| Colab notebook | [`examples/notebooks/surge_fusion_quickstart.ipynb`](examples/notebooks/surge_fusion_quickstart.ipynb) |
 | Doc index | [`docs/README.md`](docs/README.md) |
 
 ## SURGE in publications
@@ -508,6 +572,92 @@ surrogate-modeling work by the SURGE authors:
 Software citation: [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819),
 DOI [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5),
 [`CITATION.cff`](CITATION.cff).
+
+---
+
+## References
+
+Data sources and methods behind the benchmarks and model adapters. Each
+benchmark card in the [ledger](docs/benchmarks/README.md) names the entry it
+scores against; adapters list their references under `surge models --verbose`.
+
+**Fusion and plasma data**
+
+- K. L. van de Plassche *et al.*, Fast modeling of turbulent transport in fusion
+  plasmas using neural networks, *Phys. Plasmas* **27**, 022310 (2020),
+  [doi:10.1063/1.5134126](https://doi.org/10.1063/1.5134126); QLKNN10D training
+  table, Zenodo [10.5281/zenodo.3497066](https://doi.org/10.5281/zenodo.3497066)
+  — `plasma.qlknn10d`, `plasma.qlknn_transport`.
+- S. Cadena *et al.*, ConStellaration: a dataset of QI-like stellarator plasma
+  boundaries and optimization benchmarks, [arXiv:2506.19583](https://arxiv.org/abs/2506.19583)
+  (2025); S. P. Hirshman and J. C. Whitson, VMEC, *Phys. Fluids* **26**, 3553 (1983)
+  — `plasma.constellaration_*`.
+- M. Greenwald, Density limits in toroidal plasmas, *Plasma Phys. Control. Fusion*
+  **44**, R27 (2002) — `plasma.cmod_density_limit`.
+
+**Tabular, vision and operator-learning data**
+
+- R. K. Pace and R. Barry, Sparse spatial autoregressions, *Stat. Probab. Lett.*
+  **33**, 291 (1997) — `tabular.california_housing`.
+- I.-C. Yeh, Modeling of strength of high-performance concrete using artificial
+  neural networks, *Cem. Concr. Res.* **28**, 1797 (1998) — `tabular.concrete_strength`.
+- A. Tsanas and A. Xifara, Accurate quantitative estimation of energy performance
+  of residential buildings, *Energy Build.* **49**, 560 (2012) — `tabular.energy_efficiency`.
+- T. F. Brooks, D. S. Pope and M. A. Marcolini, Airfoil self-noise and prediction,
+  NASA (1989) — `tabular.airfoil_noise`.
+- K. Hamidieh, A data-driven statistical model for predicting the critical
+  temperature of a superconductor, *Comput. Mater. Sci.* **154**, 346 (2018)
+  — `tabular.superconductor`.
+- L. Grinsztajn, E. Oyallon and G. Varoquaux, Why do tree-based models still
+  outperform deep learning on typical tabular data?, NeurIPS 2022,
+  [arXiv:2207.08815](https://arxiv.org/abs/2207.08815) — CTR-23 thresholds.
+- Y. LeCun, L. Bottou, Y. Bengio and P. Haffner, Gradient-based learning applied
+  to document recognition, *Proc. IEEE* **86**, 2278 (1998) — `vision.mnist`;
+  A. Krizhevsky, Learning multiple layers of features from tiny images (2009)
+  — `vision.cifar10`.
+- M. Takamoto *et al.*, PDEBench: an extensive benchmark for scientific machine
+  learning, NeurIPS 2022, [arXiv:2210.07182](https://arxiv.org/abs/2210.07182)
+  — `pdebench.*`; R. Ohana *et al.*, The Well: a large-scale collection of diverse
+  physics simulations, NeurIPS 2024, [arXiv:2412.00568](https://arxiv.org/abs/2412.00568)
+  — `thewell.*`.
+- E. N. Lorenz, Deterministic nonperiodic flow, *J. Atmos. Sci.* **20**, 130 (1963)
+  — `sequence.lorenz63`.
+
+**Model architectures**
+
+- Z. Li *et al.*, Fourier neural operator for parametric partial differential
+  equations, ICLR 2021, [arXiv:2010.08895](https://arxiv.org/abs/2010.08895) — `pytorch.fno1d/2d`.
+- L. Lu, P. Jin, G. Pang, Z. Zhang and G. E. Karniadakis, Learning nonlinear
+  operators via DeepONet, *Nat. Mach. Intell.* **3**, 218 (2021) — `pytorch.deeponet`.
+- K. He, X. Zhang, S. Ren and J. Sun, Deep residual learning for image recognition,
+  CVPR 2016, [arXiv:1512.03385](https://arxiv.org/abs/1512.03385) — `pytorch.resnet*`,
+  `pytorch.residual_mlp`.
+- A. Dosovitskiy *et al.*, An image is worth 16×16 words, ICLR 2021,
+  [arXiv:2010.11929](https://arxiv.org/abs/2010.11929) — `pytorch.vit`.
+- M. Oquab *et al.*, DINOv2: learning robust visual features without supervision,
+  [arXiv:2304.07193](https://arxiv.org/abs/2304.07193) (2023) — `pytorch.dino_linear_probe`.
+- O. Ronneberger, P. Fischer and T. Brox, U-Net, MICCAI 2015,
+  [arXiv:1505.04597](https://arxiv.org/abs/1505.04597) — `pytorch.unet`.
+- J. Ho, A. Jain and P. Abbeel, Denoising diffusion probabilistic models, NeurIPS
+  2020, [arXiv:2006.11239](https://arxiv.org/abs/2006.11239) — `pytorch.ddpm`;
+  M. Mirza and S. Osindero, Conditional generative adversarial nets,
+  [arXiv:1411.1784](https://arxiv.org/abs/1411.1784) (2014) — `pytorch.cgan`;
+  D. P. Kingma and M. Welling, Auto-encoding variational Bayes, ICLR 2014,
+  [arXiv:1312.6114](https://arxiv.org/abs/1312.6114) — `pytorch.vae`.
+- B. Lakshminarayanan, A. Pritzel and C. Blundell, Simple and scalable predictive
+  uncertainty estimation using deep ensembles, NeurIPS 2017,
+  [arXiv:1612.01474](https://arxiv.org/abs/1612.01474) — ensemble uncertainty.
+- N. Hollmann *et al.*, Accurate predictions on small data with a tabular
+  foundation model, *Nature* **637**, 319 (2025) — `tabpfn.*`.
+
+**Software**
+
+- F. Pedregosa *et al.*, Scikit-learn: machine learning in Python, *JMLR* **12**,
+  2825 (2011); A. Paszke *et al.*, PyTorch, NeurIPS 2019; T. Chen and C. Guestrin,
+  XGBoost, KDD 2016; G. Ke *et al.*, LightGBM, NeurIPS 2017; A. G. de G. Matthews
+  *et al.*, GPflow, *JMLR* **18**, 1 (2017); T. Akiba *et al.*, Optuna, KDD 2019;
+  S. M. Lundberg and S.-I. Lee, A unified approach to interpreting model
+  predictions (SHAP), NeurIPS 2017.
 
 ---
 

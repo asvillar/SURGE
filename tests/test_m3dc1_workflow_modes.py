@@ -13,6 +13,22 @@ import pytest
 from surge.workflow.run import run_surrogate_workflow
 from surge.workflow.spec import SurrogateWorkflowSpec
 
+# The M3D-C1 HDF5 readers are facility-specific and not part of the public
+# tree; these tests only run where they are available (SURGE_M3DC1_SCRIPTS or
+# an ignored scripts/m3dc1/ checkout).
+def _m3dc1_readers_available() -> bool:
+    try:
+        from surge.datasets.m3dc1 import _get_m3dc1_loaders
+        _get_m3dc1_loaders()
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(not _m3dc1_readers_available(),
+                                reason="facility-specific M3D-C1 readers not available")
+
+
 
 # ---------------------------------------------------------------------------
 # Fixtures: fake M3DC1 batch dir with minimal complex_v2 HDF5

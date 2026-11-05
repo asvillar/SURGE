@@ -98,10 +98,13 @@ def _print_list(
     task_type: str | None = None,
     include_smoke: bool = False,
     tier: str | None = None,
+    only_keys: list[str] | None = None,
 ) -> None:
     keys = list_benchmarks(
         category=category, task_type=task_type, include_smoke=include_smoke, tier=tier
     )
+    if only_keys is not None:
+        keys = [k for k in keys if k in set(only_keys)]
     if not keys:
         print("No benchmarks match the specified filters.")
         return
@@ -164,11 +167,12 @@ def _print_list_models() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _persist(result, *, save_root: Path | None, no_save: bool) -> Path | None:
+def _persist(result, *, save_root: Path | None, no_save: bool,
+             no_predictions: bool = False) -> Path | None:
     if no_save or save_root is None:
         return None
     try:
-        path = result.save(root=save_root)
+        path = result.save(root=save_root, predictions=not no_predictions)
         print(f"       Saved  → {path}", file=sys.stderr)
         return path
     except Exception as exc:
@@ -316,6 +320,8 @@ def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
                "--save-dir", str(args.save_dir)]
         if args.use_hpo_cache:
             cmd.append("--use-hpo-cache")
+        if args.no_predictions:
+            cmd.append("--no-predictions")
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
         # exit 1 = ran but below the pass gate; still a completed job
         if proc.returncode in (0, 1):
@@ -447,6 +453,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="Render the per-benchmark status ledger (metadata.yaml + newest "
                          "results under --save-dir) to PATH "
                          "(default docs/benchmarks/README.md) and exit.")
+    ap.add_argument("--apply-selection", metavar="PATH.json", default=None,
+                    help="Apply a maintainer selection JSON ({'benchmarks':[{key,show,push,note}]}) "
+                         "to metadata.yaml (visible / focus / focus_note) and exit.")
     ap.add_argument("--list-models", action="store_true",
                     help="Print all models available in MODEL_REGISTRY and exit.")
     ap.add_argument(
@@ -471,6 +480,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="Root directory for auto-saved results. Default: benchmark_reports/")
     ap.add_argument("--no-save", action="store_true",
                     help="Disable automatic result saving.")
+    ap.add_argument("--no-predictions", action="store_true",
+                    help="Do not write predictions.npz (held-out y_true/y_pred) "
+                         "next to result.json.")
 
     # ── MLflow ────────────────────────────────────────────────────────────────
     ap.add_argument("--mlflow", action="store_true",
@@ -484,6 +496,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tier", metavar="TIER", help=argparse.SUPPRESS)
 
     args = ap.parse_args(argv)
+    # `-m a,b,c` is what people type; treat it as --compare-models.
+    if args.model and "," in args.model and not args.compare_models:
+        args.compare_models = args.model
+        args.model = None
+
+    if args.apply_selection:
+        from surge.benchmarks.status import apply_selection
+        res = apply_selection(Path(args.apply_selection))
+        print(f"Selection applied: {res['visible']} visible, {res['focus']} focus"
+              + (f", {len(res['unknown'])} unknown key(s) ignored" if res["unknown"] else ""))
+        return 0
 
     if args.status_md is not None:
         from surge.benchmarks.status import write_status_md
@@ -544,6 +567,7 @@ def main(argv: list[str] | None = None) -> int:
             n_trials=args.hpo_trials, seed=args.seed,
             metric=args.hpo_metric, n_epochs_cap=args.hpo_epochs_cap,
             save_root=None if args.no_save else args.save_dir,
+            save_predictions=not args.no_predictions,
             verbose=args.verbose,
             mlflow_experiment=args.mlflow_experiment if args.mlflow else None,
             mlflow_tracking_uri=args.mlflow_tracking_uri if args.mlflow else None,
@@ -621,6 +645,7 @@ def main(argv: list[str] | None = None) -> int:
             n_seeds=args.seeds,
             save_root=None if args.no_save else args.save_dir,
             use_hpo_cache=args.use_hpo_cache,
+            save_predictions=not args.no_predictions,
         )
 
         print_leaderboard(lb_results)
@@ -672,7 +697,8 @@ def main(argv: list[str] | None = None) -> int:
                 r = run_benchmark(k, seed=args.seed, model_key=args.model)
                 results.append(r)
                 _print_result_banner(r)
-                rp = _persist(r, save_root=args.save_dir, no_save=args.no_save)
+                rp = _persist(r, save_root=args.save_dir, no_save=args.no_save,
+                     no_predictions=args.no_predictions)
                 if args.mlflow:
                     _mlflow_log(r, result_path=rp,
                                 experiment=args.mlflow_experiment,
@@ -709,7 +735,8 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 r = run_benchmark(bk, seed=args.seed, model_key=args.model)
                 _print_result_banner(r)
-                _persist(r, save_root=args.save_dir, no_save=args.no_save)
+                _persist(r, save_root=args.save_dir, no_save=args.no_save,
+                     no_predictions=args.no_predictions)
                 results.append(r)
                 if not r.passed:
                     any_failed = True
@@ -738,7 +765,12 @@ def main(argv: list[str] | None = None) -> int:
         if (_monitor_kwargs or args.input_features) and args.model:
             from .leaderboard import _run_with_adapter
             from surge.model.registry import MODEL_REGISTRY
-            adapter = MODEL_REGISTRY.create(args.model, **_monitor_kwargs)
+            from surge.benchmarks.leaderboard import BENCH_MODEL_DEFAULTS
+            _bench_defaults = BENCH_MODEL_DEFAULTS.get(single_bm_key, {}).get(args.model, {})
+            if _bench_defaults:
+                print(f"  [defaults] {single_bm_key}: applying benchmark model defaults "
+                      f"{_bench_defaults} (override by key=value args)")
+            adapter = MODEL_REGISTRY.create(args.model, **{**_bench_defaults, **_monitor_kwargs})
             result = _run_with_adapter(
                 single_bm_key, adapter, seed=args.seed, input_features=args.input_features
             )
@@ -752,7 +784,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     _print_result_banner(result)
-    rp = _persist(result, save_root=args.save_dir, no_save=args.no_save)
+    rp = _persist(result, save_root=args.save_dir, no_save=args.no_save,
+         no_predictions=args.no_predictions)
 
     if args.mlflow:
         _mlflow_log(result, result_path=rp,

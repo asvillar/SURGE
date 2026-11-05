@@ -148,3 +148,30 @@ def test_init_bad_target_errors(csv_file: Path, tmp_path: Path):
 
     assert wizard_main(["--data", str(csv_file), "--target", "nope",
                         "--out", str(tmp_path / "s.yaml"), "--yes"]) == 2
+
+
+def test_wizard_pins_inputs_and_outputs(tmp_path: Path):
+    """A wide numeric table must not let the run-time heuristic reassign the
+    target: the spec carries explicit metadata_overrides."""
+    import importlib.util
+    import numpy as np
+    import pandas as pd
+    import yaml
+    from surge.wizard import main as wizard_main
+
+    rng = np.random.default_rng(0)
+    cols = [f"p{i}" for i in range(10)]
+    df = pd.DataFrame(rng.normal(size=(300, 10)), columns=cols)
+    df["flux"] = df[cols[:3]].sum(axis=1)
+    csv_file = tmp_path / "wide.csv"
+    df.to_csv(csv_file, index=False)
+    out = tmp_path / "spec.yaml"
+    rc = wizard_main(["--data", str(csv_file), "--target", "flux", "--goal", "accuracy",
+                      "--budget", "standard", "--yes", "--out", str(out)])
+    assert rc == 0
+    spec = yaml.safe_load(out.read_text())
+    assert spec["metadata_overrides"]["outputs"] == ["flux"]
+    assert spec["metadata_overrides"]["inputs"] == cols
+    hpo_blocks = [m["hpo"] for m in spec["models"] if "hpo" in m]
+    if importlib.util.find_spec("torch") is not None:   # headline model needs torch
+        assert hpo_blocks and hpo_blocks[0]["n_trials"] == 10

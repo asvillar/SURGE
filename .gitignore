@@ -248,6 +248,7 @@ nohup.out
 
 # Cached HuggingFace / processed plasma datasets (large, re-downloadable)
 data/datasets/constellaration/
+data/datasets/solpsnn/
 
 # Benchmark runtime data cache (downloaded or generated on first run).
 # Directory skeleton (subdirs + .gitkeep files) IS tracked; data files are not.
@@ -357,3 +358,19 @@ docs/api_reference/generated/
 /surge/models/
 examples/viz_gallery_output/
 dist_test/
+
+# AI-assistant working files and internal planning notes stay local (never
+# part of the public tree); internal/ already holds the archived material.
+/.claude/
+/CLAUDE.md
+/*_PLAN.md
+/docs/plan.md
+/docs/status.md
+/docs/agents/
+/docs/smart/
+/docs/design/
+/docs/dev/
+/scripts/m3dc1/
+/scripts/datagen/
+/scripts/hpc/
+/templates/

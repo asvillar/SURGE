@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.1.0rc1"
+__version__ = "0.1.0"
 __author__ = "Álvaro Sánchez Villar"
 
 from .metrics import summarize
@@ -47,9 +47,9 @@ try:
 except ImportError:
     DATASET_UTILS_AVAILABLE = False
 
-# M3DC1 HDF5 loaders live in scripts/m3dc1/loader.py and are NOT part of
-# the installable wheel: they are application-specific HDF5 readers that
-# depend on the scripts/m3dc1 tree alongside a working SURGE checkout.
+# M3D-C1 HDF5 loaders are facility-specific and are NOT part of the
+# installable wheel or the public tree (see surge.datasets.m3dc1 and the
+# SURGE_M3DC1_SCRIPTS environment variable).
 # `M3DC1Dataset` (exported below) imports them lazily when a dataset is
 # actually constructed, so pip-installed users get a clean `import surge`
 # and a clear ImportError only if they try to use the M3DC1 loader
@@ -93,8 +93,8 @@ if DATASET_UTILS_AVAILABLE:
         "print_validation_report",
     ])
 
-# M3DC1 HDF5 loader functions are intentionally NOT exported: they are
-# application-specific and live under scripts/m3dc1/. Use `M3DC1Dataset`
+# M3D-C1 HDF5 loader functions are intentionally NOT exported: they are
+# facility-specific (SURGE_M3DC1_SCRIPTS). Use `M3DC1Dataset`
 # from `surge.datasets.m3dc1` (exported below) which imports them lazily.
 
 # Print availability status when package is imported

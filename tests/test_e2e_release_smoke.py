@@ -2,7 +2,7 @@
 """
 End-to-end release smoke test.
 
-This is the CI regression referenced by docs/RELEASE_DEMO_PLAN.md and the
+This is the CI regression referenced by docs/RELEASING.md and the
 ``e2e-regression`` job in ``.github/workflows/ci.yml``. It exercises the full
 public path a first-time user is supposed to touch:
 

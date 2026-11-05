@@ -11,6 +11,8 @@ from pathlib import Path
 
 from surge.report.leaderboard import load_metadata
 
+from . import paths
+
 STATUS_ORDER = ("ready", "in_progress", "needs_rerun", "tutorial", "sanity")
 STATUS_TITLES = {
     "ready": "Ready",
@@ -26,15 +28,94 @@ STATUS_DOC = {
     "tutorial": "small or self-referential dataset; checks plumbing, not scientific capability.",
     "sanity": "too easy as posed or measuring a proxy; not a surrogate result.",
 }
+# Order matters: the first key present is the ledger's headline number, so
+# gated field metrics (relative L2) come before the generic R2.
 _PRIMARY = (
-    "test_r2_equilibrium_mean", "test_r2", "test_r2_mean", "test_accuracy",
-    "test_rel_l2", "test_nrmse", "test_nrmse_mean")
-_LOWER_IS_BETTER = ("test_rel_l2", "test_nrmse", "test_nrmse_mean", "test_rmse")
+    "test_vpt_median", "test_median_rel_err", "test_r2_equilibrium_mean", "test_relative_l2",
+    "test_r2", "test_r2_mean", "test_accuracy", "test_rel_l2", "test_nrmse", "test_nrmse_mean")
+_LOWER_IS_BETTER = ("test_median_rel_err", "test_relative_l2", "test_relative_l2_mean", "test_rel_l2",
+                    "test_nrmse", "test_nrmse_mean", "test_rmse")
+
+
+def _primary_for(card: dict | None) -> tuple[str, ...]:
+    """Headline-metric search order: the card's ``primary_metric`` (when it names a
+    ``test_*`` result key) first, then the global order."""
+    pm = (card or {}).get("primary_metric")
+    if isinstance(pm, str) and pm.startswith("test_"):
+        return (pm,) + tuple(k for k in _PRIMARY if k != pm)
+    return _PRIMARY
 
 
 def _is_lower_better(metric_key: str) -> bool:
     return metric_key in _LOWER_IS_BETTER
-DEFAULT_OUT = Path("docs/benchmarks/README.md")
+_repo_root = paths.repo_root()
+DEFAULT_OUT = (_repo_root / "docs" / "benchmarks" / "README.md"
+               if _repo_root is not None else Path("benchmarks_status.md"))
+_SEL_FIELDS = ("visible", "focus", "focus_note")
+
+
+def is_visible(meta: dict) -> bool:
+    return meta.get("visible", True) is not False
+
+
+def is_focus(meta: dict) -> bool:
+    return meta.get("focus", False) is True
+
+
+def focus_lines(meta: dict[str, dict]) -> list[str]:
+    """Markdown bullets for visible focus benchmarks (empty if none)."""
+    out = []
+    for k in sorted(meta):
+        m = meta[k]
+        if is_focus(m) and is_visible(m):
+            note = m.get("focus_note")
+            out.append(f"- `{k}`" + (f": {note}" if note else ""))
+    return out
+
+
+def apply_selection(selection_path: Path, metadata_path: Path | None = None) -> dict:
+    """Set ``visible`` / ``focus`` / ``focus_note`` in metadata.yaml from a picker JSON.
+
+    Input: ``{"benchmarks": [{"key", "show", "push", "note"}]}``. The YAML is
+    edited textually (only those three keys inside matching entries), so
+    comments, order and formatting elsewhere are preserved. Unknown keys warn.
+    Returns ``{"visible": n, "focus": n, "unknown": [...]}``.
+    """
+    import re
+    import sys
+
+    path = Path(metadata_path) if metadata_path else (
+        Path(__file__).resolve().parent / "metadata.yaml")
+    sel = json.loads(Path(selection_path).read_text(encoding="utf-8"))
+    rows = {b["key"]: b for b in sel.get("benchmarks", []) if "key" in b}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    starts = [i for i, ln in enumerate(lines) if re.match(r"- key:\s*", ln)]
+    ends = starts[1:] + [len(lines)]
+    known = {lines[i].split(":", 1)[1].strip().strip("'\""): (i, e)
+             for i, e in zip(starts, ends)}
+    unknown = [k for k in rows if k not in known]
+    for k in unknown:
+        print(f"warning: unknown benchmark key in selection: {k}", file=sys.stderr)
+    # edit bottom-up so indices stay valid
+    for k, (a, b) in sorted(known.items(), key=lambda kv: -kv[1][0]):
+        if k not in rows:
+            continue
+        row = rows[k]
+        body = [ln for ln in lines[a:b]
+                if not re.match(r"  (visible|focus|focus_note):", ln)]
+        while body and not body[-1].strip():
+            body.pop()
+        new = [f"  visible: {'true' if row.get('show', True) else 'false'}",
+               f"  focus: {'true' if row.get('push', False) else 'false'}"]
+        note = (row.get("note") or "").strip()
+        if note:
+            new.append(f"  focus_note: {json.dumps(note, ensure_ascii=False)}")
+        lines[a:b] = body + new
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    meta = load_metadata(path)
+    return {"visible": sum(is_visible(m) for m in meta.values()),
+            "focus": sum(is_focus(m) for m in meta.values()),
+            "unknown": unknown}
 
 
 def _ts(d: dict, path: Path) -> str:
@@ -57,18 +138,25 @@ def _parse_ts(ts: str):
     return None
 
 
-def _newest_results(reports_dir: Path) -> dict[str, dict]:
-    """benchmark_key -> best model of the NEWEST SWEEP.
+def newest_run_per_model(runs: list[dict], definition_date: str | None = None) -> list[dict]:
+    """For a list of result dicts (any models), keep each model's newest run,
+    dropping runs dated before ``definition_date`` (ISO ``YYYY-MM-DD``)."""
+    best: dict[str, dict] = {}
+    for r in runs:
+        ts = str(r.get("_ts") or r.get("timestamp") or "")
+        if definition_date and ts[:10] < str(definition_date)[:10]:
+            continue
+        m = str(r.get("model_key"))
+        if m not in best or ts > str(best[m].get("_ts") or best[m].get("timestamp") or ""):
+            best[m] = r
+    return list(best.values())
 
-    A sweep is the newest result plus every result within
-    ``SWEEP_WINDOW_HOURS`` before it (``surge bench -m all`` writes one
-    ``result.json`` per model, seconds apart). Within that sweep the best
-    score wins; runs older than the window are ignored even if better, so
-    a benchmark whose definition changed (e.g. a re-scope of its targets)
-    is reported by its current definition only.
-    """
-    from datetime import timedelta
 
+def _newest_results(reports_dir: Path, meta: dict | None = None) -> dict[str, dict]:
+    """benchmark_key -> best model among each model's NEWEST run, ignoring runs
+    dated before the benchmark's ``definition_date`` (metadata). A one-model
+    rerun therefore never hides an older full sweep, while a re-scoped
+    benchmark reports its current definition only."""
     runs: dict[str, list[dict]] = {}
     for rj in sorted(reports_dir.glob("*/*/result.json")):
         try:
@@ -79,12 +167,11 @@ def _newest_results(reports_dir: Path) -> dict[str, dict]:
         if not key:
             continue
         d["_ts"] = _ts(d, rj)
-        d["_dt"] = _parse_ts(d["_ts"])
         runs.setdefault(key, []).append(d)
 
-    def score(r):
+    def score(r, order=_PRIMARY):
         m = r.get("metrics") or {}
-        for k in _PRIMARY:
+        for k in order:
             if isinstance(m.get(k), (int, float)):
                 v = float(m[k])
                 return -v if _is_lower_better(k) else v
@@ -92,23 +179,32 @@ def _newest_results(reports_dir: Path) -> dict[str, dict]:
 
     out: dict[str, dict] = {}
     for key, rs in runs.items():
-        newest = max(rs, key=lambda r: (r["_dt"] or _parse_ts("1970-01-01"), r["_ts"]))
-        if newest["_dt"] is None:
-            cand = [r for r in rs if r["_ts"][:10] == newest["_ts"][:10]]
-        else:
-            lo = newest["_dt"] - timedelta(hours=SWEEP_WINDOW_HOURS)
-            cand = [r for r in rs if r["_dt"] is not None and lo <= r["_dt"] <= newest["_dt"]]
-        out[key] = max(cand, key=lambda r: (score(r), r["_ts"]))
+        ddate = (meta or {}).get(key, {}).get("definition_date")
+        cand = newest_run_per_model(rs, ddate)
+        if not cand:  # every run predates the definition: no current result
+            continue
+        order = _primary_for((meta or {}).get(key))
+        out[key] = max(cand, key=lambda r: (score(r, order), r["_ts"]))
     return out
 
 
-def _fmt_result(r: dict | None) -> str:
+def _fmt_result(r: dict | None, definition_date: str | None = None,
+                card: dict | None = None) -> str:
     if not r:
-        return "no result on file"
+        return (f"no run since {definition_date}" if definition_date
+                else "no result on file")
     m = r.get("metrics") or {}
-    for k in _PRIMARY:
+    for k in _primary_for(card):
         if isinstance(m.get(k), (int, float)):
             val = f"{k.removeprefix('test_')} {float(m[k]):.3f}"
+            if k == "test_vpt_median":
+                val = f"vpt {float(m[k]):.3f} λ"
+            elif k == "test_median_rel_err":
+                val = f"median rel. err. {100 * float(m[k]):.1f} %"
+            elif k == "test_auroc":
+                val = f"AUROC {float(m[k]):.4f}"
+            elif k == "test_relative_l2":
+                val = f"rel-L2 {float(m[k]):.3f}"
             break
     else:
         val = "n/a"
@@ -124,13 +220,22 @@ def _source(meta: dict, r: dict | None) -> str:
     return f"{src}; {lic}" if lic else str(src)
 
 
+def _sota_cell(meta: dict) -> str:
+    """Published state-of-the-art value + protocol flag (same / diff / ?), or an em dash."""
+    sota = meta.get("sota")
+    if not isinstance(sota, dict) or sota.get("value") is None:
+        return "—"
+    flag = {"same": "same", "different": "diff"}.get(sota.get("protocol_match"), "?")
+    return f"{sota['value']:g} {sota.get('metric') or ''} [{flag}]".replace("  ", " ")
+
+
 def _cell(s) -> str:
     return str(s).replace("|", "\\|").replace("\n", " ")
 
 
 def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> str:
     meta = load_metadata(metadata_path)
-    results = _newest_results(Path(reports_dir))
+    results = _newest_results(Path(reports_dir), meta)
     lines = [
         "# SURGE benchmark ledger",
         "",
@@ -145,20 +250,25 @@ def render_status_md(reports_dir: Path, metadata_path: Path | None = None) -> st
         "",
     ]
     lines += [f"- **{STATUS_TITLES[s]}** (`{s}`): {STATUS_DOC[s]}" for s in STATUS_ORDER]
-    lines += ["", "The on-file result is the best model of the newest sweep (runs within 3 h of the newest one); older runs are ignored even if better; "
+    lines += ["", "The on-file result is the best of each model's newest run on or after the benchmark's definition date (older runs are ignored even if better); "
               "a green check/cross reflects the benchmark gate at that run."]
+    focus = focus_lines(meta)
+    if focus:
+        lines += ["", "## Focus", ""] + focus
     for st in STATUS_ORDER:
         keys = sorted(k for k, m in meta.items() if (m.get("status") or "tutorial") == st)
         lines += ["", f"## {STATUS_TITLES[st]}", ""]
         if not keys:
             lines.append("_None._")
             continue
-        lines += ["| benchmark | task shape | data source + license | best on-file result (model, date) | gate | note |",
-                  "|---|---|---|---|---|---|"]
+        lines += ["| benchmark | task shape | discipline | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
         for k in keys:
             m, r = meta[k], results.get(k)
-            row = [f"`{k}`", m.get("shape", ""), _source(m, r), _fmt_result(r),
-                   m.get("threshold", ""), m.get("status_note", "")]
+            row = [f"`{k}`", m.get("shape", ""), m.get("discipline", "—"),
+                   _source(m, r), _fmt_result(r, m.get("definition_date"), m),
+                   m.get("threshold", ""), _sota_cell(m), m.get("status_note", ""),
+                   "✓" if is_visible(m) else "—", "✓" if is_focus(m) else "—"]
             lines.append("| " + " | ".join(_cell(c) for c in row) + " |")
     return "\n".join(lines) + "\n"
 

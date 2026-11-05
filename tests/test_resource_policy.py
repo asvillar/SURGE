@@ -1,7 +1,7 @@
 # Copyright (c) 2026, SURGE authors. Licensed under BSD-3-Clause.
 """
 Tests for surge.hpc.policy (ResourceSpec) and its integration with
-SurrogateEngine + BaseModelAdapter (T1.3 of docs/RELEASE_SPRINT.md).
+SurrogateEngine + BaseModelAdapter.
 
 We verify three things:
 

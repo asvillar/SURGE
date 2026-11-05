@@ -137,11 +137,21 @@ def _render_yaml(data_path: Path, target: str, goal: str, budget: str,
     if budget == "smoke":
         lines.append("sample_rows: 2000          # smoke budget: subsample "
                      "for a fast first pass")
+    # Pin inputs/outputs explicitly: the run-time analyzer's heuristic (last
+    # numeric columns are outputs) can otherwise reassign columns on wide
+    # tables, so the target the user chose must be what the run uses.
+    inputs = [c for c in info["numeric"] if c != target]
     lines += [
         "",
+        "# columns: the target you chose is the only output; every other numeric",
+        "# column is an input (edit these lists to drop or add columns)",
+        "metadata_overrides:",
+        "  inputs:",
+        *[f"    - {c}" for c in inputs],
+        "  outputs:",
+        f"    - {target}",
+        "",
         "# every model trains on the same splits -> directly comparable",
-        f"# target column inferred as '{target}' — the analyzer treats the",
-        "# last numeric column(s) as outputs; override via metadata_overrides",
         "models:",
     ]
     for block in slate:

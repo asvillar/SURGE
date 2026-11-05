@@ -24,7 +24,8 @@ from typing import Any
 
 import numpy as np
 
-from .base import BenchmarkResult
+from . import paths
+from .base import BenchmarkResult, capture_predictions
 from .registry import benchmark_info, benchmark_metadata, run_benchmark
 
 
@@ -50,9 +51,7 @@ def _bench_data_root() -> Path:
     On first run each loader creates its subdirectory and saves the data.
     Subsequent runs load from the local cache without re-downloading.
     """
-    root = Path(__file__).parent.parent.parent / "data" / "datasets" / "benchmarks"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    return paths.bench_data_root()
 
 
 def _fetch_openml(*args, **kwargs):
@@ -99,6 +98,9 @@ try:
     if _importlib_util.find_spec("tabpfn") is not None:
         _REGRESSION_MODELS.append("tabpfn.regressor")
         _CLASSIFICATION_MODELS.append("tabpfn.classifier")
+    if _importlib_util.find_spec("sdm") is not None:
+        _REGRESSION_MODELS.append("kumo.tabular_regressor")
+        _CLASSIFICATION_MODELS.append("kumo.tabular_classifier")
 except Exception:
     pass
 
@@ -138,7 +140,9 @@ try:
             "pytorch.alexnet",
         ]
         # CIFAR-10 uses RGB (3-channel) — exclude grayscale-only LeNet5.
-        _CIFAR10_MODELS = [m for m in _VISION_MODELS if m != "pytorch.lenet5"]
+        _CIFAR10_MODELS = [m for m in _VISION_MODELS if m != "pytorch.lenet5"] + [
+            "pytorch.dino_linear_probe",
+        ]
         # Temporal/sequence models — valid for time-series benchmarks.
         # NOT included in default tabular regression (no spatial structure).
         _SEQUENCE_MODELS = [
@@ -178,6 +182,11 @@ _BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
         "pytorch.mlp",
         "sklearn.random_forest",
     ],
+    # SOLPS-NN exhaust: the scalar benchmark uses the default tabular regression
+    # sweep (incl. kumo.tabular_regressor when installed); the 5200-output field
+    # excludes tree ensembles (an RF stores n_nodes x 5200 values per tree and
+    # exhausted a 17 GB laptop).
+    "plasma.solpsnn_te_field": ["pytorch.mlp", "pytorch.residual_mlp", "sklearn.ridge"],
     # Sequence / time-series benchmarks — include temporal models
     "sequence.lorenz63":         _SEQUENCE_MODELS,
     # Inline PDE benchmark (64-pt grid, no download) — operator models + generative
@@ -268,6 +277,7 @@ def _default_models_for(task_type: str, benchmark_key: str | None = None) -> lis
 # Metrics where lower is better (used to decide which direction to highlight).
 _LOWER_IS_BETTER: frozenset[str] = frozenset({
     "runtime_s", "test_rmse", "test_nrmse", "test_relative_l2",
+    "test_median_rel_err",
     # UQ: lower = sharper / better calibrated
     "uq_mpiw", "uq_crps", "uq_nll",
     # Plasma paper metrics
@@ -365,6 +375,7 @@ def run_leaderboard(
     pytorch_mlp_epochs: int = 50,
     save_root: Path | None = Path("benchmark_reports"),
     use_hpo_cache: bool = False,
+    save_predictions: bool = True,
 ) -> dict[str, list[BenchmarkResult]]:
     """
     Run every compatible model against each benchmark.
@@ -445,7 +456,7 @@ def run_leaderboard(
                     stage="model_lookup",
                 )
                 if save_root is not None:
-                    res.save(root=save_root)
+                    res.save(root=save_root, predictions=save_predictions)
                 results[key].append(res)
                 print(f"  [skip] {model_key} not in MODEL_REGISTRY", file=sys.stderr)
                 continue
@@ -459,7 +470,7 @@ def run_leaderboard(
                     key, model_key, reason=mismatch, stage="task_compatibility",
                 )
                 if save_root is not None:
-                    res.save(root=save_root)
+                    res.save(root=save_root, predictions=save_predictions)
                 results[key].append(res)
                 print(f"  [skip] {mismatch}", file=sys.stderr)
                 continue
@@ -478,6 +489,11 @@ def run_leaderboard(
 
             # Per-benchmark model kwargs (e.g. image shape for vision models).
             bench_kwargs = _BENCHMARK_MODEL_KWARGS.get(key, {})
+            # Benchmark-required recipe (e.g. qlknn10d residual_mlp); explicit
+            # bench/HPO/epoch kwargs always win over these defaults.
+            bench_defaults = dict(BENCH_MODEL_DEFAULTS.get(key, {}).get(model_key, {}))
+            if bench_defaults:
+                print(f"  [defaults] {key}: {bench_defaults} (overridable via model_kwargs)")
 
             # Build training-log path for PyTorch models so loss can be tracked.
             _safe_key = key.replace(".", "_")
@@ -500,19 +516,22 @@ def run_leaderboard(
                             model_kwargs={**epoch_kwargs, **cached_hp, **_log_kwargs},
                             seed=s,
                         )
-                    elif model_key in _PYTORCH_EPOCH_CAP_MODELS or bench_kwargs:
+                    elif model_key in _PYTORCH_EPOCH_CAP_MODELS or bench_kwargs or bench_defaults:
                         # Per-benchmark cap takes precedence over per-model cap.
                         _bench_ecap = _PER_BENCHMARK_EPOCH_CAP.get(key)
                         _ecap = _bench_ecap if _bench_ecap is not None else _PER_MODEL_EPOCH_CAP.get(model_key, pytorch_mlp_epochs)
+                        _explicit_epochs = (cached_hp and "n_epochs" in cached_hp) or "n_epochs" in bench_defaults
                         epoch_kwargs = (
                             {}
-                            if cached_hp and "n_epochs" in cached_hp
+                            if _explicit_epochs
                             else ({"n_epochs": _ecap} if model_key in _PYTORCH_EPOCH_CAP_MODELS else {})
                         )
                         _log_kwargs = {}
                         if _log_dir is not None:
                             _log_kwargs["log_file"] = str(_log_dir / f"{_safe_model}_seed{s}.jsonl")
-                        adapter = MODEL_REGISTRY.create(model_key, **bench_kwargs, **cached_hp, **epoch_kwargs, **_log_kwargs)
+                        adapter = MODEL_REGISTRY.create(
+                            model_key, **{**bench_defaults, **bench_kwargs, **cached_hp, **epoch_kwargs, **_log_kwargs}
+                        )
                         res = _run_with_adapter(key, adapter, seed=s)
                     elif cached_hp:
                         adapter = MODEL_REGISTRY.create(model_key, **cached_hp)
@@ -521,7 +540,7 @@ def run_leaderboard(
                         res = run_benchmark(key, seed=s, model_key=model_key)
                     if res is not None:
                         if save_root is not None:
-                            res.save(root=save_root)
+                            res.save(root=save_root, predictions=save_predictions)
                         seed_results.append(res)
                 except Exception as exc:
                     res = _skip_result(
@@ -532,7 +551,7 @@ def run_leaderboard(
                         message=f"leaderboard run skipped for {model_key}",
                     )
                     if save_root is not None:
-                        res.save(root=save_root)
+                        res.save(root=save_root, predictions=save_predictions)
                     seed_results.append(res)
                     print(f"  [skip] {key}/{model_key} seed={s}: {exc}", file=sys.stderr)
 
@@ -583,6 +602,51 @@ def _aggregate_seed_results(results: list[BenchmarkResult]) -> BenchmarkResult:
     )
 
 
+# Per-benchmark model defaults: hyperparameters a benchmark NEEDS to be
+# meaningful at its data scale (documented in the benchmark's status_note /
+# the reproduction study). Applied by `surge bench` when the user does not
+# override them; recorded in result.extra["model_defaults_applied"].
+_SOLPSNN_RESIDUAL_MLP = {"hidden_layers": [1000] * 8, "n_epochs": 300,
+                         "learning_rate": 1e-4, "dropout_rate": 0.0,
+                         "patience": 10_000, "batch_size": 64}
+
+BENCH_MODEL_DEFAULTS: dict[str, dict[str, dict]] = {
+    "plasma.qlknn10d": {
+        # examples/qlknn10d_study.py: 2.2M rows need large batches; registry
+        # defaults (200 epochs, batch 64) take days on CPU and were never the
+        # published protocol.
+        "pytorch.residual_mlp": {"hidden_layers": [512, 512, 256], "n_epochs": 60,
+                                  "batch_size": 4096, "patience": 15,
+                                  "patience_window": 5},
+    },
+    # SOLPS-NN: thesis recipe (Dasbach 2023). Targets are log10-transformed by
+    # the loader, so Kumo's own target_transform must stay None (no double log).
+    "plasma.solpsnn_exhaust_scalars": {
+        "pytorch.residual_mlp": dict(_SOLPSNN_RESIDUAL_MLP),
+        "kumo.tabular_regressor": {"target_transform": None},
+    },
+    "plasma.solpsnn_te_field": {
+        "pytorch.residual_mlp": dict(_SOLPSNN_RESIDUAL_MLP),
+    },
+}
+
+# Benchmarks whose loader returns a FIXED (X_train, y_train, X_test, y_test)
+# split (no seed-dependent resampling) -- looked up at call time so tests can
+# monkeypatch the loader functions.
+_FIXED_SPLIT_LOADERS: dict[str, str] = {
+    "plasma.solpsnn_exhaust_scalars": "_load_solpsnn_exhaust_scalars",
+    "plasma.solpsnn_te_field": "_load_solpsnn_te_field",
+    "plasma.cmod_density_limit": "_load_cmod_density_limit",
+}
+
+# Benchmarks whose loader applies a target transform: inverse applied to
+# y_test and y_pred before benchmark-specific physical-unit metrics.
+_TARGET_INVERSE: dict[str, Any] = {
+    "plasma.solpsnn_exhaust_scalars": lambda z: 10.0 ** np.asarray(z, dtype=float),
+    "plasma.solpsnn_te_field": lambda z: 10.0 ** np.asarray(z, dtype=float),
+}
+
+
 def _run_with_adapter(
     benchmark_key: str, adapter: Any, *, seed: int, input_features: str | None = None
 ) -> BenchmarkResult | None:
@@ -606,8 +670,14 @@ def _run_with_adapter(
     task_type = info["task_type"]
     model_key = getattr(adapter, "name", adapter.__class__.__name__)
 
+    fixed_split = None
     try:
-        X, y = _load_dataset(benchmark_key)
+        if benchmark_key in _FIXED_SPLIT_LOADERS:
+            fixed_split = globals()[_FIXED_SPLIT_LOADERS[benchmark_key]]()
+            X = np.vstack([fixed_split[0], fixed_split[2]])
+            y = np.concatenate([fixed_split[1], fixed_split[3]], axis=0)
+        else:
+            X, y = _load_dataset(benchmark_key)
     except Exception as exc:
         print(f"  [error] could not load {benchmark_key}: {exc}", file=sys.stderr)
         return _skip_result(benchmark_key, model_key, reason=str(exc), stage="data_load")
@@ -640,6 +710,8 @@ def _run_with_adapter(
         X_train, X_val, y_train, y_val = train_test_split(
             X_tr, y_tr, test_size=0.1, random_state=seed, stratify=y_tr
         )
+    elif fixed_split is not None:
+        X_train, y_train, X_test, y_test = fixed_split
     elif benchmark_key == "plasma.constellaration_multioutput":
         # Canonical paper split (Appendix A.4) — identical indices to the
         # per-metric constellaration_paper runner (same filtered cache order).
@@ -666,6 +738,8 @@ def _run_with_adapter(
     if not was_tracing:
         tracemalloc.start()
     _reset_gpu_peak_memory()
+    lorenz_metrics: dict[str, Any] = {}
+    lorenz_extra: dict[str, Any] = {}
     t0 = time.perf_counter()
     try:
         import inspect
@@ -675,8 +749,21 @@ def _run_with_adapter(
             fit_sig = inspect.signature(adapter.fit)
             if "X_val" in fit_sig.parameters:
                 fit_kwargs = {"X_val": X_val, "y_val": y_val}
-        adapter.fit(X_train, y_train, **fit_kwargs)
-        y_pred = np.asarray(adapter.predict(X_test))
+        if benchmark_key == "sequence.lorenz63":
+            # Gate is rollout VPT: fit + predict + rollout score inside the
+            # timed/traced window (matches tasks.run_sequence_lorenz63).
+            from .tasks import lorenz_adapter_run
+
+            lz = lorenz_adapter_run(
+                adapter, X_train, y_train, X_test, seed=seed,
+                climate_norm=float(np.sqrt(np.mean(np.sum(np.vstack([X, y]) ** 2, axis=1)))),
+            )
+            y_pred = lz["y_pred"]
+            lorenz_metrics = lz["metrics"]
+            lorenz_extra = lz["extra"]
+        else:
+            adapter.fit(X_train, y_train, **fit_kwargs)
+            y_pred = np.asarray(adapter.predict(X_test))
         elapsed = time.perf_counter() - t0
     except Exception as exc:
         print(f"  [error] fit/predict failed for {benchmark_key}: {exc}", file=sys.stderr)
@@ -689,10 +776,13 @@ def _run_with_adapter(
 
     mo_extra: dict[str, Any] = {}
     if task_type == "regression":
+        from .tasks import relative_l2_metrics
+
         # Sequence benchmarks: compute NRMSE instead of / in addition to R².
         if benchmark_key.startswith("sequence.") or benchmark_key.startswith("pde.") or benchmark_key.startswith("pdebench."):
             nrmse = float(np.linalg.norm(y_pred - y_test) / (np.linalg.norm(y_test) + 1e-12))
             metrics = {"test_nrmse": nrmse}
+            capture_predictions(y_test, y_pred)
             # Also compute R² if single-output, skip for multi-output PDE fields.
             try:
                 from sklearn.metrics import r2_score
@@ -700,6 +790,8 @@ def _run_with_adapter(
                 metrics["test_r2"] = r2
             except Exception:
                 pass
+            metrics.update(lorenz_metrics)
+            metrics.update(relative_l2_metrics(benchmark_key, y_test, y_pred))
         else:
             # Support multi-output: only ravel for 1-D targets.
             y_pred_mo = y_pred.ravel() if y_test.ndim == 1 else y_pred
@@ -718,6 +810,16 @@ def _run_with_adapter(
                 y_test, y_pred_mo, names=mo_names, kinds=mo_kinds
             )
             metrics.update(mo_metrics)
+            metrics.update(relative_l2_metrics(benchmark_key, y_test, y_pred_mo))
+            inverse = _TARGET_INVERSE.get(benchmark_key)
+            if inverse is not None:
+                # Loader targets are log10; physical-unit metrics follow.
+                from .loaders.solpsnn import SCALAR_TARGETS
+                from .tasks import solpsnn_scalar_metrics
+
+                names = list(SCALAR_TARGETS) if benchmark_key.endswith("scalars") else None
+                metrics.update(solpsnn_scalar_metrics(
+                    inverse(y_test), inverse(y_pred_mo), names))
 
         # UQ metrics — computed when the model exposes predict_with_uncertainty.
         _uq_model = getattr(adapter, "_model", adapter)
@@ -742,6 +844,14 @@ def _run_with_adapter(
             except Exception:
                 pass
         metrics = _clf_metrics(y_test, y_pred, y_prob)
+        if benchmark_key == "plasma.cmod_density_limit" and y_prob is not None:
+            from .tasks import disruption_metrics
+
+            _yp = np.asarray(y_prob)
+            _score = _yp[:, 1] if _yp.ndim > 1 else _yp
+            _dm, _base = disruption_metrics(X_test, y_test, _score)
+            metrics.update(_dm)
+            lorenz_extra.update(_base)
 
     metrics["runtime_s"] = elapsed
     metrics["peak_memory_mb"] = float(peak_memory / (1024 * 1024))
@@ -749,6 +859,10 @@ def _run_with_adapter(
     if gpu_peak is not None:
         metrics["gpu_peak_memory_mb"] = gpu_peak
     passed = _check_pass(benchmark_key, metrics)
+    if not passed:
+        gate_key = gate_metric_key(benchmark_key)
+        if gate_key is not None and gate_key not in metrics:
+            lorenz_extra["gate_metric_missing"] = gate_key
 
     message = f"leaderboard run via {model_key}"
     if benchmark_key == "plasma.constellaration_multioutput":
@@ -774,6 +888,7 @@ def _run_with_adapter(
         "resources": resource_info,
     }
     result_extra.update(mo_extra)
+    result_extra.update(lorenz_extra)
     if input_features_meta:
         result_extra.update(input_features_meta)
 
@@ -789,8 +904,8 @@ def _run_with_adapter(
     )
 
 
-def _load_dataset(benchmark_key: str):
-    """Load the raw (X, y) arrays for a benchmark key."""
+def _dataset_loaders() -> dict[str, Any]:
+    """Map benchmark key -> zero-arg callable returning the raw ``(X, y)``."""
     from sklearn.datasets import (
         load_breast_cancer,
         load_diabetes,
@@ -828,9 +943,11 @@ def _load_dataset(benchmark_key: str):
         "ctr23.brazilian_houses": lambda: _load_ctr23_brazilian_houses(),
         # DOE fusion plasma benchmarks
         "fusion.m3dc1_sample":        lambda: _load_fusion_m3dc1_sample(),
-        "plasma.cmod_density_limit":  lambda: _load_cmod_density_limit(),
+        "plasma.cmod_density_limit":  lambda: _concat_fixed(_load_cmod_density_limit()),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
         "plasma.qlknn10d":            lambda: _load_qlknn10d(),
+        "plasma.solpsnn_exhaust_scalars": lambda: _concat_fixed(_load_solpsnn_exhaust_scalars()),
+        "plasma.solpsnn_te_field":        lambda: _concat_fixed(_load_solpsnn_te_field()),
         "plasma.constellaration":              lambda: _load_constellaration(),
         "plasma.constellaration_multioutput":  lambda: _load_constellaration_multioutput(),
         "plasma.constellaration_modb":         lambda: _load_constellaration_modb(),
@@ -840,9 +957,62 @@ def _load_dataset(benchmark_key: str):
         "vision.cifar10": lambda: _load_cifar10(),
         "vision.mnist":   lambda: _load_mnist(),
     }
+    return loaders
+
+
+def dataset_loader_keys() -> list[str]:
+    """Sorted benchmark keys that have a dataset loader (public, no data loaded)."""
+    return sorted(_dataset_loaders())
+
+
+def _load_dataset(benchmark_key: str):
+    """Load the raw (X, y) arrays for a benchmark key."""
+    loaders = _dataset_loaders()
     if benchmark_key not in loaders:
         raise KeyError(f"No dataset loader for {benchmark_key!r}")
     return loaders[benchmark_key]()
+
+
+def _concat_fixed(split):
+    """(X_tr, y_tr, X_te, y_te) -> pooled (X, y) for callers that re-split."""
+    return (np.vstack([split[0], split[2]]),
+            np.concatenate([split[1], split[3]], axis=0))
+
+
+def _load_solpsnn_exhaust_scalars():
+    """SOLPS-NN exhaust scalars, fixed split: ``(X_train, y_train, X_test, y_test)``.
+
+    X = the 8 scan parameters (log10 on the three gas rates); y = log10 of
+    (psol, pwmxap, fnixap) -- targets span up to 12 decades, so the benchmark
+    trains in log space and ``_TARGET_INVERSE`` restores physical units before
+    the gated ``test_median_rel_err``.  Train = Sobol split (5756), test = random
+    split (1465).  Do NOT also enable a model's own log10 option (double log).
+    """
+    from .loaders.solpsnn import SCALAR_TARGETS, load_solpsnn
+
+    out = []
+    for split in ("train", "test"):
+        s = load_solpsnn(split, with_te=False)
+        y = np.column_stack([np.log10(np.asarray(s.scalars[k], dtype=float))
+                             for k in SCALAR_TARGETS])
+        out += [np.asarray(s.X_log, dtype=float), y]
+    return out[0], out[1], out[2], out[3]
+
+
+def _load_solpsnn_te_field():
+    """SOLPS-NN electron-temperature field, fixed split, 8 -> 5200.
+
+    y = log10(Te[eV]) flattened over the 104 x 50 grid (floor 1e-6 eV).
+    """
+    from .loaders.solpsnn import load_solpsnn
+
+    out = []
+    for split in ("train", "test"):
+        s = load_solpsnn(split, with_te=True)
+        te = np.asarray(s.te, dtype=float)
+        y = np.log10(np.maximum(te.reshape(len(te), -1), 1e-6))
+        out += [np.asarray(s.X_log, dtype=float), y]
+    return out[0], out[1], out[2], out[3]
 
 
 def _synthetic_regression_1d():
@@ -885,12 +1055,24 @@ def _load_concrete_strength():
 
 
 def _load_lorenz63():
+    """One-step ``x(t) -> x(t + dt)`` pairs, shape ``(1200, 3) -> (1200, 3)``.
+
+    Matches :func:`surge.benchmarks.tasks.run_sequence_lorenz63`'s training
+    contract (Lyapunov-time rollout protocol, definition_date 2026-10-21).
+    """
     cache = _bench_data_root() / "sequence" / "lorenz63.npz"
     if cache.exists():
         d = np.load(cache)
-        return d["X"], d["y"]
+        X, y = d["X"], d["y"]
+        if X.ndim == 2 and X.shape[1] == 3 and y.shape == X.shape:
+            return X, y
+        print(
+            f"  [cache] {cache} has stale shape X{X.shape} y{y.shape} "
+            "(expected one-step 3->3 pairs); regenerating",
+            file=sys.stderr,
+        )
     from .tasks import _generate_lorenz_trajectories
-    X, y = _generate_lorenz_trajectories(n_trajectories=1200, T_in=20, T_out=20, dt=0.01, warmup=500, seed=42)
+    X, y = _generate_lorenz_trajectories(n_trajectories=1200, dt=0.01, seed=42)
     cache.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(cache, X=X, y=y)
     return X, y
@@ -1172,55 +1354,75 @@ def _load_ctr23_brazilian_houses():
 # DOE Fusion plasma dataset loaders
 # ---------------------------------------------------------------------------
 
+_CMOD_URL = ("https://raw.githubusercontent.com/MIT-PSFC/"
+             "open_density_limit_database/main/data/DL_DataFrame.csv")
+_CMOD_FEATURES = ["density", "elongation", "minor_radius",
+                  "plasma_current", "toroidal_B_field", "triangularity"]
+
+
+def _cmod_grouped_split(X, y, groups, *, n_splits: int = 5, seed: int = 42):
+    """Discharge-grouped, class-stratified split: fold 0 of a shuffled
+    ``StratifiedGroupKFold`` is the test set.  No discharge straddles the split
+    and the natural class imbalance is kept."""
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    cv = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    tr, te = next(iter(cv.split(X, y, groups)))
+    return X[tr], y[tr], X[te], y[te], groups[tr], groups[te]
+
+
+def _download_cmod_csv(dest) -> None:
+    import os
+    import ssl
+    import urllib.request
+
+    cafile = os.environ.get("SURGE_CA_BUNDLE")
+    if not cafile:
+        try:
+            import certifi
+
+            cafile = certifi.where()
+        except ImportError:
+            cafile = None
+    ctx = ssl.create_default_context(cafile=cafile)
+    with urllib.request.urlopen(_CMOD_URL, timeout=120, context=ctx) as resp:
+        data = resp.read()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+
+
 def _load_cmod_density_limit():
-    """Alcator C-Mod density limit disruption classification.
+    """Alcator C-Mod density-limit precursor, fixed discharge-grouped split.
 
-    Binary classification: predict whether the plasma has entered the
-    Greenwald density limit phase (disruption precursor).
-
-    Source: MIT-PSFC open_density_limit_database
-    URL:    https://github.com/MIT-PSFC/open_density_limit_database
-    n = 264,385 time-slices from C-Mod discharges (highly imbalanced: 1.4% positive).
-    Features: density, elongation, minor_radius, plasma_current, toroidal_B_field,
-              triangularity  (6 normalised physics signals per time-slice).
-
-    We balance the dataset to 50/50 by downsampling the majority class to
-    keep n ≤ 40k for fast leaderboard runs.
+    Returns ``(X_train, y_train, X_test, y_test)``.  Source: MIT-PSFC Open
+    Density Limit Database (data CC BY, code MIT; Maris et al., Nucl. Fusion
+    2024).  264,385 10-ms slices of 2,333 discharges, 78 of which enter the
+    density-limit phase (1.36 % positive slices).  X = (density [1e20 m^-3],
+    elongation, minor_radius [m], plasma_current [MA], toroidal_B_field [T],
+    triangularity); y = ``density_limit_phase``.  The split is
+    ``StratifiedGroupKFold(5, shuffle, seed 42)`` grouped by ``discharge_ID``,
+    fold 0 = test, on the NATURAL class imbalance (no balancing).
     """
-    cache = _bench_data_root() / "plasma" / "cmod_density_limit.npz"
+    root = _bench_data_root() / "plasma"
+    cache = root / "cmod_density_limit_grouped.npz"
     if cache.exists():
         d = np.load(cache)
-        return d["X"], d["y"]
+        return d["X_train"], d["y_train"], d["X_test"], d["y_test"]
 
-    import io
-    import urllib.request
     import pandas as pd
 
-    url = (
-        "https://raw.githubusercontent.com/MIT-PSFC/"
-        "open_density_limit_database/main/data/DL_DataFrame.csv"
-    )
-    raw = urllib.request.urlopen(url, timeout=60).read()
-    df = pd.read_csv(io.BytesIO(raw))
-
-    feature_cols = ["density", "elongation", "minor_radius",
-                    "plasma_current", "toroidal_B_field", "triangularity"]
-    X = df[feature_cols].values.astype(float)
-    y = df["density_limit_phase"].values.astype(int)
-
-    # Balance: sample min(all positive, 20k) from each class.
-    rng = np.random.default_rng(42)
-    pos_idx = np.where(y == 1)[0]
-    neg_idx = np.where(y == 0)[0]
-    n_per_class = min(len(pos_idx), 20_000)
-    chosen_pos = rng.choice(pos_idx, size=n_per_class, replace=False)
-    chosen_neg = rng.choice(neg_idx, size=n_per_class, replace=False)
-    idx = np.concatenate([chosen_pos, chosen_neg])
-    rng.shuffle(idx)
-    X_out, y_out = X[idx], y[idx]
+    raw = root / "cmod_raw" / "DL_DataFrame.csv"
+    if not raw.exists():
+        _download_cmod_csv(raw)
+    df = pd.read_csv(raw)
+    X = df[_CMOD_FEATURES].to_numpy(dtype=float)
+    y = df["density_limit_phase"].to_numpy(dtype=int)
+    groups = df["discharge_ID"].to_numpy()
+    Xtr, ytr, Xte, yte, gtr, gte = _cmod_grouped_split(X, y, groups)
     cache.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(cache, X=X_out, y=y_out)
-    return X_out, y_out
+    np.savez_compressed(cache, X_train=Xtr, y_train=ytr, X_test=Xte, y_test=yte,
+                        groups_train=gtr, groups_test=gte)
+    return Xtr, ytr, Xte, yte
 
 
 def _load_fusion_m3dc1_sample():
@@ -1234,11 +1436,9 @@ def _load_fusion_m3dc1_sample():
     There is no synthetic fallback — results from this benchmark must
     come from real M3DC1 data.
     """
-    repo_root = Path(__file__).parent.parent.parent
-    candidate_paths = [
-        _bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5",
-        repo_root / "data" / "datasets" / "M3DC1" / "m3dc1_sample.hdf5",
-    ]
+    candidate_paths = [_bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5"]
+    if paths.repo_root() is not None:
+        candidate_paths.append(paths.datasets_root() / "M3DC1" / "m3dc1_sample.hdf5")
     h5_path = next((p for p in candidate_paths if p.exists()), None)
     if h5_path is None:
         raise FileNotFoundError(
@@ -1414,11 +1614,9 @@ def _load_constellaration(n_samples: int = 10_000):
     DOI: arXiv:2506.19583
     """
     # Fast path — check both the new unified cache location and the legacy path.
-    repo_root = Path(__file__).parent.parent.parent
-    _npz_candidates = [
-        _bench_data_root() / "plasma" / "constellaration" / "paper_nfp3_clip0.05.npz",
-        repo_root / "data" / "datasets" / "constellaration" / "paper_nfp3_clip0.05.npz",
-    ]
+    _npz_candidates = [_bench_data_root() / "plasma" / "constellaration" / "paper_nfp3_clip0.05.npz"]
+    if paths.repo_root() is not None:
+        _npz_candidates.append(paths.datasets_root() / "constellaration" / "paper_nfp3_clip0.05.npz")
     npz_path = next((p for p in _npz_candidates if p.exists()), None)
     if npz_path is not None:
         data = np.load(npz_path, allow_pickle=True)
@@ -1517,9 +1715,8 @@ def _load_constellaration_paper(
     cache_file = _cache_dir / f"paper_nfp{n_field_periods}_clip{outlier_clip_pct}.npz"
 
     # Also check legacy path so existing local caches are reused.
-    if not cache_file.exists():
-        repo_root = Path(__file__).parent.parent.parent
-        legacy = repo_root / "data" / "datasets" / "constellaration" / cache_file.name
+    if not cache_file.exists() and paths.repo_root() is not None:
+        legacy = paths.datasets_root() / "constellaration" / cache_file.name
         if legacy.exists():
             cache_file = legacy
 
@@ -1834,65 +2031,77 @@ def _run_constellaration_paper_benchmark(
     )
 
 
+_GATE_THRESHOLDS: dict[str, tuple[str, float]] = {
+    "synthetic.regression_1d": ("test_r2", 0.85),
+    "synthetic.multioutput_2d": ("test_r2", 0.75),
+    "tabular.diabetes": ("test_r2", 0.35),
+    "tabular.california_housing": ("test_r2", 0.75),
+    "tabular.concrete_strength": ("test_r2", 0.80),
+    "tabular.energy_efficiency": ("test_r2", 0.90),
+    "synthetic.classification_binary": ("test_accuracy", 0.75),
+    "tabular.iris": ("test_accuracy", 0.88),
+    "tabular.breast_cancer": ("test_accuracy", 0.93),
+    "tabular.wine": ("test_accuracy", 0.90),
+    "tabular.digits": ("test_accuracy", 0.95),
+    "sequence.lorenz63": ("test_vpt_median", 2.0),  # higher is better (Lyapunov times)
+    "pde.burgers_1d": ("test_relative_l2", 0.10),  # lower is better
+    "classification.flow_regime": ("test_accuracy", 0.85),
+    "tabular.airfoil_noise": ("test_r2", 0.80),
+    "tabular.yacht_dynamics": ("test_r2", 0.80),
+    "classification.plasma_stability": ("test_accuracy", 0.92),
+    "tabular.superconductor": ("test_r2", 0.90),
+    "multioutput.scm20d": ("test_r2", 0.60),
+    "classification.covertype": ("test_accuracy", 0.85),
+    # CTR-23 — thresholds from Grinsztajn et al. 2022 tree-model baselines
+    "ctr23.abalone": ("test_r2", 0.55),
+    "ctr23.bike_sharing": ("test_r2", 0.90),
+    "ctr23.diamonds": ("test_r2", 0.95),
+    "ctr23.house_sales": ("test_r2", 0.80),
+    "ctr23.brazilian_houses": ("test_r2", 0.75),
+    # Vision benchmarks
+    # MNIST: published LeNet-5 is 99.05%; we use 99.0% as the bar.
+    "vision.mnist": ("test_accuracy", 0.990),
+    # CIFAR-10: ResNet-20 paper result is 91.25% (He et al. 2016).
+    # Threshold set at 91.0% to allow ±0.25% seed variance.
+    "vision.cifar10": ("test_accuracy", 0.910),
+    # DOE fusion plasma benchmarks
+    "plasma.cmod_density_limit": ("test_auroc", 0.99),  # Greenwald scaling gives 0.973 on this split
+    "plasma.qlknn_transport": ("test_r2", 0.90),
+    "plasma.qlknn10d": ("test_r2", 0.95),
+    "plasma.constellaration": ("test_r2", 0.85),
+    "thewell.gray_scott": ("test_relative_l2", 0.30),
+    # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
+    "plasma.constellaration_paper": ("test_r2_mean", 0.97),
+    # Gate on the 8 metrics that need the VMEC++ equilibrium solve. The
+    # geometry (3) and derived (1) ConStellaration labels are no longer
+    # trained at all (they are closed-form functions of the boundary
+    # coefficients the model already sees) — training on them would
+    # otherwise mask a weak surrogate behind an easy R²=1.0.
+    "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
+    # Field benchmarks — PROVISIONAL, set from the 500-row smoke cache;
+    # to be re-set from the first full (26,897-row) leaderboard run.
+    "plasma.solpsnn_exhaust_scalars": ("test_median_rel_err", 0.20),  # lower is better
+    "plasma.solpsnn_te_field": ("test_median_rel_err", 0.10),  # lower is better, PROVISIONAL
+    "plasma.constellaration_modb": ("test_relative_l2", 0.05),
+    "plasma.constellaration_surfaces": ("test_relative_l2", 0.02),
+}
+
+
+def gate_metric_key(benchmark_key: str) -> "str | None":
+    """Name of the pass/fail gate metric for *benchmark_key* (None if ungated)."""
+    entry = _GATE_THRESHOLDS.get(benchmark_key)
+    return entry[0] if entry else None
+
+
 def _check_pass(benchmark_key: str, metrics: dict) -> bool:
     """Best-effort pass check using known thresholds."""
-    _THRESHOLDS: dict[str, tuple[str, float]] = {
-        "synthetic.regression_1d": ("test_r2", 0.85),
-        "synthetic.multioutput_2d": ("test_r2", 0.75),
-        "tabular.diabetes": ("test_r2", 0.35),
-        "tabular.california_housing": ("test_r2", 0.75),
-        "tabular.concrete_strength": ("test_r2", 0.80),
-        "tabular.energy_efficiency": ("test_r2", 0.90),
-        "synthetic.classification_binary": ("test_accuracy", 0.75),
-        "tabular.iris": ("test_accuracy", 0.88),
-        "tabular.breast_cancer": ("test_accuracy", 0.93),
-        "tabular.wine": ("test_accuracy", 0.90),
-        "tabular.digits": ("test_accuracy", 0.95),
-        "sequence.lorenz63": ("test_nrmse", 0.30),  # lower is better
-        "pde.burgers_1d": ("test_relative_l2", 0.10),  # lower is better
-        "classification.flow_regime": ("test_accuracy", 0.85),
-        "tabular.airfoil_noise": ("test_r2", 0.80),
-        "tabular.yacht_dynamics": ("test_r2", 0.80),
-        "classification.plasma_stability": ("test_accuracy", 0.92),
-        "tabular.superconductor": ("test_r2", 0.90),
-        "multioutput.scm20d": ("test_r2", 0.60),
-        "classification.covertype": ("test_accuracy", 0.85),
-        # CTR-23 — thresholds from Grinsztajn et al. 2022 tree-model baselines
-        "ctr23.abalone": ("test_r2", 0.55),
-        "ctr23.bike_sharing": ("test_r2", 0.90),
-        "ctr23.diamonds": ("test_r2", 0.95),
-        "ctr23.house_sales": ("test_r2", 0.80),
-        "ctr23.brazilian_houses": ("test_r2", 0.75),
-        # Vision benchmarks
-        # MNIST: published LeNet-5 is 99.05%; we use 99.0% as the bar.
-        "vision.mnist": ("test_accuracy", 0.990),
-        # CIFAR-10: ResNet-20 paper result is 91.25% (He et al. 2016).
-        # Threshold set at 91.0% to allow ±0.25% seed variance.
-        "vision.cifar10": ("test_accuracy", 0.910),
-        # DOE fusion plasma benchmarks
-        "plasma.cmod_density_limit": ("test_accuracy", 0.85),
-        "plasma.qlknn_transport": ("test_r2", 0.90),
-        "plasma.constellaration": ("test_r2", 0.50),
-        "thewell.gray_scott": ("test_relative_l2", 0.30),
-        # Paper protocol: MLP ensemble achieves R²>0.97 on all 12 metrics
-        "plasma.constellaration_paper": ("test_r2_mean", 0.97),
-        # Gate on the 8 metrics that need the VMEC++ equilibrium solve. The
-        # geometry (3) and derived (1) ConStellaration labels are no longer
-        # trained at all (they are closed-form functions of the boundary
-        # coefficients the model already sees) — training on them would
-        # otherwise mask a weak surrogate behind an easy R²=1.0.
-        "plasma.constellaration_multioutput": ("test_r2_equilibrium_mean", 0.85),
-        # Field benchmarks — PROVISIONAL, set from the 500-row smoke cache;
-        # to be re-set from the first full (26,897-row) leaderboard run.
-        "plasma.constellaration_modb": ("test_relative_l2", 0.05),
-        "plasma.constellaration_surfaces": ("test_relative_l2", 0.02),
-    }
-    if benchmark_key not in _THRESHOLDS:
+    if benchmark_key not in _GATE_THRESHOLDS:
         return True
-    metric_key, threshold = _THRESHOLDS[benchmark_key]
+    metric_key, threshold = _GATE_THRESHOLDS[benchmark_key]
     val = metrics.get(metric_key)
     if val is None:
-        return True
+        # A gated benchmark without its gate metric must never PASS.
+        return False
     # For lower-is-better metrics, pass if val <= threshold.
     if metric_key in _LOWER_IS_BETTER or metric_key == "test_nrmse":
         return float(val) <= threshold

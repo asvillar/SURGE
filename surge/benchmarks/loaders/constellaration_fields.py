@@ -38,7 +38,7 @@ import numpy as np
 
 from .constellaration import (
     N_INPUT_FEATURES,
-    _DEFAULT_DATA_DIR,
+    _default_data_dir,
     boundary_grid,
     evaluate_modB,
     evaluate_surface,
@@ -82,7 +82,7 @@ def _boundary_x90(rmnc_boundary: np.ndarray, zmns_boundary: np.ndarray, xm: np.n
 
 
 def _cache_path(n_rows: int, n_theta: int, n_phi: int, n_fp: int) -> Path:
-    return _DEFAULT_DATA_DIR / f"field_nfp{n_fp}_n{n_rows}_t{n_theta}_p{n_phi}.npz"
+    return _default_data_dir() / f"field_nfp{n_fp}_n{n_rows}_t{n_theta}_p{n_phi}.npz"
 
 
 def load_constellaration_field_raw(
@@ -115,7 +115,7 @@ def load_constellaration_field_raw(
     :func:`geometry_metrics` (``sqrt(mean_cross_section_area / pi)``, same
     definition used by the ``aspect_ratio`` scalar benchmark).
     """
-    finalized_path = Path(path) if path else (_DEFAULT_DATA_DIR / "wout_nfp3_subset.npz")
+    finalized_path = Path(path) if path else (_default_data_dir() / "wout_nfp3_subset.npz")
     data = load_wout_subset(path)
     n = len(data["plasma_config_id"])
     if not finalized_path.exists():

@@ -59,4 +59,4 @@ HPC / NERSC
 -----------
 
 See the walkthrough in the repository:
-``docs/setup/WALKTHROUGH.md`` (also summarized from the project README).
+the project README's install section.

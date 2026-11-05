@@ -1,11 +1,16 @@
 include README.md
+include README_PYPI.md
 include LICENSE
+include NOTICE
+include CITATION.cff
+include CHANGELOG.md
 include requirements.txt
 include pyproject.toml
 recursive-include surge *.py
-recursive-include tests *.py
-recursive-include examples *.py *.ipynb
-recursive-include docs *.rst *.md
+# distutils' sdist._add_defaults_optional() unconditionally globs
+# tests/test*.py into the sdist regardless of the lines above; exclude it
+# back out so the sdist doesn't leak test sources.
+exclude tests/test*.py
 global-exclude __pycache__
 global-exclude *.py[co]
 global-exclude *~

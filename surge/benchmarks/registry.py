@@ -198,9 +198,10 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
 
     # ── Sequence / windowed prediction (tabular interface) ────────────────────
     "sequence.lorenz63": (
-        run_sequence_lorenz63, "tabular", "regression", "60→60 (n=1,200)",
-        "Lorenz-63 RK-4 short-horizon prediction — windowed 20-step input/output, "
-        "inline ODE solver (no download)",
+        run_sequence_lorenz63, "tabular", "regression",
+        "3→3 (one step; scored as 10-λ rollout, n=1,200)",
+        "Lorenz-63 one-step surrogate scored by autoregressive rollout valid "
+        "prediction time — inline RK-4 ODE solver (no download)",
     ),
 
     # ── Field (discretised function/field → function/field) ───────────────────
@@ -239,10 +240,11 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "M3DC1 equilibrium surrogate — 13 MHD params → stability metric",
     ),
     "plasma.cmod_density_limit": (
-        None, "plasma", "classification", "6→2 (n=264,385)",
-        "Alcator C-Mod density limit disruption — 6 plasma signals → binary label. "
-        "MIT-PSFC open_density_limit_database. Greenwald limit physics. "
-        "[MIT-PSFC/open_density_limit_database, GitHub]",
+        None, "plasma", "classification", "6→2 (211,647 train / 52,738 test slices, grouped by discharge)",
+        "Alcator C-Mod density-limit precursor — 6 plasma signals → binary state, "
+        "discharge-grouped split on the natural class imbalance, scored by AUROC "
+        "(Greenwald-fraction baseline). "
+        "[MIT-PSFC Open Density Limit Database, CC BY, Maris et al. 2024]",
     ),
     "plasma.qlknn_transport": (
         None, "plasma", "regression", "10→1 (n≈7,475 post mask)",
@@ -260,6 +262,20 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "input grid (Zeff, Ati, Ate, An, q, smag, x, Ti_Te, Nustar). "
         "van de Plassche et al. PoP 27, 022310 (2020); Zenodo "
         "10.5281/zenodo.3497066 (CC-BY 4.0). [13.3 GB open download]",
+    ),
+    "plasma.solpsnn_exhaust_scalars": (
+        None, "plasma", "regression", "8→3 (n=5,756 train / 1,465 test)",
+        "SOLPS-ITER divertor exhaust scalars (P_SOL, peak target heat flux, target "
+        "particle flux) from 8 scan parameters (R, B, P, D_puff, N_puff, D_core, "
+        "D_perp, chi_perp); fixed Sobol-train / random-test split, log10 targets, "
+        "gate on median relative error. Dasbach & Wiesen 2023; Zenodo "
+        "10.5281/zenodo.19237127 (CC BY 4.0). [290 MB subset of a 17.6 GB record]",
+    ),
+    "plasma.solpsnn_te_field": (
+        None, "plasma", "regression", "8→5200 (n=5,756 train / 1,465 test)",
+        "SOLPS-ITER electron-temperature field Te(104x50 B2 grid) from the same 8 scan "
+        "parameters; log10(Te) targets, fixed split. HIDDEN/provisional. "
+        "Dasbach & Wiesen 2023; Zenodo 10.5281/zenodo.19237127 (CC BY 4.0).",
     ),
     "plasma.constellaration": (
         None, "plasma", "regression", "90→1 (10k subsample)",
@@ -334,6 +350,9 @@ _SHORT_ALIASES: dict[str, str] = {
     "qlknn":                "plasma.qlknn_transport",
     "qlknn10d":             "plasma.qlknn10d",
     "cmod":                 "plasma.cmod_density_limit",
+    "solpsnn":              "plasma.solpsnn_exhaust_scalars",
+    "solps_scalars":        "plasma.solpsnn_exhaust_scalars",
+    "solps_te":             "plasma.solpsnn_te_field",
     "constellaration":      "plasma.constellaration",
     "constellaration_paper":"plasma.constellaration_paper",
     "constellaration_multi":"plasma.constellaration_multioutput",
@@ -391,8 +410,8 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "access": "generated_cached",
         "cache_path": "data/datasets/benchmarks/sequence/lorenz63.npz",
         "sample_count": 1200,
-        "feature_shape": "60",
-        "target_shape": "60",
+        "feature_shape": "3",
+        "target_shape": "3",
         "resource_expectation": {"device": "cpu", "memory_tier": "small", "optional_dependencies": []},
     },
     "pde.burgers_1d": {
@@ -427,13 +446,37 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "plasma.cmod_density_limit": {
         "dataset_source": "MIT-PSFC/open_density_limit_database",
-        "license": "upstream GitHub repository terms",
+        "license": "CC BY (data), MIT (code)",
         "access": "download_cached",
-        "cache_path": "data/datasets/benchmarks/plasma/cmod_density_limit.npz",
+        "cache_path": "data/datasets/benchmarks/plasma/cmod_density_limit_grouped.npz",
         "sample_count": 264385,
         "feature_shape": "6",
         "target_shape": "2 classes",
         "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": []},
+    },
+    "plasma.solpsnn_exhaust_scalars": {
+        "dataset_source": "SOLPS-NN, Dasbach & Wiesen 2023, Zenodo 10.5281/zenodo.19237127",
+        "license": "CC BY 4.0",
+        "access": "download_cached",
+        "cache_path": "data/datasets/solpsnn/",
+        "size": "290 MB subset of a 17.6 GB record",
+        "url": "https://zenodo.org/records/19237127",
+        "sample_count": 7221,
+        "feature_shape": "8",
+        "target_shape": "3",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "small", "optional_dependencies": []},
+    },
+    "plasma.solpsnn_te_field": {
+        "dataset_source": "SOLPS-NN, Dasbach & Wiesen 2023, Zenodo 10.5281/zenodo.19237127",
+        "license": "CC BY 4.0",
+        "access": "download_cached",
+        "cache_path": "data/datasets/solpsnn/",
+        "size": "290 MB subset of a 17.6 GB record",
+        "url": "https://zenodo.org/records/19237127",
+        "sample_count": 7221,
+        "feature_shape": "8",
+        "target_shape": "5200",
+        "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": []},
     },
     "plasma.qlknn10d": {
         "dataset_source": "QLKNN10D Zenodo 10.5281/zenodo.3497066",
@@ -700,11 +743,19 @@ def run_benchmark(key: str, **kwargs: Any) -> BenchmarkResult:
         from .leaderboard import _run_with_adapter
         from surge.model.registry import MODEL_REGISTRY
 
+        from .leaderboard import BENCH_MODEL_DEFAULTS
+
         model_key = kwargs.pop("model_key", "sklearn.ridge")
         seed = kwargs.pop("seed", 42)
+        model_kwargs = kwargs.pop("model_kwargs", None) or {}
         if model_key not in MODEL_REGISTRY:
             raise KeyError(f"Model {model_key!r} not registered.")
-        adapter = MODEL_REGISTRY.create(model_key)
+        # benchmark-declared hyperparameters (what the task NEEDS at its data
+        # scale); explicit model_kwargs always win
+        defaults = BENCH_MODEL_DEFAULTS.get(key, {}).get(model_key, {})
+        if defaults:
+            print(f"  [defaults] {key}: {defaults} (overridable via model_kwargs)")
+        adapter = MODEL_REGISTRY.create(model_key, **{**defaults, **model_kwargs})
         result = _run_with_adapter(key, adapter, seed=seed)
         if result is None:
             raise RuntimeError(f"Benchmark {key!r} with model {model_key!r} failed.")

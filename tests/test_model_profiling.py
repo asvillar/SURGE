@@ -1,6 +1,6 @@
 # Copyright (c) 2026, SURGE authors. Licensed under BSD-3-Clause.
 """
-Tests for surge.model.profiling (T1.4 of docs/RELEASE_SPRINT.md).
+Tests for surge.model.profiling.
 
 Verifies that every engine run attaches a profile dict containing
 model_size_bytes + inference_ms_per_sample + parameter_count, that the
