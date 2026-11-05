@@ -51,16 +51,6 @@ exclude_patterns = [
     'dev/**',
     'agents/**',
     'setup/**',
-    'AUDIT_NIGHT1.md',
-    'OPEN_QUESTIONS.md',
-    'PRERELEASE.md',
-    'PUBLIC_OPEN_SOURCE_PLAN.md',
-    'REFACTORING_PLAN.md',
-    'RELEASE_DEMO_PLAN.md',
-    'RELEASE_SPRINT.md',
-    'ROADMAP.md',
-    'plan.md',
-    'status.md',
     'README.md',
 ]
 

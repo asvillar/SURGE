@@ -52,6 +52,8 @@ from typing import NamedTuple
 
 import numpy as np
 
+from .. import paths
+
 N_MODES_M = 5
 N_MODES_N = 9
 N_MODES_TOTAL = N_MODES_M * N_MODES_N  # 45
@@ -341,8 +343,10 @@ def geometry_features(
 
 _HF_DATASET_NAME = "proxima-fusion/constellaration"
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_DEFAULT_DATA_DIR = _REPO_ROOT / "data" / "datasets" / "constellaration"
+
+def _default_data_dir() -> Path:
+    """``<datasets_root>/constellaration`` (honours ``SURGE_DATA_DIR``)."""
+    return paths.datasets_root() / "constellaration"
 
 # Mirrors leaderboard._CONSTELLARATION_METRICS / METRIC_COLS_SRC
 # (surge/benchmarks/leaderboard.py:1475-1488, 1537) exactly. Percentile
@@ -379,9 +383,9 @@ def _ensure_hf_ssl_env() -> None:
     try:
         import certifi
 
-        bundle = _DEFAULT_DATA_DIR / ".ca_bundle.pem"
+        bundle = _default_data_dir() / ".ca_bundle.pem"
         if not bundle.exists():
-            _DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            _default_data_dir().mkdir(parents=True, exist_ok=True)
             roots = subprocess.run(
                 ["security", "find-certificate", "-a", "-p", "/Library/Keychains/System.keychain"],
                 capture_output=True, text=True, timeout=15, check=True,
@@ -400,7 +404,7 @@ def _verify_ids_against_npz(
     present locally (nothing to verify against).
     """
     npz_path = Path(npz_path) if npz_path else (
-        _DEFAULT_DATA_DIR / f"paper_nfp{n_field_periods}_clip{outlier_clip_pct}.npz"
+        _default_data_dir() / f"paper_nfp{n_field_periods}_clip{outlier_clip_pct}.npz"
     )
     if not npz_path.exists():
         return
@@ -444,7 +448,7 @@ def paper_filter_ids(
     recovery used exactly the same filter and row order as the cache.
     """
     cache_path = Path(cache_path) if cache_path else (
-        _DEFAULT_DATA_DIR / f"paper_nfp{n_field_periods}_ids.json"
+        _default_data_dir() / f"paper_nfp{n_field_periods}_ids.json"
     )
     if cache_path.exists():
         return json.loads(cache_path.read_text())
@@ -878,7 +882,7 @@ def download_wout_subset(
     id_set = set(ids)
     n_total = len(id_set)
 
-    out_path = Path(out_path) if out_path else (_DEFAULT_DATA_DIR / "wout_nfp3_subset.npz")
+    out_path = Path(out_path) if out_path else (_default_data_dir() / "wout_nfp3_subset.npz")
     parts_dir = out_path.parent / f"{out_path.stem}_parts"
     parts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -926,7 +930,7 @@ def load_wout_subset(path: "str | Path | None" = None) -> dict:
     still running), falls back to concatenating the ``<path>_parts/`` chunk
     files on the fly, so progress can be inspected mid-run.
     """
-    path = Path(path) if path else (_DEFAULT_DATA_DIR / "wout_nfp3_subset.npz")
+    path = Path(path) if path else (_default_data_dir() / "wout_nfp3_subset.npz")
     if path.exists():
         with np.load(path, allow_pickle=False) as d:
             return {k: d[k] for k in d.files}

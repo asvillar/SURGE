@@ -3,10 +3,10 @@ title: "SURGE: Surrogate Unified Robust Generation Engine"
 message: "If you use SURGE in your research, please cite this software."
 type: software
 version: "0.1.0"
-date-released: "2026-04-22"
+date-released: "2026-10-30"
 license: BSD-3-Clause
-url: "https://github.com/S-Villar/SURGE"
-repository-code: "https://github.com/S-Villar/SURGE"
+url: "https://github.com/asvillar/SURGE"
+repository-code: "https://github.com/asvillar/SURGE"
 doi: 10.11578/dc.20260422.5
 identifiers:
   - type: url
@@ -59,10 +59,10 @@ preferred-citation:
   type: software
   title: "SURGE: Surrogate Unified Robust Generation Engine"
   version: "0.1.0"
-  date-released: "2026-04-22"
+  date-released: "2026-10-30"
   doi: 10.11578/dc.20260422.5
   url: "https://doi.org/10.11578/dc.20260422.5"
-  repository-code: "https://github.com/S-Villar/SURGE"
+  repository-code: "https://github.com/asvillar/SURGE"
   authors:
     - family-names: "Sanchez-Villar"
       given-names: "Alvaro"

@@ -7,12 +7,14 @@ import pytest
 from surge.inference.rollout import (
     autoregressive_rollout,
     choose_dt,
+    climate_histogram_error,
     layout_case_grid_frames,
     match_frame,
     persistence_rel_l2,
     regime_masks,
     sample_rollout_starts,
     stack_case_panels,
+    valid_prediction_time,
 )
 
 
@@ -81,6 +83,44 @@ def test_persistence_rel_l2_matches_manual_computation():
         np.linalg.norm(state0 - truths[1]) / np.linalg.norm(truths[1]),
     ])
     np.testing.assert_allclose(rel, expected)
+
+
+def test_valid_prediction_time_known_crossing():
+    # Error stays below 0.4 for 3 steps then crosses at step index 3 (4th step).
+    errors = np.array([0.1, 0.2, 0.35, 0.5, 0.9])
+    dt_lyapunov = 0.01 / 1.104
+    vpt = valid_prediction_time(errors, threshold=0.4, dt_lyapunov=dt_lyapunov,
+                                horizon_lyapunov=10.0)
+    assert vpt == pytest.approx(4 * dt_lyapunov)
+
+
+def test_valid_prediction_time_never_crosses_returns_horizon():
+    errors = np.full(20, 0.1)  # always well below threshold
+    vpt = valid_prediction_time(errors, threshold=0.4, dt_lyapunov=0.01 / 1.104,
+                                horizon_lyapunov=10.0)
+    assert vpt == 10.0
+
+
+def test_valid_prediction_time_defaults_horizon_to_curve_length():
+    errors = np.full(5, 0.1)
+    dt_lyapunov = 0.5
+    vpt = valid_prediction_time(errors, threshold=0.4, dt_lyapunov=dt_lyapunov)
+    assert vpt == pytest.approx(5 * dt_lyapunov)
+
+
+def test_climate_histogram_error_zero_for_identical_distributions():
+    rng = np.random.default_rng(0)
+    values = rng.standard_normal(5000)
+    err = climate_histogram_error(values, values.copy())
+    assert err == pytest.approx(0.0, abs=1e-9)
+
+
+def test_climate_histogram_error_positive_for_shifted_distribution():
+    rng = np.random.default_rng(0)
+    truth = rng.standard_normal(5000)
+    pred = rng.standard_normal(5000) + 5.0  # disjoint distribution
+    err = climate_histogram_error(truth, pred)
+    assert err > 1.0  # near-total mismatch
 
 
 def test_sample_rollout_starts_never_below_settle_steps_and_leaves_room():
@@ -224,3 +264,14 @@ def test_match_frame_nonzero_diff_when_no_exact_match():
 
     assert idx == 1
     assert diff == pytest.approx(0.4, abs=1e-6)
+
+
+def test_valid_prediction_time_nan_counts_as_crossing():
+    dt = 0.01
+    assert valid_prediction_time(np.full(50, np.nan), 0.4, dt) == pytest.approx(1 * dt)
+    errs = np.array([0.1, 0.2, 0.1, np.nan, 0.1])
+    assert valid_prediction_time(errs, 0.4, dt) == pytest.approx(4 * dt)
+    errs = np.array([0.1, np.inf, 0.1])
+    assert valid_prediction_time(errs, 0.4, dt) == pytest.approx(2 * dt)
+    # finite curves unchanged
+    assert valid_prediction_time(np.array([0.1, 0.2]), 0.4, dt, horizon_lyapunov=7.0) == 7.0

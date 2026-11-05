@@ -329,7 +329,7 @@ def pca_summary(
     Part of dataset characterization: reveals effective dimensionality and
     dominant input directions before training. This does NOT transform the
     training data (PCA-as-preprocessing is a separate, planned feature —
-    see docs/design/ARCHITECTURE_RECOMMENDATIONS.md).
+    see the split-strategy note in docs/GETTING_STARTED.md).
 
     Parameters
     ----------

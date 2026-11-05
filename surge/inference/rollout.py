@@ -24,6 +24,7 @@ __all__ = [
     "autoregressive_rollout", "persistence_rel_l2",
     "sample_rollout_starts", "choose_dt", "regime_masks",
     "layout_case_grid_frames", "stack_case_panel_frames", "match_frame",
+    "valid_prediction_time", "climate_histogram_error",
 ]
 
 
@@ -81,6 +82,99 @@ def persistence_rel_l2(initial_state: np.ndarray, truths: np.ndarray) -> np.ndar
     truths = np.asarray(truths)
     init = np.asarray(initial_state, dtype=np.float32)
     return np.array([relative_l2(t, init) for t in truths])
+
+
+def valid_prediction_time(
+    errors: np.ndarray, threshold: float, dt_lyapunov: float,
+    horizon_lyapunov: float | None = None,
+) -> float:
+    """First crossing time (in Lyapunov-time units) of a normalised error curve.
+
+    Chaotic-system rollouts (e.g. Lorenz-63) are conventionally scored by
+    "valid prediction time" (VPT): how long an autoregressive rollout tracks
+    the truth before a normalised error exceeds a threshold, measured in
+    Lyapunov times so the number is comparable across systems with different
+    divergence rates (Pathak et al. 2018, PRL 120, 024102).
+
+    Parameters
+    ----------
+    errors:
+        ``(n_steps,)`` normalised error at each rolled-out step (step ``k``
+        is ``k + 1`` model applications past the initial condition).
+    threshold:
+        Crossing threshold (e.g. 0.4).
+    dt_lyapunov:
+        Lyapunov times per step (``step_dt / lyapunov_time``), converting a
+        step index into a Lyapunov-time value.
+    horizon_lyapunov:
+        Value returned when ``errors`` never crosses ``threshold`` — i.e. the
+        rollout's total horizon in Lyapunov times. Defaults to
+        ``len(errors) * dt_lyapunov`` (consistent, but an explicit horizon
+        avoids rounding drift when the caller already knows it).
+
+    Returns
+    -------
+    vpt : float, in Lyapunov-time units.
+    """
+    errors = np.asarray(errors)
+    # A non-finite error (diverged / NaN rollout) counts as a crossing.
+    exceed = np.nonzero(~np.isfinite(errors) | (errors > threshold))[0]
+    if exceed.size == 0:
+        return float(
+            horizon_lyapunov if horizon_lyapunov is not None
+            else len(errors) * dt_lyapunov)
+    return float((int(exceed[0]) + 1) * dt_lyapunov)
+
+
+def climate_histogram_error(
+    truth_values: np.ndarray, pred_values: np.ndarray, bins: int = 50,
+) -> float:
+    """Relative L1 error between the truth/prediction value histograms.
+
+    Scores whether a long rollout reproduces a chaotic system's invariant
+    ("climate") statistics — e.g. the Lorenz-63 z-coordinate distribution —
+    even at horizons where pointwise trajectory tracking has long since
+    diverged (VPT alone would read as a flat failure there).
+
+    Parameters
+    ----------
+    truth_values, pred_values:
+        Arrays of any shape; flattened before histogramming (e.g. all steps
+        of all rolled-out trajectories).
+    bins:
+        Number of histogram bins, shared by both distributions over the
+        union of their value ranges.
+
+    Returns
+    -------
+    error : ``sum(|pred_mass - truth_mass|) / sum(|truth_mass|)`` over shared
+        equal-width bins (identical to the density-normalised form for finite
+        inputs).  Non-finite handling: bin edges come from FINITE values only;
+        masses are counts divided by the total entry count INCLUDING
+        non-finite ones, so non-finite predictions carry no mass and raise the
+        error by that fraction; a fully non-finite prediction scores 1.0.
+    """
+    truth_values = np.asarray(truth_values, dtype=np.float64).ravel()
+    pred_values = np.asarray(pred_values, dtype=np.float64).ravel()
+    n_truth, n_pred = truth_values.size, pred_values.size
+    truth_f = truth_values[np.isfinite(truth_values)]
+    pred_f = pred_values[np.isfinite(pred_values)]
+    if truth_f.size == 0 or n_truth == 0:
+        return 1.0 if n_pred else 0.0
+    if pred_f.size == 0:
+        return 1.0  # nothing finite predicted: no mass overlaps the truth
+    lo = min(truth_f.min(), pred_f.min())
+    hi = max(truth_f.max(), pred_f.max())
+    if hi <= lo:
+        hi = lo + 1e-6
+    edges = np.linspace(lo, hi, bins + 1)
+    truth_hist, _ = np.histogram(truth_f, bins=edges)
+    pred_hist, _ = np.histogram(pred_f, bins=edges)
+    # Probability masses over ALL entries (non-finite included in the total).
+    truth_mass = truth_hist / n_truth
+    pred_mass = pred_hist / n_pred
+    denom = float(np.sum(np.abs(truth_mass))) + 1e-12
+    return float(np.sum(np.abs(pred_mass - truth_mass)) / denom)
 
 
 def sample_rollout_starts(

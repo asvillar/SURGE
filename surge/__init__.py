@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.1.0rc1"
+__version__ = "0.1.0"
 __author__ = "Álvaro Sánchez Villar"
 
 from .metrics import summarize
@@ -47,9 +47,9 @@ try:
 except ImportError:
     DATASET_UTILS_AVAILABLE = False
 
-# MHD-code HDF5 loaders live in scripts/mhd_code/loader.py and are NOT part of
-# the installable wheel: they are application-specific HDF5 readers that
-# depend on the scripts/mhd_code tree alongside a working SURGE checkout.
+# MHD-code HDF5 loaders are facility-specific and are NOT part of the
+# installable wheel or the public tree (see surge.datasets.mhd_code and the
+# SURGE_MHD-code_SCRIPTS environment variable).
 # `MHD-codeDataset` (exported below) imports them lazily when a dataset is
 # actually constructed, so pip-installed users get a clean `import surge`
 # and a clear ImportError only if they try to use the MHD-code loader
@@ -94,7 +94,7 @@ if DATASET_UTILS_AVAILABLE:
     ])
 
 # MHD-code HDF5 loader functions are intentionally NOT exported: they are
-# application-specific and live under scripts/mhd_code/. Use `MHD-codeDataset`
+# facility-specific (SURGE_MHD-code_SCRIPTS). Use `MHD-codeDataset`
 # from `surge.datasets.mhd_code` (exported below) which imports them lazily.
 
 # Print availability status when package is imported

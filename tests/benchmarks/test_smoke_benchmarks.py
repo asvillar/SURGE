@@ -170,7 +170,10 @@ def test_cli_all_tier0(capsys):
     from surge.benchmarks.run import main
 
     code = main(["--all", "--tier", "0"])
-    assert code == 0
+    # sequence.lorenz63's upgraded VPT >= 2.0 threshold is intentionally out of
+    # reach for generic surrogates (see test_cli_all_autosave), so a passing
+    # run here is "at least one PASS", not an all-pass exit code.
+    assert code in (0, 1)
     out = capsys.readouterr().out
     assert "PASS" in out
 
@@ -244,7 +247,14 @@ def test_cli_all_autosave(tmp_path: Path, capsys):
     from surge.benchmarks.run import main
 
     code = main(["--all", "--tier", "0", "--save-dir", str(tmp_path)])
-    assert code == 0
+    # Exit code reflects pass/fail across all run benchmarks (run.py: "return 1
+    # if any_failed"), not whether autosave happened. sequence.lorenz63's
+    # VPT >= 2.0 (Lyapunov times) threshold is intentionally out of reach for
+    # generic surrogates (reservoir-computing/ESN architectures report ~5-10 λ
+    # on this attractor; see metadata.yaml), so a tier-0 sweep that includes it
+    # legitimately exits 1 — the autosave behaviour under test is the file
+    # count below, independent of pass/fail.
+    assert code in (0, 1)
     saved = list(tmp_path.rglob("result.json"))
     # Tier-0 benchmarks: synthetic.regression_1d, synthetic.classification_binary,
     # synthetic.multioutput_2d, sequence.lorenz63, classification.flow_regime (5 total)

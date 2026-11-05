@@ -181,6 +181,21 @@ def density_cmap(mode: str = "light"):
     return cmap
 
 
+def field_cmap(mode: str = "light"):
+    """Perceptual multi-hue colormap for physical fields spanning many decades.
+
+    The one-hue ``sequential_cmap`` is for magnitudes within about one decade
+    (bar fills, single-scale heatmaps). Fields such as a plasma temperature
+    that vary over six or more orders of magnitude need a colormap whose
+    lightness AND hue change along the scale, otherwise the structure inside
+    each case is invisible. Matplotlib ``inferno`` is used on both surfaces;
+    out-of-range values are clipped to the ends. Pair with ``log10`` data.
+    """
+    import matplotlib.pyplot as plt
+
+    return plt.get_cmap("inferno").copy()
+
+
 def diverging_cmap(mode: str = "light") -> LinearSegmentedColormap:
     """Blue <-> red diverging colormap with a neutral midpoint (signed data).
 

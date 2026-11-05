@@ -406,4 +406,3 @@ register_model(MyAdapter, key="mybackend.mymodel", aliases=["mymodel"])
 
 - [`quickstart.rst`](quickstart.rst) — diabetes / California demos
 - [`SURGE_OVERVIEW.md`](SURGE_OVERVIEW.md) — codebase tour
-- [`setup/WALKTHROUGH.md`](setup/WALKTHROUGH.md) — HPC first-run setup
