@@ -331,6 +331,7 @@ _SHORT_ALIASES: dict[str, str] = {
     "covertype":            "tabular.covertype",
     "plasma_stability":     "tabular.plasma_stability",
     "classification.plasma_stability": "tabular.plasma_stability",
+    "classification.covertype": "tabular.covertype",
     # CTR-23
     "abalone":              "ctr23.abalone",
     "bike_sharing":         "ctr23.bike_sharing",
