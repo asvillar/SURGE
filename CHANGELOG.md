@@ -132,6 +132,25 @@ All notable changes to SURGE (`surge-ml`). Follows
   ships `tests/`, `docs/`, or `examples/`, an `all` extra, and a single
   version source (`surge/__init__.__version__`).
 
+### Fixed
+
+- **Uncertainty in workflow runs**: a model with `request_uncertainty: true`
+  no longer aborts the run when its validation uncertainty is saved; the
+  file now holds `mean` and `std`. `surge init --goal uncertainty` writes a
+  Gaussian-process block with a normalised target.
+- **Column roles**: when a spec lists both inputs and outputs, those lists
+  are authoritative and other columns are left out. Text columns are never
+  picked up automatically, and listing one raises a clear error.
+- **HDF5 loading**: a dataset that would not fit in memory (default limit
+  2 GB, `SURGE_MAX_HDF5_GB`) is refused with a message naming it, and a
+  warning says which dataset was chosen when a file holds several.
+- **Wizard**: `surge init --yes` requires `--target`; the folder of `--out`
+  is created when missing.
+- **Engine**: rows dropped for missing values are reported.
+- **Benchmarks**: comparing several models on `tabular.covertype` and
+  `tabular.plasma_stability` now finds the dataset and saves under the key
+  the ledger reads.
+
 ### Changed
 
 - **Benchmark honesty review**: closed-form / linear-identity results no
