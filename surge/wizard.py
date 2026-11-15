@@ -3,7 +3,8 @@
 Inspects a data file with the existing loader/schema-inference, asks
 three questions (target, goal, budget), suggests a model slate by task
 shape, and writes a fully commented ``spec.yaml``. Non-interactive flags
-(``--data --target --goal --budget --yes``) cover scripting and tests.
+(``--data --target --goal --budget --yes``) cover scripting and tests;
+``--target`` is required in non-interactive mode (no silent default column).
 
 YAML stays the source of truth — the wizard only generates it.
 """
@@ -74,7 +75,11 @@ def _model_slate(goal: str, budget: str, n_rows: int,
                       "comment": "robust baseline"})
         if n_rows <= 5000 and "sklearn.gpr" in available:
             slate.append({"key": "sklearn.gpr", "name": "gp",
-                          "comment": "exact GP — calibrated bands (n <= 5k)",
+                          "comment": "exact GP (n <= 5k): mean and standard "
+                                     "deviation per point; check the coverage "
+                                     "on held-out data. alpha is the noise "
+                                     "level on the normalised target",
+                          "params": {"normalize_y": True, "alpha": 0.01},
                           "request_uncertainty": True})
         elif have("pytorch.mlp_ensemble"):
             slate.append({"key": "pytorch.mlp_ensemble", "name": "ensemble",
@@ -174,13 +179,14 @@ def main(argv: Optional[list[str]] = None) -> int:
                     "commented workflow spec.")
     ap.add_argument("--data", help="path to the data file (CSV/Parquet/PKL/"
                                    "HDF5/NetCDF)")
-    ap.add_argument("--target", help="target column to predict")
+    ap.add_argument("--target", help="target column to predict (required with --yes or "
+                         "when stdin is not a TTY)")
     ap.add_argument("--goal", choices=GOALS, help="what matters most")
     ap.add_argument("--budget", choices=BUDGETS, help="time budget")
     ap.add_argument("--out", default="spec.yaml", help="output spec path")
     ap.add_argument("--yes", "-y", action="store_true",
-                    help="non-interactive: accept defaults for anything "
-                         "not given via flags")
+                    help="non-interactive: accept defaults for goal/budget; "
+                         "--data and --target are required")
     args = ap.parse_args(argv)
 
     interactive = not args.yes and sys.stdin.isatty()
@@ -209,9 +215,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     candidates = _target_candidates(info)
     target = args.target
     if not target:
-        target = (candidates[0] if not interactive else
-                  _ask(f"Target column (candidates: {', '.join(candidates)})",
-                       candidates[0]))
+        if not interactive:
+            print("error: --target is required in non-interactive mode "
+                  "(--yes or no TTY); candidate columns: "
+                  f"{', '.join(candidates)}", file=sys.stderr)
+            return 2
+        target = _ask(f"Target column (candidates: {', '.join(candidates)})",
+                      candidates[0])
     if target not in info["df"].columns:
         print(f"error: column '{target}' not in the data", file=sys.stderr)
         return 2
@@ -240,6 +250,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if _ask(f"{out} exists — overwrite? (y/n)", "n") != "y":
             print("aborted")
             return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text)
 
     from surge.workflow.schema import validate_file

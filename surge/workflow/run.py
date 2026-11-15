@@ -914,12 +914,21 @@ def _extract_metric(result: ModelRunResult, metric_key: str) -> float:
     return float(split_metrics[metric])
 
 
-def _ensure_serializable(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
-    for key, value in payload.items():
-        if isinstance(value, np.ndarray):
-            result[key] = value.tolist()
-        else:
-            result[key] = value
-    return result
+def _ensure_serializable(payload: Any) -> Any:
+    """JSON-ready form of a payload; a top-level ``(mean, std)`` pair becomes a keyed dict."""
+    if isinstance(payload, (tuple, list)) and len(payload) == 2:
+        payload = {"mean": payload[0], "std": payload[1]}
+    return _jsonable(payload)
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, (tuple, list)):
+        return [_jsonable(v) for v in value]
+    return value
 
