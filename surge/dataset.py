@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -12,6 +14,8 @@ import pandas as pd
 
 from .preprocessing import analyze_dataset_structure, get_dataset_statistics, print_dataset_analysis
 from .utils import posix_str
+
+logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - optional dependency
     import yaml
@@ -440,24 +444,50 @@ class SurrogateDataset:
             return pd.read_hdf(path, **reader_kwargs)
         if H5PY_AVAILABLE:
             with h5py.File(path, "r") as handle:  # type: ignore[var-annotated]
-                dataset = self._find_first_2d_dataset(handle)
+                found: List[Any] = []
+                dataset = self._find_first_2d_dataset(handle, collect=found)
                 if dataset is None:
                     raise ValueError("Could not auto-detect a 2D dataset inside HDF5 file.")
+                if len(found) > 1:
+                    logger.warning(
+                        "HDF5 file %s holds %d 2-D datasets (%s); using '%s'. "
+                        "Pass key=... to choose another.",
+                        path, len(found), ", ".join(d.name for d in found), dataset.name,
+                    )
+                limit_gb = _max_hdf5_gb()
+                n_bytes = 1
+                for dim in dataset.shape:
+                    n_bytes *= int(dim)
+                n_bytes *= int(dataset.dtype.itemsize)
+                size_gb = n_bytes / 1024**3
+                if size_gb > limit_gb:
+                    raise ValueError(
+                        f"HDF5 dataset '{dataset.name}' has shape {tuple(dataset.shape)} "
+                        f"and would need {size_gb:.2f} GB in memory (limit {limit_gb:g} GB). "
+                        "Tabulate a sample of the rows into a table (CSV/Parquet) first, "
+                        "or raise the limit with the SURGE_MAX_HDF5_GB environment variable."
+                    )
                 data = dataset[:]
                 columns = self._hdf5_columns(dataset)
                 return pd.DataFrame(data, columns=columns)
         # Fallback to pandas (will raise helpful error if key missing)
         return pd.read_hdf(path, **reader_kwargs)
 
-    def _find_first_2d_dataset(self, group):
+    def _find_first_2d_dataset(self, group, collect: Optional[List[Any]] = None):
+        """Return the first 2-D dataset; if ``collect`` is given, append all of them."""
+        first = None
         for key, item in group.items():
             if isinstance(item, h5py.Dataset) and item.ndim == 2:
-                return item
-            if isinstance(item, h5py.Group):
-                found = self._find_first_2d_dataset(item)
-                if found is not None:
+                if collect is None:
+                    return item
+                collect.append(item)
+                first = first or item
+            elif isinstance(item, h5py.Group):
+                found = self._find_first_2d_dataset(item, collect)
+                first = first or found
+                if found is not None and collect is None:
                     return found
-        return None
+        return first
 
     def _hdf5_columns(self, dataset) -> List[str]:
         if "column_names" in dataset.attrs:
@@ -491,6 +521,16 @@ class SurrogateDataset:
             with path.open("r", encoding="utf-8") as handle:
                 return json.load(handle)
         raise ValueError(f"Unsupported metadata format: {path.suffix}")
+
+
+def _max_hdf5_gb() -> float:
+    raw = os.environ.get("SURGE_MAX_HDF5_GB")
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            logger.warning("Ignoring invalid SURGE_MAX_HDF5_GB=%r", raw)
+    return 2.0
 
 
 def _ensure_numpy_core_alias() -> None:
