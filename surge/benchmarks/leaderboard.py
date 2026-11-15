@@ -366,6 +366,14 @@ def _reset_gpu_peak_memory() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Registry keys whose metadata / loader / gate key differs (the sklearn task
+# runners already save under the metadata key; the generic path must match).
+_METADATA_KEY: dict[str, str] = {
+    "tabular.covertype": "classification.covertype",
+    "tabular.plasma_stability": "classification.plasma_stability",
+}
+
+
 def run_leaderboard(
     benchmark_keys: list[str],
     *,
@@ -443,6 +451,9 @@ def run_leaderboard(
 
     for key in benchmark_keys:
         info = benchmark_info(key)
+        # Run, gate and save under the metadata key so every model's result
+        # lands where the dataset loader, the gate table and the ledger look.
+        key = _METADATA_KEY.get(key, key)
         task_type = info["task_type"]
         candidates = model_keys if model_keys is not None else _default_models_for(task_type, key)
         results[key] = []
