@@ -49,7 +49,7 @@ The on-file result is the best of each model's newest run on or after the benchm
 | benchmark | task shape | discipline | data source + license | best on-file result (model, date) | gate | SOTA | note | visible | focus |
 |---|---|---|---|---|---|---|---|---|---|
 | `classification.covertype` | 54 → 7 | Environmental Sciences | Blackard & Dean (1999) Computers & Electronics in Agriculture | accuracy 0.759 ✗ (sklearn.gradient_boosting_classifier, 2026-10-20) | Acc ≥ 0.85 | 0.95 Accuracy [diff] | run 2026-10-20 gradient boosting acc 0.760 FAIL on 20k subsample; full 581k not yet tried | — | ✓ |
-| `fusion.m3dc1_sample` | 13 → 1 | Fusion & Plasma Physics | M3DC1 Group — NSTX-U experimental data, PPPL | r2 0.998 ✓ (synthetic fixture) (sklearn.ridge, 2026-05-22) | R² ≥ 0.85 | — | on-file result is the synthetic fallback fixture | — | — |
+| `fusion.m3dc1_sample` | 13 → 1 | Fusion & Plasma Physics | Local sample file (not distributed) | r2 0.998 ✓ (synthetic fixture) (sklearn.ridge, 2026-05-22) | R² ≥ 0.85 | — | on-file result is the synthetic fallback fixture | — | — |
 | `plasma.constellaration` | 90 → 1 | Fusion & Plasma Physics | Cadena et al. (2025) arXiv:2506.19583 — ConStellaration dataset | r2 0.899 ✓ (sklearn.mlp, 2026-05-23) | R² ≥ 0.85 | 0.982 R² [diff] | code gate fixed to 0.85 (was 0.50); rerun in progress 2026-10-20 | — | ✓ |
 | `plasma.constellaration_paper` | 90 → 12 | Fusion & Plasma Physics | Cadena et al. (2025) arXiv:2506.19583 §A.4 — 12-metric protocol | r2_mean 0.928 ✗ (pytorch.residual_mlp, 2026-05-23) | mean R² ≥ 0.85 | 0.99 R² (mean) [diff] | paper protocol, mean R² 0.929 vs paper 0.97 — parity check, honest fail | ✓ | ✓ |
 

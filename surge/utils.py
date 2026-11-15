@@ -186,7 +186,7 @@ def setup_surge_path():
     return surge_path_obj
 
 
-def get_data_path(dataset_name="HHFW-NSTX"):
+def get_data_path(dataset_name):
     """
     Get the path to a specific dataset in the SURGE repository.
 

@@ -236,10 +236,10 @@ class TestGenerateRunsFromEquilibria:
         source_dir.mkdir()
         
         # Create two equilibrium directories
-        for eq_name in ['sparc_1300', 'sparc_1301']:
+        for eq_name in ['case_1300', 'case_1301']:
             eq_dir = source_dir / eq_name
             eq_dir.mkdir()
-            input_file = eq_dir / "C1input"
+            input_file = eq_dir / "input.dat"
             input_file.write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
         
         integer_mask = [True, False, False]
@@ -248,7 +248,7 @@ class TestGenerateRunsFromEquilibria:
         
         results = gen.generate_runs_from_equilibria(
             inpnames=sample_params,
-            inputfilename="C1input",
+            inputfilename="input.dat",
             source_run_dir=str(source_dir),
             ranges=sample_ranges,
             integer_mask=integer_mask,
@@ -266,10 +266,10 @@ class TestGenerateRunsFromEquilibria:
         assert run1.exists()
         assert run2.exists()
         # Check that both runs have both equilibria
-        assert (run1 / "sparc_1300").exists()
-        assert (run1 / "sparc_1301").exists()
-        assert (run2 / "sparc_1300").exists()
-        assert (run2 / "sparc_1301").exists()
+        assert (run1 / "case_1300").exists()
+        assert (run1 / "case_1301").exists()
+        assert (run2 / "case_1300").exists()
+        assert (run2 / "case_1301").exists()
     
     def test_generate_runs_fixed_mode(self, temp_dir, sample_params, sample_ranges):
         """Test generating runs in 'fixed' mode (single equilibrium)."""
@@ -280,10 +280,10 @@ class TestGenerateRunsFromEquilibria:
         source_dir.mkdir()
         
         # Create multiple equilibrium directories
-        for eq_name in ['sparc_1300', 'sparc_1301', 'sparc_234321']:
+        for eq_name in ['case_1300', 'case_1301', 'case_234321']:
             eq_dir = source_dir / eq_name
             eq_dir.mkdir()
-            input_file = eq_dir / "C1input"
+            input_file = eq_dir / "input.dat"
             input_file.write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
         
         integer_mask = [True, False, False]
@@ -292,7 +292,7 @@ class TestGenerateRunsFromEquilibria:
         
         results = gen.generate_runs_from_equilibria(
             inpnames=sample_params,
-            inputfilename="C1input",
+            inputfilename="input.dat",
             source_run_dir=str(source_dir),
             ranges=sample_ranges,
             integer_mask=integer_mask,
@@ -308,11 +308,11 @@ class TestGenerateRunsFromEquilibria:
         for run_idx in [1, 2, 3]:
             run_dir = out_root / f"run{run_idx}"
             assert run_dir.exists()
-            # In fixed mode, should only have first equilibrium (sparc_1300)
-            assert (run_dir / "sparc_1300").exists()
-            assert not (run_dir / "sparc_1301").exists()
+            # In fixed mode, should only have first equilibrium (case_1300)
+            assert (run_dir / "case_1300").exists()
+            assert not (run_dir / "case_1301").exists()
             # Check metadata includes equilibrium name
-            assert results[run_idx - 1]['equilibrium'] == 'sparc_1300'
+            assert results[run_idx - 1]['equilibrium'] == 'case_1300'
     
     def test_generate_runs_per_case_mode(self, temp_dir, sample_params, sample_ranges):
         """Test generating runs in 'per_case' mode."""
@@ -323,10 +323,10 @@ class TestGenerateRunsFromEquilibria:
         source_dir.mkdir()
         
         # Create two equilibrium directories
-        for eq_name in ['sparc_1300', 'sparc_1301']:
+        for eq_name in ['case_1300', 'case_1301']:
             eq_dir = source_dir / eq_name
             eq_dir.mkdir()
-            input_file = eq_dir / "C1input"
+            input_file = eq_dir / "input.dat"
             input_file.write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
         
         integer_mask = [True, False, False]
@@ -335,7 +335,7 @@ class TestGenerateRunsFromEquilibria:
         
         results = gen.generate_runs_from_equilibria(
             inpnames=sample_params,
-            inputfilename="C1input",
+            inputfilename="input.dat",
             source_run_dir=str(source_dir),
             ranges=sample_ranges,
             integer_mask=integer_mask,
@@ -348,11 +348,11 @@ class TestGenerateRunsFromEquilibria:
         
         # Should create runs for each equilibrium
         assert len(results) == 4  # 2 equilibria × 2 runs
-        # Check structure: sparc_1300/run1, sparc_1300/run2, etc.
-        assert (out_root / "sparc_1300" / "run1").exists()
-        assert (out_root / "sparc_1300" / "run2").exists()
-        assert (out_root / "sparc_1301" / "run1").exists()
-        assert (out_root / "sparc_1301" / "run2").exists()
+        # Check structure: case_1300/run1, case_1300/run2, etc.
+        assert (out_root / "case_1300" / "run1").exists()
+        assert (out_root / "case_1300" / "run2").exists()
+        assert (out_root / "case_1301" / "run1").exists()
+        assert (out_root / "case_1301" / "run2").exists()
     
     def test_generate_runs_invalid_mode(self, temp_dir, sample_params, sample_ranges):
         """Test that invalid equilibria_mode raises error."""
@@ -360,18 +360,55 @@ class TestGenerateRunsFromEquilibria:
         
         source_dir = Path(temp_dir) / "source_run"
         source_dir.mkdir()
-        (source_dir / "sparc_1300").mkdir()
+        (source_dir / "case_1300").mkdir()
         
         with pytest.raises(ValueError, match="equilibria_mode must be"):
             gen.generate_runs_from_equilibria(
                 inpnames=sample_params,
-                inputfilename="C1input",
+                inputfilename="input.dat",
                 source_run_dir=str(source_dir),
                 ranges=sample_ranges,
                 integer_mask=[True, False, False],
                 n_runs=1,
                 equilibria_mode='invalid_mode',
                 seed=42
+            )
+
+
+class TestCasePrefix:
+    """case_prefix selects which sub-directories count as cases."""
+
+    def test_case_prefix_filters_folders(self, temp_dir, sample_params, sample_ranges):
+        gen = DataGenerator(dry_run=False, use_python_replacement=True)
+        source_dir = Path(temp_dir) / "source_run"
+        source_dir.mkdir()
+        for name in ["case_1300", "other_1"]:
+            d = source_dir / name
+            d.mkdir()
+            (d / "input.dat").write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
+        kwargs = dict(
+            inpnames=sample_params,
+            inputfilename="input.dat",
+            source_run_dir=str(source_dir),
+            ranges=sample_ranges,
+            integer_mask=[True, False, False],
+            n_runs=1,
+            equilibria_mode="set",
+            seed=1,
+        )
+        out_all = Path(temp_dir) / "out_all"
+        gen.generate_runs_from_equilibria(out_root=str(out_all), **kwargs)
+        assert (out_all / "run1" / "case_1300").exists()
+        assert (out_all / "run1" / "other_1").exists()
+
+        out_f = Path(temp_dir) / "out_filtered"
+        gen.generate_runs_from_equilibria(out_root=str(out_f), case_prefix="case_", **kwargs)
+        assert (out_f / "run1" / "case_1300").exists()
+        assert not (out_f / "run1" / "other_1").exists()
+
+        with pytest.raises(RuntimeError, match="No case directories"):
+            gen.generate_runs_from_equilibria(
+                out_root=str(Path(temp_dir) / "out_none"), case_prefix="zzz", **kwargs
             )
 
 
@@ -384,16 +421,16 @@ class TestSamplesFileGeneration:
         
         source_dir = Path(temp_dir) / "source_run"
         source_dir.mkdir()
-        eq_dir = source_dir / "sparc_1300"
+        eq_dir = source_dir / "case_1300"
         eq_dir.mkdir()
-        (eq_dir / "C1input").write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
+        (eq_dir / "input.dat").write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
         
         out_root = Path(temp_dir) / "output"
         out_root.mkdir()
         
         gen.generate_runs_from_equilibria(
             inpnames=sample_params,
-            inputfilename="C1input",
+            inputfilename="input.dat",
             source_run_dir=str(source_dir),
             ranges=sample_ranges,
             integer_mask=[True, False, False],

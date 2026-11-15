@@ -84,7 +84,6 @@ Core Functionalities
    BUILD_YOUR_OWN_SURROGATE
    CUSTOM_DATASET_TUTORIAL
    citation
-   SURGE_OVERVIEW
    comparison
    api_reference/index
 

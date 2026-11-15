@@ -85,21 +85,18 @@ ipython_config.py
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
 #   intended to run in multiple environments; otherwise, check them in:
-# .python-version
 
 # pipenv
 #   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
 #   However, in case of collaboration, if having platform-specific dependencies or dependencies
 #   having no cross-platform support, pipenv may install dependencies that don't work, or not
 #   install all needed dependencies.
-#Pipfile.lock
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
 
 # pdm
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
@@ -201,11 +198,7 @@ results.json
 results/*/
 !results/.gitkeep
 
-# Internal / project-local trees (data-generation runbooks, per-experiment
-# configs, Slurm launchers, investigative notebooks, internal design docs).
-# Kept on local disks for reference; not shipped in the public v0.1.0 tree.
-# Lessons extracted from these live in docs/internal/ (also ignored, but
-# maintained as a separate local-only reference — back it up yourself).
+# Local-only subtrees (not distributed).
 docs/internal/
 scripts/**/internal/
 configs/internal/
@@ -231,24 +224,15 @@ catboost_info/
 mlflow.db
 mlruns/
 
-# Editor tool configuration stays local (.claude/skills IS tracked:
-# shared maintainer playbooks)
+# Editor configuration (local)
 .cursor/
 
 # Local scientific datasets live under data/datasets/ but are never
-# tracked: distribute via external storage, fetch on demand.
-data/datasets/NSTX-U/
-data/datasets/SMART/
-data/datasets/HHFW-NSTX/
 
 # Backup and scratch files
 *.backup
 *.nohup.out
 nohup.out
-
-# Cached HuggingFace / processed plasma datasets (large, re-downloadable)
-data/datasets/constellaration/
-data/datasets/solpsnn/
 
 # Benchmark runtime data cache (downloaded or generated on first run).
 # Directory skeleton (subdirs + .gitkeep files) IS tracked; data files are not.
@@ -263,10 +247,9 @@ hall_pip_requirements.txt
 # Reference runs archive (ai4fusion-dev: local only, not committed)
 data/runs/
 
-# internal/ is the local sandbox for proprietary datasets, Slurm templates,
-# and anything else we don't redistribute. Nothing under it is tracked.
+# Local sandbox folder (not distributed).
 internal/
-# Local Slurm launch logs (job IDs, tmp copies)
+# Local launch logs
 logs/
 pscratch/
 
@@ -280,26 +263,13 @@ pscratch/
 !docs/assets/readme/dark/*.png
 !docs/assets/gallery/*.png
 
-# M3DC1 interface/visualization outputs (explicitly excluded)
 comprehensive_eigenmode*.png
 test_*.png
 eigenmode_*.png
 field_reconstruction*.png
 2d_field_*.png
 
-# M3DC1 interface artifacts directory (generated outputs)
-scripts/m3dc1/interfaces/artifacts/
-
-# M3DC1 Python support code (pulled from external repo; see docs/dev/M3DC1_PYTHON_CODE.md)
-notebooks/m3dc1/m3dc1_python_code/
-
-# HHFW pickles: not shipped in public releases; keep local only under policy.
-data/datasets/HHFW-NSTX/*.pkl
-
 # Specific notebook files
-notebooks/Test_Botorch_Pe_NSTX_Compare.ipynb
-# Ignore HPO result pickles (heavy)
-data/datasets/HHFW-NSTX/combined_hpo_results*.pkl
 
 # Notebook outputs and checkpoints
 .ipynb_checkpoints/
@@ -319,32 +289,21 @@ REFACTORING_SUMMARY.md
 
 # Test artifacts and outputs
 test_outputs/
-test_hhfw*.py
 
 # Documentation files (keep local only)
-RUN_HHFW_TEST.md
 TRAINER_COMPARISON_REPORT.md
 UNIFIED_FRAMEWORK_SUMMARY.md
 BRANCH_STRATEGY.md
 
-# Slurm tee logs from scripts/m3dc1/train_*_augstyle.slurm
 slurm_logs/
-
 
 # Local HPC scratch links / accidental staging dirs (never public)
 pscratch/
 /src/
 slurm_logs/
-/m3dc1/
 
-# Slurm batch logs accumulate in logs/ — already ignored via runs/ but
-# logs/ is a separate convention used by scripts/m3dc1/internal/launch_*.sh
+# Batch logs
 logs/
-
-# Vendored external simulator python packages (e.g. m3dc1 unstructured)
-# should never be in the public tree; users with HPC access set
-# M3DC1_PYTHON_PATH if they need eigenmode_features' optional import.
-notebooks/**/m3dc1_python_code/
 
 # Sphinx autosummary regenerates these on every build.
 docs/_build/
@@ -359,18 +318,23 @@ docs/api_reference/generated/
 examples/viz_gallery_output/
 dist_test/
 
-# AI-assistant working files and internal planning notes stay local (never
-# part of the public tree); internal/ already holds the archived material.
+# Local planning notes and tool configuration
 /.claude/
 /CLAUDE.md
 /*_PLAN.md
 /docs/plan.md
 /docs/status.md
 /docs/agents/
-/docs/smart/
 /docs/design/
 /docs/dev/
-/scripts/m3dc1/
 /scripts/datagen/
 /scripts/hpc/
 /templates/
+
+# Local datasets are never tracked; benchmark caches are handled by the rules above
+/data/datasets/*/
+!/data/datasets/benchmarks/
+# Local notebooks and application-specific working folders
+/notebooks/
+# Local audit and scratch work
+/audit/

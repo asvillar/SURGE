@@ -551,7 +551,6 @@ with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
 | **Getting started (one page)** | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
 | Build your own surrogate | [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md) |
 | Install reference | [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) |
-| Codebase tour | [`docs/SURGE_OVERVIEW.md`](docs/SURGE_OVERVIEW.md) |
 | Benchmark definitions & citations | [ledger](docs/benchmarks/README.md), [`surge/benchmarks/metadata.yaml`](surge/benchmarks/metadata.yaml), [References](#references) |
 | Release notes | [`CHANGELOG.md`](CHANGELOG.md), [`docs/RELEASING.md`](docs/RELEASING.md) |
 | Colab notebook | [`examples/notebooks/surge_fusion_quickstart.ipynb`](examples/notebooks/surge_fusion_quickstart.ipynb) |

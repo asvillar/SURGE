@@ -3,13 +3,13 @@
 Provides a simple DataGenerator class that can create parameter samples
 using random uniform sampling or Latin Hypercube Sampling (LHS) and
 write/replace values into input files by calling external shell scripts
-from the HotPlasmaAI/bin folder (replace_var.sh).
+from a user-supplied bin folder (replace_var.sh).
 
 API (high level):
   generator = DataGenerator(bin_dir=...)
   generator.generate(
       inpnames=[...],
-      inputfilename='C1input',
+      inputfilename='input.dat',
       ranges=[[min,max],...],
       integer_mask=[True,False,...],
       n_samples=10,
@@ -40,7 +40,7 @@ class DataGenerator:
     """Generate parameter cases and modify input files using helper scripts.
 
     Args:
-        bin_dir: directory where HotPlasmaAI/bin scripts live (replace_var.sh)
+        bin_dir: directory containing the helper scripts (replace_var.sh)
         replace_script: script name to call for replacing variables (default: replace_var.sh)
     """
 
@@ -51,11 +51,12 @@ class DataGenerator:
         dry_run: bool = False,
         use_python_replacement: bool = False,
     ):
-        self.bin_dir = bin_dir or str(Path.home() / "HotPlasmaAI" / "bin")
+        # Folder holding the external replace script; SURGE_DATAGEN_BIN overrides the default.
+        self.bin_dir = bin_dir or os.environ.get("SURGE_DATAGEN_BIN") or str(Path.home() / "bin")
         self.replace_script = replace_script
         # If dry_run is True, the generator will not execute external scripts and
         # will only print the replacement commands. Useful for testing on systems
-        # that don't have the HotPlasmaAI scripts available.
+        # that don't have the helper scripts available.
         self.dry_run = bool(dry_run)
         # If True, perform in-Python replacement (no external sed/perl) and
         # avoid creating editor backup files like file.py~.
@@ -569,6 +570,7 @@ class DataGenerator:
         seed: Optional[int] = None,
         template_inpfile: Optional[str] = None,
         log_space: Optional[Sequence[bool]] = None,
+        case_prefix: str = "",
     ) -> List[dict]:
         """Create run folders from existing equilibria case folders.
 
@@ -597,7 +599,7 @@ class DataGenerator:
         Args:
             inpnames: Parameter names to modify.
             inputfilename: Basename of the input file to edit inside each case directory.
-            source_run_dir: Directory containing one or more equilibria case folders (e.g., sparc_*).
+            source_run_dir: Directory containing one or more equilibria case folders whose names start with `case_prefix` (all sub-directories if empty).
             ranges: [[min, max], ...] per parameter.
             integer_mask: List of booleans specifying integer parameters.
             n_runs: Number of runs to create.
@@ -608,6 +610,8 @@ class DataGenerator:
             template_inpfile: Optional full path to a reference input file. If a copied case is
                 missing the required input file, this template will be copied into the case before
                 attempting replacements.
+            case_prefix: Only sub-directories whose names start with this prefix are
+                treated as cases (default "": every sub-directory is a case).
             log_space: Optional sequence of booleans indicating which parameters should be sampled
                      in log space. If None, all parameters are sampled in linear space. For 
                      log-space sampling, samples are drawn uniformly in log space then exponentiated.
@@ -629,9 +633,9 @@ class DataGenerator:
         if not os.path.isdir(source_run_dir):
             raise FileNotFoundError(f"Source run dir not found: {source_run_dir}")
 
-        cases = sorted([d for d in os.listdir(source_run_dir) if os.path.isdir(os.path.join(source_run_dir, d)) and d.startswith("sparc_")])
+        cases = sorted([d for d in os.listdir(source_run_dir) if os.path.isdir(os.path.join(source_run_dir, d)) and d.startswith(case_prefix)])
         if not cases:
-            raise RuntimeError(f"No sparc_ case directories found in {source_run_dir}")
+            raise RuntimeError(f"No case directories (prefix {case_prefix!r}) found in {source_run_dir}")
 
         dim = len(inpnames)
 

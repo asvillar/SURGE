@@ -19,7 +19,6 @@
 | [BUILD_YOUR_OWN_SURROGATE.md](BUILD_YOUR_OWN_SURROGATE.md) | Train on your data + embed new models |
 | [CUSTOM_DATASET_TUTORIAL.md](CUSTOM_DATASET_TUTORIAL.md) | Redirect → BUILD_YOUR_OWN_SURROGATE |
 | [citation.rst](citation.rst) | OSTI / MLA and DOE Code |
-| [SURGE_OVERVIEW.md](SURGE_OVERVIEW.md) | Deeper tour of the codebase |
 | [setup/INSTALLATION.md](setup/INSTALLATION.md) | Long-form install and tips |
 | [design/](design/) | Architecture roadmap and benchmark-restructure design (maintainers) |
 

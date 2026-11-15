@@ -125,5 +125,8 @@ class TestDatagenWindowsGuard:
         monkeypatch.setattr(
             "surge.datagen.generator.Path.home", staticmethod(lambda: fake_home)
         )
+        monkeypatch.delenv("SURGE_DATAGEN_BIN", raising=False)
         gen = DataGenerator()
-        assert gen.bin_dir == str(fake_home / "HotPlasmaAI" / "bin")
+        assert gen.bin_dir == str(fake_home / "bin")
+        monkeypatch.setenv("SURGE_DATAGEN_BIN", "/opt/tools/bin")
+        assert DataGenerator().bin_dir == "/opt/tools/bin"

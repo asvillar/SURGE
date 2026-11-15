@@ -54,7 +54,7 @@ input_a,input_b,input_c,output_x,output_y
 ```
 
 Remove NaNs before training. Nested simulation HDF5 (M3DC1 batches, XGC dirs)
-uses specialized loaders — see [`SURGE_OVERVIEW.md`](SURGE_OVERVIEW.md).
+uses specialized loaders in `surge/datasets/`.
 
 Generate the bundled tutorial dataset:
 
@@ -405,4 +405,3 @@ register_model(MyAdapter, key="mybackend.mymodel", aliases=["mymodel"])
 ## Related
 
 - [`quickstart.rst`](quickstart.rst) — diabetes / California demos
-- [`SURGE_OVERVIEW.md`](SURGE_OVERVIEW.md) — codebase tour

@@ -687,7 +687,7 @@ benchmarks:
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
   tier: 2
-  citation: M3DC1 Group — NSTX-U experimental data, PPPL
+  citation: "Local sample file of M3D-C1 equilibrium parameters (not distributed with SURGE)"
   url: https://m3dc1.pppl.gov
   shape: 13 → 1
   n: ~500
@@ -696,7 +696,7 @@ benchmarks:
   description: 'Tokamak MHD equilibrium surrogate: map equilibrium parameters to a stability/growth-rate
     metric.'
   task_explainer: "Thirteen normalised MHD equilibrium parameters are mapped to a single stability metric of a tokamak plasma computed by the M3D-C1 extended-MHD code. A surrogate would replace expensive 3D MHD runs. If the real HDF5 file is absent a synthetic linear fixture is used instead, so check the 'synthetic fixture' badge before trusting R²."
-  published_in: "M3D-C1 group, PPPL (NSTX-U-related sample); local HDF5 data/datasets/M3DC1/m3dc1_sample.hdf5, otherwise synthetic fallback"
+  published_in: "Local sample file, not distributed; a synthetic fallback fixture is used when it is absent"
   sota:
     value: null
     metric: "R²"
