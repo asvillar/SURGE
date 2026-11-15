@@ -227,7 +227,6 @@ mlruns/
 # Editor configuration (local)
 .cursor/
 
-# Local scientific datasets live under data/datasets/ but are never
 
 # Backup and scratch files
 *.backup
@@ -269,7 +268,6 @@ eigenmode_*.png
 field_reconstruction*.png
 2d_field_*.png
 
-# Specific notebook files
 
 # Notebook outputs and checkpoints
 .ipynb_checkpoints/
@@ -319,8 +317,6 @@ examples/viz_gallery_output/
 dist_test/
 
 # Local planning notes and tool configuration
-/.claude/
-/CLAUDE.md
 /*_PLAN.md
 /docs/plan.md
 /docs/status.md
