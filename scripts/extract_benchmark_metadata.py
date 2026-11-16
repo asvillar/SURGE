@@ -2,7 +2,7 @@
 """One-shot extraction of benchmark metadata into surge/benchmarks/metadata.yaml.
 
 Sources:
-  1. The retired Cursor canvas leaderboard (surge/viz/leaderboard.canvas.tsx,
+  1. The retired editor canvas leaderboard (surge/viz/leaderboard.canvas.tsx,
      read from git history) — structured fields: name, citation, url, shape,
      n, capability, tier, primary metric, threshold, IO feature descriptions.
   2. docs/BENCHMARK_VERIFICATION_BRIEF.md — verified one-line problem

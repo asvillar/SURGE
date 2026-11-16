@@ -183,7 +183,7 @@ All notable changes to SURGE (`surge-ml`). Follows
 
 - Legacy modules (`surge/legacy/`, `surge/models.py`,
   `surge/visualization.py`, duplicate `surge/registry.py`).
-- Editor-specific tooling (Cursor canvas dashboards and refresh scripts);
+- Editor-specific tooling (editor canvas dashboards and refresh scripts);
   the leaderboard is now artifact-driven HTML.
 - Generated artifacts from version control (MLflow state, benchmark
   report trees, backup files, tooling demos).

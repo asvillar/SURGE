@@ -29,10 +29,8 @@ out of scope for `0.1.0`.
 2. New user-visible behaviour is documented in `docs/` and, when
    relevant, in the `README.md`.
 3. New public APIs carry docstrings and type hints.
-4. No new absolute NERSC-style paths (`/global/homes/...`,
-   `/pscratch/...`) land in tracked source. Use relative paths or
-   environment variables. See [`docs/AUDIT_NIGHT1.md`](./docs/AUDIT_NIGHT1.md)
-   for the disclosure-safety rationale.
+4. No new absolute cluster paths (home or scratch directories) land in
+   tracked source. Use relative paths or environment variables.
 5. The `[surge.fit] ...` banner still appears exactly once per model
    train. If a PR changes that, the reason belongs in the commit
    message.

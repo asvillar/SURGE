@@ -41,7 +41,7 @@ or CLI banner. At minimum: -->
 
 ## Checklist
 
-- [ ] No absolute NERSC-style paths (`/global/homes/...`, `/pscratch/...`)
+- [ ] No absolute cluster paths (home or scratch directories)
       added to tracked source
 - [ ] No large binary / data blobs added to `data/` or elsewhere
 - [ ] Commit messages use imperative, present-tense style
