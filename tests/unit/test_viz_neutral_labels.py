@@ -14,7 +14,7 @@ from surge.viz.comparison import plot_inference_comparison_grid, plot_mse_compar
 from surge.viz.hpo import plot_hpo_convergence
 from surge.viz.profiles import plot_profile_comparison_with_inset
 
-BANNED = ("TORIC", "P_c", "P_e", "MW", "gB", "RFR")
+BANNED = ("P_c", "P_e", "MW", "gB", "RFR")
 
 
 def _texts(fig):
