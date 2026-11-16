@@ -3,8 +3,8 @@ SURGE (Surrogate Unified Robust Generation Engine)
 Copyright (c) 2025 Álvaro Sánchez Villar
 
 This work was supported by the U.S. Department of Energy, Office of Science,
-Fusion Energy Sciences, under contract/award number DE-AC02-09CH11466
-(Argonne National Laboratory, U.S. Department of Energy contract).
+Fusion Energy Sciences, under contract number DE-AC02-09CH11466 with
+Princeton University, which operates the Princeton Plasma Physics Laboratory.
 
 The software is licensed under the BSD 3-Clause License; see the LICENSE
 file. Third-party components retain their own licenses as noted in source
@@ -12,8 +12,9 @@ files or in documentation where applicable.
 
 DISCLAIMER: This work was prepared as an account of work sponsored by an
 agency of the United States Government. Neither the United States Government
-nor any agency thereof, nor UChicago Argonne, LLC, nor any of their employees
-or officers, makes any warranty, express or implied, or assumes any legal
+nor any agency thereof, nor any of their employees, nor any of their
+contractors, subcontractors or their employees, makes any warranty, express
+or implied, or assumes any legal
 liability or responsibility for the accuracy, completeness, or usefulness
 of any information, apparatus, product, or process disclosed, or represents
 that its use would not infringe privately owned rights. Reference herein to
