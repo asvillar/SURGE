@@ -17,12 +17,6 @@ answers are fine. Delete sections that don't apply.
 - [ ] `ci` — CI / build / tooling
 - [ ] `chore` — housekeeping
 
-## Roadmap / plan link
-
-<!-- If this PR is a scheduled item, link the section of
-docs/ROADMAP.md, docs/REFACTORING_PLAN.md, or docs/RELEASE_SPRINT.md.
-E.g. "closes T1.3 of docs/RELEASE_SPRINT.md". -->
-
 ## Test plan
 
 <!-- How did you verify this locally? Paste the relevant pytest output
@@ -37,7 +31,7 @@ or CLI banner. At minimum: -->
 ## Backwards compatibility
 
 - [ ] No public API change
-- [ ] Public API change, documented above and in `docs/ROADMAP.md`
+- [ ] Public API change, documented above and in the docs
 
 ## Checklist
 

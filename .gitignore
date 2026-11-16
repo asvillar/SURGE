@@ -226,7 +226,6 @@ mlruns/
 
 # Editor configuration (local)
 
-
 # Backup and scratch files
 *.backup
 *.nohup.out
@@ -238,18 +237,13 @@ data/datasets/benchmarks/**
 !data/datasets/benchmarks/**/
 !data/datasets/benchmarks/**/.gitkeep
 
-# Conda environment backup files
-hall_backup.yml
-hall_pip_requirements.txt
-
-# Reference runs archive (ai4fusion-dev: local only, not committed)
+# Local run archives
 data/runs/
 
 # Local sandbox folder (not distributed).
 internal/
 # Local launch logs
 logs/
-pscratch/
 
 # Exclude all PNGs (research plots, run figures, etc.) except the
 # design-system logos we ship in data/logos/ and the curated README
@@ -266,7 +260,6 @@ test_*.png
 eigenmode_*.png
 field_reconstruction*.png
 2d_field_*.png
-
 
 # Notebook outputs and checkpoints
 .ipynb_checkpoints/
@@ -287,16 +280,8 @@ REFACTORING_SUMMARY.md
 # Test artifacts and outputs
 test_outputs/
 
-# Documentation files (keep local only)
-TRAINER_COMPARISON_REPORT.md
-UNIFIED_FRAMEWORK_SUMMARY.md
-BRANCH_STRATEGY.md
-
 slurm_logs/
 
-# Local HPC scratch links / accidental staging dirs (never public)
-pscratch/
-/src/
 slurm_logs/
 
 # Batch logs
@@ -306,30 +291,9 @@ logs/
 docs/_build/
 docs/api_reference/generated/
 
-# Legacy / shadow `surge/models/` package directory. The canonical
-# module is the tracked `surge/models.py`; the local `surge/models/`
-# directory is an older/alternative layout kept on some checkouts.
-# Keeping it ignored is what avoids the CI vs local collision (see
-# commits 6f33d89 and ead0177 for the bug and fix).
-/surge/models/
 examples/viz_gallery_output/
 dist_test/
-
-# Local planning notes and tool configuration
-/*_PLAN.md
-/docs/plan.md
-/docs/status.md
-/docs/agents/
-/docs/design/
-/docs/dev/
-/scripts/datagen/
-/scripts/hpc/
-/templates/
 
 # Local datasets are never tracked; benchmark caches are handled by the rules above
 /data/datasets/*/
 !/data/datasets/benchmarks/
-# Local notebooks and application-specific working folders
-/notebooks/
-# Local audit and scratch work
-/audit/

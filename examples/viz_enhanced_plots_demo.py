@@ -9,7 +9,7 @@ This script demonstrates the new publication-quality plotting capabilities:
 - Comprehensive data analysis suite
 
 Usage:
-    python examples/viz_enhanced_plots_demo.py [--run-dir runs/enhanced_demo_fast]
+    python examples/viz_enhanced_plots_demo.py --run-dir <run folder>
 """
 
 from __future__ import annotations
@@ -172,8 +172,8 @@ def demo_data_analysis(dataset: SurrogateDataset, output_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(description='Enhanced visualization plots demo')
-    parser.add_argument('--run-dir', type=str, default='runs/enhanced_demo_fast',
-                       help='Path to SURGE workflow run directory')
+    parser.add_argument('--run-dir', type=str, required=True,
+                       help='Folder written by `surge run` (workflow run directory)')
     parser.add_argument('--output-dir', type=str, default=None,
                        help='Output directory for plots (default: run_dir/plots)')
     parser.add_argument('--dataset', type=str, default=None,

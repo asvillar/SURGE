@@ -22,7 +22,7 @@ To add a new model to SURGE, you need to:
 
 ### Step 1: Create the Adapter File
 
-Create a new file: `surge/models/adapters/cnn_adapter.py`
+Create a new file: `surge/model/adapters/cnn_adapter.py`
 
 ```python
 """PyTorch CNN adapter for SURGE."""
@@ -452,7 +452,7 @@ __all__ = ["CNNAdapter"]
 
 ## Step 8: Update the Adapters Module
 
-Edit `surge/models/adapters/__init__.py` to include your new adapter:
+Edit `surge/model/adapters/__init__.py` to include your new adapter:
 
 ```python
 """Adapter registry bootstrap."""
@@ -660,7 +660,7 @@ MODEL_REGISTRY.register(
 
 ### Model not found in registry
 - Make sure you've imported the adapter module (it auto-registers on import)
-- Check that `surge/models/adapters/__init__.py` imports your adapter
+- Check that `surge/model/adapters/__init__.py` imports your adapter
 - Verify the key/alias matches what you're using
 
 ### "Model not fitted" error
@@ -686,5 +686,5 @@ MODEL_REGISTRY.register(
 
 ---
 
-*For questions or issues, refer to existing adapters in `surge/models/adapters/` as reference implementations.*
+*For questions or issues, refer to existing adapters in `surge/model/adapters/` as reference implementations.*
 

@@ -21,7 +21,7 @@ From a clone (recommended for development)
 
 .. code-block:: bash
 
-   git clone https://github.com/S-Villar/SURGE.git
+   git clone https://github.com/asvillar/SURGE.git
    cd SURGE
    python -m venv .venv
    source .venv/bin/activate  # Windows: .venv\Scripts\activate
@@ -30,7 +30,7 @@ From a clone (recommended for development)
 
 Using `uv <https://github.com/astral-sh/uv>`__ is supported and faster; see
 :doc:`index` and the
-`README <https://github.com/S-Villar/SURGE/blob/main/README.md>`__ for a
+`README <https://github.com/asvillar/SURGE/blob/main/README.md>`__ for a
 copy-paste recipe.
 
 Core and optional stack
@@ -54,9 +54,3 @@ Verify
    from surge import SurrogateWorkflowSpec
    assert surge.__version__
    print("SURGE", surge.__version__, "— OK")
-
-HPC / NERSC
------------
-
-See the walkthrough in the repository:
-the project README's install section.

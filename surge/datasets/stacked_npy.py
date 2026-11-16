@@ -11,17 +11,38 @@ import pandas as pd
 from ..dataset import SurrogateDataset
 
 
+def _resolve_stack_prefix(data_dir: Path, set_name: Optional[str]) -> str:
+    """Return the file-name prefix of the stack to load from ``data_dir``.
+
+    A stack is a set of files ``<prefix>_data.npy`` and ``<prefix>_target.npy``
+    (optionally ``<prefix>_var_all.npy``). If ``set_name`` is given it is used
+    as the prefix; otherwise the directory must hold exactly one stack.
+    """
+    if set_name:
+        return str(set_name)
+    prefixes = sorted(p.name[: -len("_data.npy")] for p in data_dir.glob("*_data.npy"))
+    if len(prefixes) == 1:
+        return prefixes[0]
+    if not prefixes:
+        raise FileNotFoundError(f"No '<name>_data.npy' file found in {data_dir}")
+    raise ValueError(
+        f"Several stacks found in {data_dir}: {prefixes}. Pass set_name=<prefix> to choose one."
+    )
+
+
 def _load_stacked_npy(
     data_dir: Union[str, Path],
-    set_name: str = "set1",
+    set_name: Optional[str] = None,
     sample: Optional[int] = None,
     random_state: int = 42,
     row_range: Optional[tuple[int, int]] = None,
 ) -> tuple[pd.DataFrame, List[str], List[str]]:
     """
-    Load a conventional stacked-.npy directory into a DataFrame.
+    Load a stacked-.npy directory into a DataFrame.
 
-    File naming: data_nprev5_{set_name}_data.npy, _target.npy, _var_all.npy
+    File naming: ``<set_name>_data.npy``, ``<set_name>_target.npy`` and an
+    optional ``<set_name>_var_all.npy``. If ``set_name`` is None, the single
+    ``*_data.npy`` stack found in the directory is used.
 
     Parameters
     ----------
@@ -30,7 +51,7 @@ def _load_stacked_npy(
         evaluation (e.g. row_range=(50000, 100000) for a held-out chunk).
     """
     data_dir = Path(data_dir)
-    prefix = f"data_nprev5_{set_name}"
+    prefix = _resolve_stack_prefix(data_dir, set_name)
     data_path = data_dir / f"{prefix}_data.npy"
     target_path = data_dir / f"{prefix}_target.npy"
     var_all_path = data_dir / f"{prefix}_var_all.npy"
@@ -38,7 +59,7 @@ def _load_stacked_npy(
     if not data_path.exists():
         raise FileNotFoundError(
             f"Expected data file not found: {data_path}. "
-            f"Check set_name (e.g. 'set1' or 'set2_beta0p5')."
+            f"Check set_name (the file-name prefix before '_data.npy')."
         )
     if not target_path.exists():
         raise FileNotFoundError(f"Target file not found: {target_path}")
@@ -70,15 +91,11 @@ def _load_stacked_npy(
         var_all = np.load(var_all_path, allow_pickle=True)
         if hasattr(var_all, "tolist"):
             var_all = var_all.tolist()
-        # Store in metadata for reference; 14 vars vs 201 inputs suggests
-        # each var has multiple spatial points
+        # Store in metadata for reference; fewer variable names than input
+        # columns suggests each variable spans several slots (e.g. stages)
         pass  # Could add df.attrs["var_all"] = var_all if needed
 
     return df, input_cols, output_cols
-
-
-# Backward-compatible name used by some notebooks and tests.
-_load_olcf_npy = _load_stacked_npy
 
 
 class StackedNpyDataset(SurrogateDataset):
@@ -86,52 +103,8 @@ class StackedNpyDataset(SurrogateDataset):
     Stacked .npy directory layout (``format="stacked_npy"`` in ``SurrogateDataset``).
 
     Constructors:
-    - ``from_olcf_hackathon``: directory with ``data_nprev5_*`` naming (legacy name, kept for API stability)
     - ``from_npy``: explicit path to input and target arrays
     """
-
-    @classmethod
-    def from_olcf_hackathon(
-        cls,
-        data_dir: Union[str, Path],
-        *,
-        set_name: str = "set1",
-        sample: Optional[int] = None,
-        random_state: int = 42,
-    ) -> "StackedNpyDataset":
-        """
-        Load from a directory that follows the ``data_nprev5_*`` file naming convention.
-
-        Parameters
-        ----------
-        data_dir : str or Path
-            Path to the directory containing the .npy stacks
-        set_name : str
-            Dataset set name: "set1" (lower beta) or "set2_beta0p5"
-        sample : int, optional
-            Subsample for testing (e.g. 10000). If None, load full dataset.
-        random_state : int
-            Random seed for subsampling
-
-        Returns
-        -------
-        StackedNpyDataset
-            Loaded dataset with input_0..input_200, output_0, output_1
-        """
-        df, input_cols, output_cols = _load_stacked_npy(
-            data_dir,
-            set_name=set_name,
-            sample=sample,
-            random_state=random_state,
-        )
-        dataset = cls()
-        dataset.load_from_dataframe(
-            df,
-            input_columns=input_cols,
-            output_columns=output_cols,
-        )
-        dataset.file_path = Path(data_dir)
-        return dataset
 
     @classmethod
     def from_npy(

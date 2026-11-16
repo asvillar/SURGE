@@ -1,4 +1,4 @@
-"""Optional MLflow integration for SURGE run tracking (AmSC-style auditing)."""
+"""Optional MLflow integration for SURGE run tracking (run auditing)."""
 
 from __future__ import annotations
 

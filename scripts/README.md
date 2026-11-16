@@ -5,8 +5,6 @@ scripts that are **not** part of the importable `surge` API:
 
 - `benchmark_scale.py` — measure the scaling levers (device, threads, batch
   fan-out) and cache the numbers behind the scale figure.
-- `extract_benchmark_metadata.py` — the one-off that seeded
-  `surge/benchmarks/metadata.yaml`.
 - `plot_training.py`, `utils/show_surge_training_progress.py` — live/offline
   training-loss viewers for a run.
 - `utils/check_installation.py` — verify an install.

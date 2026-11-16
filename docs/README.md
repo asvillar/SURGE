@@ -2,7 +2,7 @@
 
 ## Current status (v0.1.0)
 
-- **Source:** public repository [github.com/S-Villar/SURGE](https://github.com/S-Villar/SURGE).
+- **Source:** public repository [github.com/asvillar/SURGE](https://github.com/asvillar/SURGE).
 - **DOE record:** [DOE Code 179819](https://www.osti.gov/doecode/biblio/179819), DOI [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5).
 - **Build:** `.readthedocs.yaml` at the repo root; Python 3.11; install path + `[docs]` extra.
 - **Formal citation:** see [citation.rst](citation.rst) (*Citing SURGE*) and the root [CITATION.cff](../CITATION.cff).
@@ -20,7 +20,6 @@
 | [CUSTOM_DATASET_TUTORIAL.md](CUSTOM_DATASET_TUTORIAL.md) | Redirect → BUILD_YOUR_OWN_SURROGATE |
 | [citation.rst](citation.rst) | OSTI / MLA and DOE Code |
 | [setup/INSTALLATION.md](setup/INSTALLATION.md) | Long-form install and tips |
-| [design/](design/) | Architecture roadmap and benchmark-restructure design (maintainers) |
 
 ## Build locally
 
@@ -33,4 +32,3 @@ make -C docs html
 
 ## Navigation index
 
-Internal planning and prerelease checklists (PRERELEASE, ROADMAP, etc.) are **excluded** in `conf.py` so they are not published on Read the Docs; they remain in the repository for maintainers.

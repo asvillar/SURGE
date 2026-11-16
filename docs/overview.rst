@@ -12,7 +12,7 @@ High-Level Architecture
 
   - ``surge/dataset.py`` – dataset ingestion + auto-detection
   - ``surge/engine.py`` – splitting, standardization, metrics, timing
-  - ``surge/registry.py`` – unified model registry + adapter metadata
+  - ``surge/model/registry.py`` – unified model registry + adapter metadata
   - ``surge/workflow/`` – YAML spec + orchestration runner
   - ``surge/io/`` – artifact writers (models, scalers, metrics, predictions)
   - ``surge/viz/`` – reusable plotting helpers (density scatter, violin/SNR, etc.)

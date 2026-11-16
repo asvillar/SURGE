@@ -29,8 +29,6 @@ DEFAULT_MODEL_DISPLAY = {
     "random_forest_profiles": "Random Forest",
     "torch_mlp_mc_dropout": "MLP",
     "gpflow_gpr_profiles": "GPR",
-    "mlp_aparallel": "MLP",
-    "rf_aparallel": "Random Forest",
 }
 
 
@@ -110,7 +108,7 @@ def viz_hpo(
     if not hpo_files:
         return []
 
-    # Build method names from filenames (mlp_aparallel_hpo -> MLP)
+    # Build method names from filenames (torch_mlp_mc_dropout_hpo -> MLP)
     hpo_dict = {}
     for f in hpo_files:
         model_key = f.stem.replace("_hpo", "")
@@ -173,7 +171,7 @@ def viz_run(
     datastreamset_max : int, default=10
         Max datastreamsets to evaluate.
     datastreamset_eval_set : str, optional
-        Override set_name for datastreamset eval (e.g. set2_beta0p5 for cross-set eval).
+        Override set_name for datastreamset eval (e.g. another stack in the same folder).
 
     Returns
     -------
@@ -379,8 +377,8 @@ def viz_shap(
     tree_only : bool, default=False
         If True, only run SHAP for tree models (skip KernelExplainer for non-tree).
     output_index : int, optional
-        For multi-output models, which output to explain (0-based). For the A_parallel target,
-        output_1 = A_parallel. If None and dataset_format is stacked_npy with 2 outputs, uses 1.
+        For multi-output models, which output to explain (0-based). If None, the first
+        output (index 0) is explained.
 
     Returns
     -------
@@ -419,13 +417,8 @@ def viz_shap(
     with summary_file.open("r", encoding="utf-8") as f:
         summary = json.load(f)
 
-    # Infer output_index for the A_parallel target: output_1 is A_parallel
-    shap_output_index = output_index
-    if shap_output_index is None:
-        fmt = (spec.dataset_format or "").lower()
-        n_out = summary.get("dataset", {}).get("n_outputs", 0)
-        if fmt == "stacked_npy" and n_out >= 2:
-            shap_output_index = 1
+    # Default to the first output unless the caller chose one.
+    shap_output_index = output_index if output_index is not None else 0
 
     dataset_path = Path(summary.get("dataset", {}).get("file_path", spec.dataset_path))
     if not dataset_path.exists():
@@ -646,7 +639,7 @@ DRIFT_RMSE_RATIO_THRESHOLD = 1.5
 def _apply_drift_detection(
     results: Dict[str, Any],
     run_dir: Path,
-    output_key: str = "output_1",
+    output_key: str = "output_0",
     r2_drop_threshold: float = DRIFT_R2_DROP_THRESHOLD,
     rmse_ratio_threshold: float = DRIFT_RMSE_RATIO_THRESHOLD,
 ) -> None:
@@ -783,6 +776,7 @@ def viz_datastreamset_evaluation(
     max_datastreamsets: int = 10,
     datastreamset_offset: int = 0,
     eval_set_name: Optional[str] = None,
+    output_key: str = "output_0",
 ) -> Dict[str, Any]:
     """
     Evaluate trained models on held-out datastreamsets of the dataset.
@@ -806,8 +800,11 @@ def viz_datastreamset_evaluation(
     datastreamset_offset : int, default=0
         Start from this datastreamset index (datastreamset_offset * datastreamset_size).
     eval_set_name : str, optional
-        Override set_name when loading datastreamsets (e.g. set2_beta0p5 for cross-set eval).
-        If None, uses spec.metadata_overrides.set_name (train set).
+        Override set_name when loading datastreamsets (e.g. another stack in the same folder).
+        If None, uses spec.metadata_overrides.set_name (train set), if any.
+    output_key : str, default="output_0"
+        Which output ("output_<i>") drives drift detection and the plots; the first
+        output by default.
 
     Returns
     -------
@@ -865,7 +862,7 @@ def viz_datastreamset_evaluation(
     train_ranges = _load_or_build_train_ranges(
         run_dir, spec, dataset_path, summary, input_scaler, output_scaler
     )
-    train_set_name = (spec.metadata_overrides or {}).get("set_name", "set1")
+    train_set_name = (spec.metadata_overrides or {}).get("set_name")
     effective_eval_set = eval_set_name if eval_set_name is not None else train_set_name
     if train_ranges:
         results: Dict[str, Any] = {
@@ -890,7 +887,8 @@ def viz_datastreamset_evaluation(
 
         try:
             hints = dict(spec.metadata_overrides or {})
-            hints["set_name"] = effective_eval_set
+            if effective_eval_set is not None:
+                hints["set_name"] = effective_eval_set
             hints["row_range"] = (start, end)
             dataset = SurrogateDataset.from_path(
                 dataset_path,
@@ -971,7 +969,7 @@ def viz_datastreamset_evaluation(
             results["datastreamsets"][datastreamset_key]["models"][name] = metrics
 
     # Apply drift detection policy (OOD + accuracy triggers)
-    _apply_drift_detection(results, run_dir, output_key="output_1")
+    _apply_drift_detection(results, run_dir, output_key=output_key)
 
     out_path = output_dir / "datastreamset_evaluation_stats.json"
     with out_path.open("w", encoding="utf-8") as f:
@@ -979,7 +977,9 @@ def viz_datastreamset_evaluation(
     results["saved_path"] = str(out_path)
 
     # Plot R², RMSE, and prediction error vs datastreamset index
-    _plot_datastreamset_evaluation(results, output_dir, datastreamset_size, run_dir=run_dir)
+    _plot_datastreamset_evaluation(
+        results, output_dir, datastreamset_size, run_dir=run_dir, output_key=output_key
+    )
     return results
 
 
@@ -989,6 +989,7 @@ def _plot_datastreamset_evaluation(
     datastreamset_size: int,
     dpi: int = 150,
     run_dir: Optional[Path] = None,
+    output_key: str = "output_0",
 ) -> None:
     """Plot R², RMSE, prediction error vs datastreamset index; shade out-of-range datastreamsets."""
     try:
@@ -1025,16 +1026,14 @@ def _plot_datastreamset_evaluation(
     models = sorted(models)
     model_display = {m: DEFAULT_MODEL_DISPLAY.get(m, m.replace("_", " ").title()) for m in models}
 
-    # Collect R² and RMSE per model, per datastreamset, for output_1 (A_parallel)
-    output_key = "output_1"  # A_parallel
-    for out_k in ("output_1", "output_0"):
-        if any(
-            out_k in datastreamsets_data[s].get("models", {}).get(m, {})
-            for s in datastreamsets_data
-            for m in models
-        ):
-            output_key = out_k
-            break
+    # Use the requested output; fall back to the first output present in the results.
+    if not any(
+        output_key in datastreamsets_data[s].get("models", {}).get(m, {})
+        for s in datastreamsets_data
+        for m in models
+    ):
+        output_key = "output_0"
+    output_label = output_key
 
     # Check if we have in_range data and input_min_max_ood for range evolution
     has_in_range = any("in_range" in s for s in datastreamsets_data.values())
@@ -1104,7 +1103,7 @@ def _plot_datastreamset_evaluation(
                 ax_rmse.axvspan(datastreamset_indices[i] - 0.4, datastreamset_indices[i] + 0.4, alpha=0.2, color="red")
 
     ax_r2.set_ylabel("R² score")
-    ax_r2.set_title("Generalization: R² vs held-out datastreamset (A_parallel, red = out-of-range)")
+    ax_r2.set_title(f"Generalization: R² vs held-out datastreamset ({output_label}, red = out-of-range)")
     if ref_r2_train is not None:
         ax_r2.axhline(ref_r2_train, color="gray", linestyle="--", alpha=0.7, label=f"Train R²={ref_r2_train:.3f}")
     if ref_r2_val is not None:
@@ -1134,7 +1133,7 @@ def _plot_datastreamset_evaluation(
 
     ax_rmse.set_xlabel("Segment index" if not has_in_range and ax_input_range is None else "")
     ax_rmse.set_ylabel("RMSE")
-    ax_rmse.set_title("Prediction error (RMSE) vs held-out datastreamset (A_parallel)")
+    ax_rmse.set_title(f"Prediction error (RMSE) vs held-out datastreamset ({output_label})")
     if has_model_metrics:
         ax_rmse.legend(loc="best", fontsize=9)
     else:

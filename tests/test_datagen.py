@@ -4,6 +4,7 @@ Tests for DataGenerator class.
 Tests parameter sampling, file replacement, batch generation, and equilibria modes.
 """
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -40,6 +41,24 @@ class TestDataGeneratorInit:
         gen = DataGenerator()
         assert gen is not None
         assert gen.dry_run is False
+        # No script directory configured: built-in replacement is the default.
+        assert gen.bin_dir is None
+        assert gen.use_python_replacement is True
+
+    def test_default_replaces_without_external_script(self, temp_dir, monkeypatch):
+        """A plain DataGenerator() edits a variable with no external script."""
+        monkeypatch.delenv("SURGE_DATAGEN_BIN", raising=False)
+        inp = os.path.join(temp_dir, "input.dat")
+        with open(inp, "w") as f:
+            f.write("alpha = 1\nbeta = 2\n")
+        DataGenerator()._call_replace("alpha", 7, inp)
+        with open(inp) as f:
+            text = f.read()
+        assert "alpha = 7" in text and "beta = 2" in text
+
+    def test_explicit_script_dir_disables_builtin(self):
+        gen = DataGenerator(bin_dir="/some/dir")
+        assert gen.bin_dir == "/some/dir"
         assert gen.use_python_replacement is False
     
     def test_init_dry_run(self):

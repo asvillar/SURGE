@@ -15,8 +15,7 @@ grid and derives those shape metrics analytically:
 * ``aspect_ratio`` — **exact / closed-form**: minor radius from the
   toroidally-averaged cross-section area, major radius from the exact VMEC
   surface-volume integral. Verified against the dataset's
-  ``aspect_ratio`` column at Pearson r > 0.9999 (see
-  ``audit/presentation/review/constellaration_algebraic_check.md``).
+  ``aspect_ratio`` column at Pearson r > 0.9999.
 * ``volume`` / ``mean_cross_section_area`` — **exact**, closed-form surface
   integrals (same integrals used to derive ``aspect_ratio``).
 * ``max_elongation_est`` / ``average_triangularity_est`` — **estimates**.
@@ -27,8 +26,7 @@ grid and derives those shape metrics analytically:
   order-of-magnitude shape descriptors, not reproductions of the dataset's
   ``max_elongation`` / ``average_triangularity`` columns.
 
-Index / formula reference (recovered and verified numerically in the audit
-above): flattening of the 45 ``(m, n)`` VMEC modes is row-major over
+Index / formula reference (checked numerically against the dataset): flattening of the 45 ``(m, n)`` VMEC modes is row-major over
 ``m = 0..4`` (slow index) and ``n_idx = 0..8`` (fast index, toroidal mode
 ``n = n_idx - 4``), i.e. ``r_cos[i] = r_cos[m=i//9, n=i%9-4]`` (same for
 ``z_sin``). The boundary at one field period is::

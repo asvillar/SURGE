@@ -175,7 +175,7 @@ def run_surrogate_workflow(
         if getattr(spec, "cv_folds", 0) and int(spec.cv_folds) > 0:
             warnings.warn(
                 f"spec.cv_folds={spec.cv_folds} is not yet implemented in the unified "
-                "workflow (k-fold training and aggregated fold metrics; see docs/ROADMAP.md). "
+                "workflow (k-fold training and aggregated fold metrics). "
                 "This run uses the usual single random train/val/test split; cv_folds is ignored.",
                 UserWarning,
                 stacklevel=2,
@@ -383,7 +383,7 @@ def run_surrogate_workflow(
     }
         save_workflow_summary(summary, paths)
 
-        # Optional MLflow logging (AmSC-style tracking)
+        # Optional MLflow logging (run tracking)
         if spec.mlflow_tracking:
             try:
                 from ..integrations.mlflow_logger import log_surge_run

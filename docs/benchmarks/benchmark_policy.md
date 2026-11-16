@@ -1,9 +1,7 @@
 # Benchmark policy (SURGE)
 
 This repo ships **CPU-only, sklearn-based** standard tasks (Tier 0–1) under
-`surge/benchmarks/`. Larger tiers (image, field, ImageNet) are described in
-[SURGE_BENCHMARKS_VIZ_PLAN.md](../../SURGE_BENCHMARKS_VIZ_PLAN.md) and are not
-required for CI.
+`surge/benchmarks/`. Larger tiers (image, field, ImageNet) are not required for CI.
 
 ## Tiers (summary)
 
@@ -16,7 +14,7 @@ required for CI.
 ## Pass/fail
 
 Each task returns `BenchmarkResult.passed` using conservative thresholds
-documented in `surge/benchmarks/tasks.py`. Adjust thresholds when Swarming CI
+documented in `surge/benchmarks/tasks.py`. Adjust thresholds when CI
 hardware is consistently slower or noisier.
 
 ## Commands
@@ -27,4 +25,4 @@ PYTHONPATH=. python -m surge.benchmarks.run --benchmark synthetic.regression_1d
 PYTHONPATH=. python -m pytest tests/benchmarks/test_smoke_benchmarks.py -q
 ```
 
-Artifact JSON (`--output`) is intended for `benchmark_reports/` in human-run jobs.
+Artifact JSON (`--output`) is intended for `benchmark_reports/` in jobs run by a maintainer.

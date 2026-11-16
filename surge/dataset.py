@@ -425,7 +425,7 @@ class SurrogateDataset:
         if not path.is_dir():
             raise ValueError(f"stacked_npy format requires a directory path, got: {path}")
 
-        set_name = reader_kwargs.get("set_name", "set1")
+        set_name = reader_kwargs.get("set_name")
         sample = reader_kwargs.get("sample")
         random_state = reader_kwargs.get("random_state", 42)
         row_range = reader_kwargs.get("row_range")

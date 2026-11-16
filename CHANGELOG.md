@@ -150,6 +150,17 @@ All notable changes to SURGE (`surge-ml`). Follows
 - **Benchmarks**: comparing several models on `tabular.covertype` and
   `tabular.plasma_stability` now finds the dataset and saves under the key
   the ledger reads.
+- Dataset downloads in the benchmark suite verify HTTPS certificates
+  (using `certifi` when present); `SURGE_INSECURE_SSL=1` turns
+  verification off explicitly.
+- `DataGenerator` replaces variables with its built-in routine by
+  default; an external script is used only when `bin_dir` or
+  `SURGE_DATAGEN_BIN` is set.
+- Plotting helpers take their labels and titles from arguments, with
+  neutral defaults; the stacked loader discovers the stack in a folder
+  instead of assuming a file name.
+- Maintainer notes, an internal development log and dead links removed
+  from the benchmark ledger and the documentation.
 
 ### Changed
 

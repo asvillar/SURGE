@@ -28,7 +28,7 @@ CI coverage: `tests/test_custom_dataset_tutorial.py`.
 ## Install
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git && cd SURGE
+git clone https://github.com/asvillar/SURGE.git && cd SURGE
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -e ".[torch,dev]"
 python -c "import surge; print(surge.__version__)"
@@ -401,7 +401,6 @@ register_model(MyAdapter, key="mybackend.mymodel", aliases=["mymodel"])
 
 - [`QUICK_START_NEW_MODEL.md`](QUICK_START_NEW_MODEL.md) — minimal adapter cheat sheet
 - [`ADDING_NEW_MODEL_ADAPTER.md`](ADDING_NEW_MODEL_ADAPTER.md) — full CNN walkthrough
-- [`MODEL_EXTENSION_SUMMARY.md`](MODEL_EXTENSION_SUMMARY.md) — architecture diagram
 
 ## Related
 

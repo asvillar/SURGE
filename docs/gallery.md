@@ -7,7 +7,6 @@ dark variants, deterministic PNG/SVG/PDF) with:
 
 ```bash
 python examples/viz_theme_gallery.py
-python scripts/sync_readme_assets.py                        # curate into docs/
 python -m surge.report.leaderboard --out leaderboard.html   # dashboard
 ```
 

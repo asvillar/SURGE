@@ -165,6 +165,8 @@ def plot_output_distributions(
     save_path: Optional[Union[str, Path]] = None,
     dpi: int = 150,
     max_outputs: int = 10,
+    ylabel: str = "Output value",
+    title: str = "Output distributions",
 ) -> Tuple[object, object]:
     """
     Plot violin plots for output profile distributions.
@@ -174,7 +176,7 @@ def plot_output_distributions(
     df : pd.DataFrame
         DataFrame containing output columns.
     output_columns : list, optional
-        List of output column names (e.g., ['P_c,0', 'P_c,50', ...]).
+        List of output column names (e.g., ['y_0', 'y_50', ...]).
         If None, uses all numeric columns.
     sample_indices : list, optional
         Indices to sample (e.g., [0, 50, 100, ...]). If None, uses all columns.
@@ -186,6 +188,10 @@ def plot_output_distributions(
         Resolution for saved figures.
     max_outputs : int, default=10
         Maximum number of outputs to plot.
+    ylabel : str, default="Output value"
+        Y-axis label (include units if known).
+    title : str, default="Output distributions"
+        Axes title.
         
     Returns
     -------
@@ -235,8 +241,8 @@ def plot_output_distributions(
     # Set labels
     ax.set_xticks(range(len(plot_labels)))
     ax.set_xticklabels(plot_labels, rotation=45, ha='right', fontsize=9)
-    ax.set_ylabel('Output Power [MW/m³/MW_abs]', fontsize=11)
-    ax.set_title('Output Power Distributions', fontsize=12, fontweight='bold')
+    ax.set_ylabel(ylabel, fontsize=11)
+    ax.set_title(title, fontsize=12, fontweight='bold')
     
     # Grid
     ax.grid(True, alpha=0.3, linestyle='--', axis='y')
@@ -257,8 +263,8 @@ def plot_profile_mean_std(
     figsize: Tuple[float, float] = (10, 6),
     save_path: Optional[Union[str, Path]] = None,
     dpi: int = 150,
-    output_name: str = "P_c",
-    units: str = "[MW/m³/MW_abs]",
+    output_name: str = "output",
+    units: str = "",
 ) -> Tuple[object, object]:
     """
     Plot mean ± standard deviation for output profiles.
@@ -277,10 +283,10 @@ def plot_profile_mean_std(
         Path to save figure.
     dpi : int, default=150
         Resolution for saved figures.
-    output_name : str, default="P_c"
+    output_name : str, default="output"
         Name for output variable (for labels).
-    units : str, default="[MW/m³/MW_abs]"
-        Units for output.
+    units : str, default=""
+        Units for output (e.g. "[m/s]"); omitted when empty.
         
     Returns
     -------
@@ -320,7 +326,7 @@ def plot_profile_mean_std(
     
     # Labels
     ax.set_xlabel('Output Index', fontsize=11)
-    ax.set_ylabel(f'{output_name} {units}', fontsize=11)
+    ax.set_ylabel(f'{output_name} {units}'.strip(), fontsize=11)
     ax.set_title(f'Output Profile: Mean ± Standard Deviation', fontsize=12, fontweight='bold')
     
     # Legend

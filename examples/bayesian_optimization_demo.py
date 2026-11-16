@@ -2,7 +2,7 @@
 Bayesian Optimization for RandomForestRegressor using Optuna and BoTorchSampler
 Demonstrates convergence of R² score over 100 trials with visualization
 
-This script provides the exact demonstration requested:
+This script demonstrates:
 1. RandomForestRegressor hyperparameter optimization using Optuna
 2. BoTorchSampler for Bayesian optimization
 3. 100 trials showing convergence

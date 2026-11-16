@@ -26,7 +26,7 @@ source .venv/bin/activate
 From a clone (recommended while `0.1.0` is still pre-release on PyPI):
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git
+git clone https://github.com/asvillar/SURGE.git
 cd SURGE
 pip install -e ".[torch,onnx]"
 ```
@@ -103,15 +103,12 @@ optional backend that requires a legacy TensorFlow; the warning is emitted
 once at import and the sklearn / torch / onnx paths are unaffected. If you
 do need GPflow, uncomment its extra in `pyproject.toml` and install.
 
-**Running on NERSC / Perlmutter** — create the venv on `$SCRATCH` rather than
-`$HOME` (quota pressure); see `docs/internal/SURGE_SLURM_BEST_PRACTICES.md` for
-worked examples if you have access.
+**Running on a shared cluster** — create the venv on scratch storage rather
+than your home directory (quota pressure).
 
 ## Next steps
 
 - `python -m examples.quickstart --dataset california` — a bigger public
   regression benchmark (20k samples, typically R² > 0.8).
-- [`docs/RUNBOOK.md`](../RUNBOOK.md) — what each file under
-  `runs/<tag>/` means and how to consume it downstream.
 - The README's *Quickstart* section for a verbatim output transcript and a
   full artifact listing.

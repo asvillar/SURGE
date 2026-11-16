@@ -13,7 +13,7 @@
 ## Minimal Example
 
 ```python
-# File: surge/models/adapters/my_model_adapter.py
+# File: surge/model/adapters/my_model_adapter.py
 
 from ...registry import BaseModelAdapter, MODEL_REGISTRY
 import numpy as np
@@ -156,7 +156,7 @@ class YourAdapter(BaseModelAdapter):
 1. **Data is pre-processed**: SURGE provides standardized/scaled data to `fit()` and `predict()`
 2. **Handle multi-output**: `y` can be 1D or 2D
 3. **State management**: Always call `mark_fitted()` after training, `ensure_fitted()` before prediction
-4. **Auto-registration**: Import your adapter module to register it (add to `surge/models/adapters/__init__.py`)
+4. **Auto-registration**: Import your adapter module to register it (add to `surge/model/adapters/__init__.py`)
 
 ---
 
@@ -169,7 +169,7 @@ full embedding policy and checklist.
 
 ## Reference Implementations
 
-- **Simple**: `surge/models/adapters/sklearn_adapter.py` (RandomForest)
-- **PyTorch**: `surge/models/adapters/torch_adapter.py` (MLP)
-- **GPflow**: `surge/models/adapters/gpflow_adapter.py` (GPR)
+- **Simple**: `surge/model/sklearn.py` (RandomForest)
+- **PyTorch**: `surge/model/pytorch.py` (MLP)
+- **GPflow**: `surge/model/gpflow.py` (GPR)
 

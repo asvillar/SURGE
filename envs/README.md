@@ -15,7 +15,7 @@ uv pip install -e ".[shap]"             # SHAP feature importance
 Supported Python: **3.10 – 3.12**.
 
 The conda YAMLs in this directory (`environment.yml`,
-`environment_minimal.yml`, `environment_gpu.yml`, `surge-env-devel.yml`)
+`environment_minimal.yml`, `environment_gpu.yml`)
 predate that consolidation and are kept for HPC sites that require
 conda. If you use them, still install SURGE itself with
 `pip install -e ".[...]"` inside the activated environment so dependency

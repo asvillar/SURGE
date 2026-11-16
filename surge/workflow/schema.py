@@ -87,7 +87,7 @@ def spec_json_schema() -> dict:
     schema = _dataclass_schema(SurrogateWorkflowSpec)
     schema.update({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://github.com/S-Villar/SURGE/surge/workflow/spec.schema.json",
+        "$id": "https://github.com/asvillar/SURGE/surge/workflow/spec.schema.json",
         "title": "SURGE workflow spec",
         "description": ("Declarative surrogate workflow: load -> split -> "
                         "train -> HPO -> metrics -> artifacts."),

@@ -128,7 +128,7 @@ Configuration-driven runs (YAML)
 
 For anything beyond a quick experiment you'll typically author a YAML spec
 and invoke ``run_surrogate_workflow`` with it. The schema matches
-``SurrogateWorkflowSpec`` one-for-one; see ``configs/`` for worked examples.
+``SurrogateWorkflowSpec`` one-for-one; see ``examples/configs/`` for worked examples.
 
 .. code-block:: python
 
@@ -138,7 +138,7 @@ and invoke ``run_surrogate_workflow`` with it. The schema matches
    from surge.workflow.run import run_surrogate_workflow
 
    spec = SurrogateWorkflowSpec.from_dict(
-       yaml.safe_load(Path("configs/my_experiment.yaml").read_text())
+       yaml.safe_load(Path("examples/configs/my_experiment.yaml").read_text())
    )
    summary = run_surrogate_workflow(spec)
 

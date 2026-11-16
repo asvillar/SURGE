@@ -1,7 +1,5 @@
 # SURGE benchmark metadata — single source of truth for leaderboard
 # reports (names, citations, tiers, thresholds, IO descriptions).
-# Extracted 2026-07 from the retired canvas leaderboard and the
-# benchmark verification brief by scripts/extract_benchmark_metadata.py.
 # Edit THIS file to change benchmark descriptions; result numbers
 # always come from benchmark_reports/**/result.json at render time.
 benchmarks:
@@ -26,7 +24,7 @@ benchmarks:
     value: null
     metric: "R²"
     model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "literature review (2026-09-24)"
     url: null
     protocol_match: "unknown"
     note: "no verified published number for this exact split/protocol; Pace & Barry OLS ~0.60, community gradient-boosting baselines ~0.83-0.85, no canonical paper number"
@@ -43,7 +41,6 @@ benchmarks:
   - {name: "MedHouseVal", desc: "Median house value (units of 100k$)"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.concrete_strength
   status: tutorial
   status_note: "General tabular demo (UCI): pull-and-run tutorial; real runs on file, not a fusion result"
@@ -81,7 +78,6 @@ benchmarks:
   - {name: "compressive_strength", desc: "Concrete compressive strength (MPa)"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.energy_efficiency
   status: tutorial
   status_note: "General tabular demo (UCI): pull-and-run tutorial; real runs on file, not a fusion result"
@@ -119,7 +115,6 @@ benchmarks:
   - {name: "Y1", desc: "Heating load (kWh/m², a.u. as tabulated)"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.airfoil_noise
   status: tutorial
   status_note: "General tabular demo (UCI/NASA): pull-and-run tutorial; real runs on file, not a fusion result"
@@ -155,7 +150,6 @@ benchmarks:
   - {name: "scaled_sound_pressure_level", desc: "Scaled sound pressure level (dB)"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.yacht_dynamics
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -225,7 +219,6 @@ benchmarks:
   - {name: "critical_temp", desc: "Superconducting critical temperature (K)"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.diabetes
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -288,7 +281,7 @@ benchmarks:
     value: null
     metric: "R²"
     model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "literature review (2026-09-24)"
     url: "https://doi.org/10.1007/s10994-016-5546-z"
     protocol_match: "unknown"
     note: "no verified published number for this exact split/protocol; the paper reports aRRMSE not R², and SURGE's shape/n (61->20, 8,966) disagrees with registry.py (61->16, 9,803)"
@@ -328,7 +321,6 @@ benchmarks:
   - {name: "diagnosis", desc: "Class: malignant (0) or benign (1)"}
   visible: true
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.digits
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -359,7 +351,6 @@ benchmarks:
   - {name: "digit", desc: "Digit class 0-9"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.iris
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -393,7 +384,6 @@ benchmarks:
   - {name: "species", desc: "Species: setosa / versicolor / virginica"}
   visible: true
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: tabular.wine
   status: tutorial
   status_note: "Small dataset (n < 1,000); plumbing / teaching benchmark"
@@ -424,10 +414,9 @@ benchmarks:
   - {name: "cultivar", desc: "Cultivar class 0-2"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: classification.covertype
   status: needs_rerun
-  status_note: "run 2026-10-20 gradient boosting acc 0.760 FAIL on 20k subsample; full 581k not yet tried"
+  status_note: "gradient boosting reaches accuracy 0.760 on a 20k subsample, below the gate; the full 581k set has not been run"
   name: Forest Covertype (7-class)
   capability: Scientific Classification
   discipline: Environmental Sciences
@@ -490,7 +479,6 @@ benchmarks:
   - {name: "stabf", desc: "Grid stability class: stable / unstable"}
   visible: false
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: classification.flow_regime
   status: tutorial
   status_note: "Small classification set (n < 1,000 effective); plumbing check"
@@ -511,7 +499,7 @@ benchmarks:
     value: null
     metric: "Accuracy"
     model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "literature review (2026-09-24)"
     url: null
     protocol_match: "unknown"
     note: "no verified published number for this exact split/protocol; fully synthetic fixture with no literature target"
@@ -553,7 +541,7 @@ benchmarks:
     value: null
     metric: "valid prediction time (Lyapunov times)"
     model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "literature review (2026-09-24)"
     url: null
     protocol_match: "different"
     note: "no verified published number for this exact one-step-surrogate / 10-λ-rollout protocol; reservoir-computing/ESN work reports 13-105 Lyapunov times (2025-2026 hybrid work), but that is a purpose-built architecture class, not a like-for-like comparison with the generic surrogates swept here"
@@ -563,7 +551,6 @@ benchmarks:
   - {name: "next_state", desc: "Lorenz-63 state (x, y, z) at time t + dt=0.01 (dimensionless)"}
   visible: false
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: pde.burgers_1d
   status: sanity
   status_note: "R² 1.000 at 64 points — too easy as posed vs FNO paper's 1024"
@@ -594,7 +581,6 @@ benchmarks:
   - {name: "uT", desc: "Velocity profile u(x,T) on 64 grid points (a.u.)"}
   visible: true
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: vision.mnist
   status: tutorial
   status_note: "MNIST is a plumbing check, not a surrogate result"
@@ -679,7 +665,6 @@ benchmarks:
   - {name: "class", desc: "Object class: airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck"}
   visible: true
   focus: false
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.cmod_density_limit
   status: ready
   definition_date: 2026-11-04  # re-posed: discharge-grouped split, natural imbalance, AUROC gate
@@ -719,7 +704,7 @@ benchmarks:
   focus: false
 - key: plasma.constellaration
   status: needs_rerun
-  status_note: "code gate fixed to 0.85 (was 0.50); rerun in progress 2026-10-20"
+  status_note: "gate is 0.85; a rerun under this gate is pending"
   name: ConStellaration Stellarator Surrogate
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
@@ -782,11 +767,10 @@ benchmarks:
   - {name: "metrics[0:12]", desc: "8 equilibrium metrics (iota, mirror ratios, vacuum well, gradient scale length, flux compression, log10 QI) + aspect ratio, max elongation, average triangularity, aspect-ratio / edge iota"}
   visible: true
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.constellaration_multioutput
   definition_date: 2026-09-25  # re-scoped to the 8 equilibrium targets
   status: ready
-  status_note: "90→8 equilibrium metrics; run 2026-09-25 mean R² 0.916, QI 0.935"
+  status_note: "90→8 equilibrium metrics; mean R² 0.916, QI 0.935"
   name: ConStellaration Joint Multi-output
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
@@ -853,7 +837,6 @@ benchmarks:
     note: "paper range 0.974-0.998 is over all 12 metrics with one ensemble per metric, not a joint 8-output model"
   visible: true
   focus: true
-  focus_note: "MAybe look at the one its publsished already in the website?"
 - key: plasma.constellaration_modb
   status: in_progress
   status_note: "field surrogates; 500/26,897 equilibria cached"
@@ -891,13 +874,12 @@ benchmarks:
     value: null
     metric: "rel-L2 (median)"
     model: null
-    source: "not covered by BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "not covered by the literature review (2026-09-24)"
     url: null
     protocol_match: "unknown"
     note: "no verified published number for this exact split/protocol; benchmark is SURGE-defined and not in the SOTA review"
   visible: false
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.constellaration_surfaces
   status: in_progress
   status_note: "field surrogates; 500/26,897 equilibria cached"
@@ -933,13 +915,12 @@ benchmarks:
     value: null
     metric: "rel-L2 (median)"
     model: null
-    source: "not covered by BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "not covered by the literature review (2026-09-24)"
     url: null
     protocol_match: "unknown"
     note: "no verified published number for this exact split/protocol; benchmark is SURGE-defined and not in the SOTA review"
   visible: false
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.qlknn10d
   status: ready
   status_note: "surge bench run 2026-10-21: residual MLP R² 0.9898 on 200k held-out QuaLiKiz fluxes (gate 0.95); trained with the benchmark-declared hyperparameters (batch 4096, 60 epochs)"
@@ -973,13 +954,12 @@ benchmarks:
     value: null
     metric: "R²"
     model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "literature review (2026-09-24)"
     url: "https://doi.org/10.1063/1.5134126"
     protocol_match: "unknown"
     note: "no verified published number for this exact split/protocol; the paper describes 1-15% flux discrepancy vs QuaLiKiz qualitatively, per-flux R² not found"
   visible: true
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.qlknn_transport
   status: tutorial
   status_note: "ground truth is the QLKNN_7_11 network itself"
@@ -1027,13 +1007,12 @@ benchmarks:
     value: null
     metric: "R²"
     model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
+    source: "literature review (2026-09-24)"
     url: "https://doi.org/10.1063/1.5134126"
     protocol_match: "unknown"
     note: "no verified published number for this exact split/protocol; ground truth is the QLKNN network itself, so no literature reference exists"
   visible: true
   focus: true
-  focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
 - key: plasma.solpsnn_exhaust_scalars
   status: in_progress
   status_note: "SOLPS-ITER exhaust scalars from the SOLPS-NN record (Dasbach & Wiesen 2023); fixed Sobol-train / random-test split. In-context Kumo Tabular reaches 8.6 % median relative error on the peak target heat flux against the published 13 % (five-fold tuned networks); the benchmark card, per-regime metrics and the gate are provisional."

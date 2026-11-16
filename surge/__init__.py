@@ -18,7 +18,7 @@ from .model.base import BaseModelAdapter
 from .model.registry import ModelRegistry, registry_summary
 from .dataset import SurrogateDataset
 from .datasets import StackedNpyDataset
-from .utils import get_data_path, setup_surge_path
+from .utils import get_data_path
 from .datagen import DataGenerator
 from .workflow.run import run_surrogate_workflow
 from .workflow.spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
@@ -63,7 +63,6 @@ __all__ = [
     "ModelConfig",
     "HPOConfig",
     "summarize",
-    "setup_surge_path",
     "get_data_path",
     "DataGenerator",
     "__version__",

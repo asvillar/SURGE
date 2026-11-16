@@ -11,11 +11,11 @@ SURGE
 *Surrogate Unified Robust Generation Engine*
 
 **Current status (v0.1.0):** the code is open source on
-`GitHub <https://github.com/S-Villar/SURGE>`__, registered in
+`GitHub <https://github.com/asvillar/SURGE>`__, registered in
 `U.S. DOE OSTI / DOE Code <https://www.osti.gov/doecode/biblio/179819>`__
 (``179819``, DOI |doi_surge|), with continuous integration on
 ``main`` and a `documented
-<https://github.com/S-Villar/SURGE/blob/main/README.md>`__ install +
+<https://github.com/asvillar/SURGE/blob/main/README.md>`__ install +
 quickstart (``uv``, ``.[torch,onnx,dev]``, including ``h5py`` for
 HDF5 tests). The test suite: **52 passed, 1 skipped** in a full
 dev environment (see :doc:`citation` for the formal cite).
@@ -67,7 +67,7 @@ SURGE has been designed to support a wide range of scientific and engineering us
 Core Functionalities
 --------------------
 
-- **Workflow-first API** – use ``run_surrogate_workflow`` with YAML specs (see ``configs/``).  
+- **Workflow-first API** – use ``run_surrogate_workflow`` with YAML specs (see ``examples/configs/``).  
 - **Dataset analysis** – ``surge.dataset`` handles multi-format loads (CSV, HDF5, NetCDF, pickle) and enforces clean numeric frames before scaling.  
 - **Optuna integration** – per-model search spaces defined inline, supporting categorical lists (e.g., hidden layer templates) and loguniform ranges.  
 - **Artifact standardization** – consistent directory layout for reproducibility + notebooks/tests.  

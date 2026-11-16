@@ -43,13 +43,9 @@ source_suffix = {
 templates_path = ['_templates']
 exclude_patterns = [
     '_build', 'Thumbs.db', '.DS_Store',
-    # Internal content — kept local for the authors but never shipped
-    # on ReadTheDocs. Matches the .gitignore entries in docs/internal/.
+    # Folders that are not part of the documentation site.
     'internal/**',
-    # Dev / agent / prerelease planning — useful in the repo, not in
-    # the user-facing documentation site.
     'dev/**',
-    'agents/**',
     'setup/**',
     'README.md',
 ]

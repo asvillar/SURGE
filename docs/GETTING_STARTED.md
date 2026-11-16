@@ -7,7 +7,7 @@ One page from zero to a trained surrogate with figures. Python 3.10–3.12.
 With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git && cd SURGE
+git clone https://github.com/asvillar/SURGE.git && cd SURGE
 uv venv && source .venv/bin/activate
 uv pip install -e ".[torch,dev]"
 ```
@@ -111,7 +111,7 @@ SURGE ships a JSON Schema for workflow specs
 completion, hover docs, and inline validation while you type:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/S-Villar/SURGE/main/surge/workflow/spec.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/asvillar/SURGE/main/surge/workflow/spec.schema.json
 ```
 
 Offline check of any spec (unknown keys, typos with suggestions, bad

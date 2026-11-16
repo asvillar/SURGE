@@ -144,48 +144,6 @@ def save_json(obj, path):
         json.dump(obj, f, indent=2)
 
 
-def setup_surge_path():
-    """
-    Check if SURGE environment variable is set and create it if needed.
-
-    Returns:
-        Path: The SURGE repository path
-
-    Raises:
-        FileNotFoundError: If SURGE path cannot be determined or doesn't exist
-    """
-    # Check if SURGE environment variable exists
-    surge_path = os.environ.get('SURGE')
-
-    if surge_path is None:
-        # Try to determine SURGE path from current file location
-        current_file = Path(__file__).resolve()
-        # Navigate up from surge/utils.py to find the repo root
-        potential_surge_path = current_file.parent.parent
-
-        # Verify this is indeed the SURGE repo by checking for key directories
-        if (potential_surge_path / 'surge').exists() and (potential_surge_path / 'notebooks').exists():
-            surge_path = str(potential_surge_path)
-            # Set the environment variable for this session and future use
-            os.environ['SURGE'] = surge_path
-            print(f"✅ SURGE environment variable set to: {surge_path}")
-        else:
-            raise FileNotFoundError(
-                "Could not automatically determine SURGE repository path. "
-                "Please set the SURGE environment variable manually: "
-                "export SURGE=/path/to/your/SURGE/repo"
-            )
-    else:
-        print(f"✅ Using existing SURGE environment variable: {surge_path}")
-
-    # Validate the path exists
-    surge_path_obj = Path(surge_path)
-    if not surge_path_obj.exists():
-        raise FileNotFoundError(f"SURGE path does not exist: {surge_path}")
-
-    return surge_path_obj
-
-
 def get_data_path(dataset_name):
     """
     Get the path to a specific dataset in the SURGE repository.
@@ -668,7 +626,7 @@ def _collect_system_info_quiet():
         except Exception:
             pass
 
-    # (NVML/pynvml probing was removed per user request)
+    # (NVML/pynvml probing is not used.)
     info['gpu_details'] = gpu_details
 
     # Job/cluster detection (quiet)
@@ -904,7 +862,7 @@ def system_monitor_report(run_cpu_test: bool = False, n_estimators: int = 40, n_
     sysinfo = _collect_system_info_quiet()
     metrics['gpu_available'] = sysinfo.get('gpu_available')
     metrics['device'] = sysinfo.get('device')
-    # (NVML/pynvml probing was removed per user request)
+    # (NVML/pynvml probing is not used.)
 
     # Prepare tabular output
     # Prepare boxed report (CPU -> GPU -> MEMORY) using sysinfo + metrics

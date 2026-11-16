@@ -14,7 +14,6 @@ there is no pre-refactor API left in the tree.
 | `test_e2e_release_smoke.py` | End-to-end regression fixture used by CI: sklearn RF train → predict → ONNX export → ONNX-runtime inference on `sklearn.datasets.load_diabetes` (no vendored data) |
 | `test_model_registry.py` | Listing, retrieval, and custom registration against `MODEL_REGISTRY` |
 | `test_model_profiling.py` | `model_size_bytes` / `inference_ms_per_sample` profile fields produced by the workflow |
-| `test_preprocessing.py` | Input / output column detection heuristics |
 | `test_model_comparison.py` | Multi-model comparison scaffold — currently guarded by a legacy `VISUALIZATION_AVAILABLE` flag and skips until refactored against `surge.viz`. |
 
 ## Running

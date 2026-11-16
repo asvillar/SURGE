@@ -199,7 +199,7 @@ def save_model_card(
     training_config: Optional[Mapping[str, Any]] = None,
 ) -> Path:
     """
-    Save a model card (JSON) with model size and metadata for AmSC-style tracking.
+    Save a model card (JSON) with model size and metadata for run tracking.
 
     Writes runs/<tag>/model_card_<name>.json with n_params, file_size_bytes, backend, etc.
     """

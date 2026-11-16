@@ -2,8 +2,10 @@
 
 Provides a simple DataGenerator class that can create parameter samples
 using random uniform sampling or Latin Hypercube Sampling (LHS) and
-write/replace values into input files by calling external shell scripts
-from a user-supplied bin folder (replace_var.sh).
+write/replace values into input files. Variable replacement is done by a
+built-in pure-Python routine by default. Optionally, an external helper script
+(replace_var.sh) can be used by passing ``bin_dir`` or setting the
+``SURGE_DATAGEN_BIN`` environment variable to the folder that holds it.
 
 API (high level):
   generator = DataGenerator(bin_dir=...)
@@ -20,7 +22,7 @@ API (high level):
 
 The class will create case folders under out_dir named case_1, case_2, ...
 and copy the base_case contents into each one before modifying the input
-file by calling the replace_var.sh script.
+file with the built-in replacement (or the external script, if configured).
 """
 from __future__ import annotations
 
@@ -37,11 +39,19 @@ from scipy.stats import qmc
 
 
 class DataGenerator:
-    """Generate parameter cases and modify input files using helper scripts.
+    """Generate parameter cases and modify their input files.
+
+    By default variables are replaced with the built-in Python routine, which
+    needs no external files. An external script is used only when ``bin_dir``
+    or the ``SURGE_DATAGEN_BIN`` environment variable is set and
+    ``use_python_replacement`` is not True.
 
     Args:
-        bin_dir: directory containing the helper scripts (replace_var.sh)
+        bin_dir: optional directory containing an external replace script
         replace_script: script name to call for replacing variables (default: replace_var.sh)
+        dry_run: print the replacement commands instead of running them
+        use_python_replacement: force the built-in replacement even if a
+            script directory is configured
     """
 
     def __init__(
@@ -51,8 +61,9 @@ class DataGenerator:
         dry_run: bool = False,
         use_python_replacement: bool = False,
     ):
-        # Folder holding the external replace script; SURGE_DATAGEN_BIN overrides the default.
-        self.bin_dir = bin_dir or os.environ.get("SURGE_DATAGEN_BIN") or str(Path.home() / "bin")
+        # Folder holding an optional external replace script (argument, else
+        # SURGE_DATAGEN_BIN). None means the built-in replacement is used.
+        self.bin_dir = bin_dir or os.environ.get("SURGE_DATAGEN_BIN") or None
         self.replace_script = replace_script
         # If dry_run is True, the generator will not execute external scripts and
         # will only print the replacement commands. Useful for testing on systems
@@ -60,12 +71,13 @@ class DataGenerator:
         self.dry_run = bool(dry_run)
         # If True, perform in-Python replacement (no external sed/perl) and
         # avoid creating editor backup files like file.py~.
-        self.use_python_replacement = bool(use_python_replacement)
+        # Without an external script directory the built-in replacement is used.
+        self.use_python_replacement = bool(use_python_replacement) or self.bin_dir is None
         # Tracks the most recent batch directory created by generate()
         self.last_batch_path = None
 
     def _call_replace(self, varname: str, value, filepath: str):
-        script_path = os.path.join(self.bin_dir, self.replace_script)
+        script_path = os.path.join(self.bin_dir or "", self.replace_script)
         # Convert numpy types to python native
         if isinstance(value, (np.floating, np.integer)):
             value = value.item()
@@ -759,24 +771,6 @@ class DataGenerator:
             raise ValueError("equilibria_mode must be one of: 'set', 'fixed', or 'per_case'")
 
         return created
-
-
-def example_usage():
-    """Simple example for local testing."""
-    gen = DataGenerator()
-    res = gen.generate(
-        inpnames=["nemax", "temax"],
-        inputfilename="global_ns.py",
-        ranges=[[1e18, 5e18], [5, 100]],
-        integer_mask=[False, False],
-        n_samples=3,
-        method="lhs",
-        out_dir=str(Path.home() / "Simulations" / "Petra-HOT" / "1D_TOMATOR" / "param_cases"),
-        base_case_dir=str(Path.home() / "Simulations" / "Petra-HOT" / "1D_TOMATOR" / "case_default_neLHS_2"),
-        seed=42,
-    )
-    for r in res:
-        print(r)
 
 
 # -------- Visualization helpers --------

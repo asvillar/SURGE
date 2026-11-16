@@ -56,7 +56,7 @@ def _target_candidates(info: dict[str, Any]) -> list[str]:
 
 def _model_slate(goal: str, budget: str, n_rows: int,
                  available: set[str]) -> list[dict[str, Any]]:
-    """Model blocks by goal/size — mirrors surge-build-surrogate guidance."""
+    """Model blocks by goal and dataset size."""
     def have(key: str, fallback: str | None = None) -> str | None:
         if key in available:
             return key

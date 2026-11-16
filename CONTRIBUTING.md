@@ -12,16 +12,15 @@ in [`SECURITY.md`](./SECURITY.md) rather than a public issue.
 ## Quickstart for developers
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git
+git clone https://github.com/asvillar/SURGE.git
 cd SURGE
 python -m pip install -e ".[dev]"
 pytest -q tests/
 ```
 
 The test suite should report `N passed, M skipped, 0 failed`. The
-skipped tests are legacy pre-refactor tests tracked in
-[`docs/REFACTORING_PLAN.md`](./docs/REFACTORING_PLAN.md) §1.9; they are
-out of scope for `0.1.0`.
+skipped tests are legacy pre-refactor tests; they are out of scope for
+`0.1.0`.
 
 ## What "ready to merge" looks like
 
@@ -47,8 +46,6 @@ out of scope for `0.1.0`.
    `refactor: ...`, `docs: ...`, `chore: ...`, `ci: ...`, `test: ...`).
    The template at `.github/pull_request_template.md` will walk you
    through the rest.
-4. Reference the relevant section of `docs/ROADMAP.md` or
-   `docs/REFACTORING_PLAN.md` when the change is a scheduled item.
 
 ## Coding style
 

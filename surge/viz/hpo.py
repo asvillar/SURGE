@@ -77,6 +77,8 @@ def plot_hpo_convergence(
     show_best_markers: bool = True,
     colors: Optional[Dict[str, str]] = None,
     linestyles: Optional[Dict[str, str]] = None,
+    title: Optional[str] = None,
+    model_name: Optional[str] = None,
 ) -> Tuple[object, object, Dict[str, Dict[str, float]]]:
     """
     Plot HPO convergence curves matching publication style.
@@ -113,6 +115,10 @@ def plot_hpo_convergence(
     linestyles : dict, optional
         Dictionary mapping method names to the running-best step line style.
         Default: {'Random': '--', 'TPE': '--', 'BoTorch': '--'}
+    title : str, optional
+        Axes title. If None, built from the metric (and ``model_name``).
+    model_name : str, optional
+        Model name appended to the default title.
         
     Returns
     -------
@@ -334,13 +340,15 @@ def plot_hpo_convergence(
     # Set labels
     if metric.lower() == "r2":
         ylabel = "R² Score"
-        title = "Hyperparameter Optimization - RFR (P_e)"
+        title_default = "Hyperparameter optimization"
     elif metric.lower() == "rmse":
         ylabel = "RMSE"
-        title = "Hyperparameter Optimization - Validation RMSE"
+        title_default = "Hyperparameter optimization - validation RMSE"
     else:
         ylabel = metric.upper()
-        title = f"Hyperparameter Optimization - {metric.upper()}"
+        title_default = f"Hyperparameter optimization - {metric.upper()}"
+    if title is None:
+        title = f"{title_default} ({model_name})" if model_name else title_default
     
     ax.set_xlabel("Iteration", fontsize=12)
     ax.set_ylabel(ylabel, fontsize=12)

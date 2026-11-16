@@ -120,12 +120,14 @@ def plot_profile_comparison_with_inset(
     output_name: Optional[str] = None,
     line_styles: Optional[Dict[str, str]] = None,
     colors: Optional[Dict[str, str]] = None,
+    reference_label: str = "Reference",
+    prediction_label: str = "Surrogate ({model})",
 ) -> Tuple[object, object]:
     """
     Plot profile comparison with optional inset for detailed view.
     
     Creates publication-quality profile plots with main view and optional
-    inset zoom, matching the style of TORIC vs TORIC-ML profile comparisons.
+    inset zoom for comparing reference and surrogate profiles.
     
     Parameters
     ----------
@@ -135,14 +137,14 @@ def plot_profile_comparison_with_inset(
         Ground truth profile values.
     predictions : dict
         Dictionary mapping model names to predicted profiles.
-        Format: {'RFR': y_pred_rfr, 'MLP': y_pred_mlp, ...}
+        Format: {'model_a': y_pred_a, 'model_b': y_pred_b, ...}
     case_label : str, optional
         Case label/identifier (e.g., "case 9476").
     case_metadata : dict, optional
         Dictionary of case parameters to display (e.g., {'N_φ': 8, 'n_e0': 4.9e19}).
     mse_values : dict, optional
         Dictionary mapping model names to MSE values.
-        Format: {'RFR': 1.2e-8, 'MLP': 8.6e-8}.
+        Format: {'model_a': 1.2e-8, 'model_b': 8.6e-8}.
     category : str, optional
         Category label: "Good", "Average", or "Poor".
     inset_region : tuple, optional
@@ -160,15 +162,19 @@ def plot_profile_comparison_with_inset(
     ylabel : str, optional
         Y-axis label. Auto-generated if None.
     units : str, optional
-        Units for y-axis (e.g., "[W/cm³/MWabs]").
+        Units for y-axis (e.g., "[m/s]").
     output_name : str, optional
-        Output name (e.g., "P_e", "P_H").
+        Output name (e.g., "temperature").
     line_styles : dict, optional
         Dictionary mapping model names to line styles.
-        Default: {'GT': '-', 'RFR': '--', 'MLP': ':'}
+        Reference uses the 'GT' entry (default '-'); other models default to '--'.
     colors : dict, optional
         Dictionary mapping model names to colors.
-        Default: {'GT': 'k', 'RFR': 'r', 'MLP': 'b'}
+        Reference uses the 'GT' entry (default 'k'); other models cycle matplotlib colors.
+    reference_label : str, default="Reference"
+        Legend label for the reference curve (y_true).
+    prediction_label : str, default="Surrogate ({model})"
+        Legend template for predictions; ``{model}`` is replaced by the key.
         
     Returns
     -------
@@ -188,28 +194,27 @@ def plot_profile_comparison_with_inset(
     
     # Default line styles and colors
     if line_styles is None:
-        line_styles = {'GT': '-', 'RFR': '--', 'MLP': ':', 'TORIC': '-'}
+        line_styles = {'GT': '-'}
     if colors is None:
-        colors = {'GT': 'k', 'RFR': 'r', 'MLP': 'b', 'TORIC': 'k'}
+        colors = {'GT': 'k'}
     
     # Create figure
     fig, ax = plt.subplots(figsize=figsize)
     
     # Plot ground truth
-    gt_label = 'TORIC' if 'TORIC' in line_styles else 'GT'
     ax.plot(
         radius, y_true,
-        color=colors.get('GT', colors.get('TORIC', 'k')),
-        linestyle=line_styles.get('GT', line_styles.get('TORIC', '-')),
+        color=colors.get('GT', 'k'),
+        linestyle=line_styles.get('GT', '-'),
         linewidth=2.0,
-        label=gt_label,
+        label=reference_label,
         alpha=0.9
     )
     
     # Plot predictions
     for model_name, y_pred in predictions.items():
         y_pred_arr = np.asarray(y_pred)
-        model_label = f'TORIC-ML ({model_name})'
+        model_label = prediction_label.replace('{model}', str(model_name))
         ax.plot(
             radius, y_pred_arr,
             color=colors.get(model_name, f'C{list(predictions.keys()).index(model_name) + 1}'),
@@ -281,8 +286,8 @@ def plot_profile_comparison_with_inset(
             
             ax_inset.plot(
                 radius_inset, y_true_inset,
-                color=colors.get('GT', colors.get('TORIC', 'k')),
-                linestyle=line_styles.get('GT', line_styles.get('TORIC', '-')),
+                color=colors.get('GT', 'k'),
+                linestyle=line_styles.get('GT', '-'),
                 linewidth=1.5,
                 alpha=0.9
             )

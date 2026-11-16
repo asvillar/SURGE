@@ -1,4 +1,4 @@
-"""Third-pass review fixes: rel-L2 on adapter paths, diverged rollouts, histogram, clips."""
+"""Regression tests for rel-L2 on adapter paths, diverged rollouts, histogram, clips."""
 from __future__ import annotations
 
 import numpy as np
