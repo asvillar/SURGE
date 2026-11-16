@@ -7,12 +7,6 @@
     "dataset_format": {
       "type": "string"
     },
-    "dataset_source": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "metadata_path": {
       "anyOf": [
         {
@@ -78,33 +72,6 @@
     },
     "metadata_overrides": {
       "type": "object"
-    },
-    "batch_dir_mode_step": {
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
-    "batch_dir_psi_step": {
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
-    "batch_dir_target_shape": {
-      "type": [
-        "array",
-        "null"
-      ]
-    },
-    "batch_dir_include_eigenmodes": {
-      "type": "boolean"
-    },
-    "batch_dir_filename": {
-      "type": [
-        "string",
-        "null"
-      ]
     },
     "notes": {
       "type": [

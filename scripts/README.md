@@ -11,6 +11,6 @@ scripts that are **not** part of the importable `surge` API:
   training-loss viewers for a run.
 - `utils/check_installation.py` — verify an install.
 
-Facility-specific batch pipelines and launchers (M3D-C1, Slurm) are kept out
+Facility-specific batch pipelines and launchers (Slurm) are kept out
 of the public tree; use `surge` from Python or the YAML workflow for
 installable, documented behaviour.

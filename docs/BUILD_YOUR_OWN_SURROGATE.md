@@ -53,8 +53,9 @@ input_a,input_b,input_c,output_x,output_y
 1.2,0.5,-0.3,0.61,-0.12
 ```
 
-Remove NaNs before training. Nested simulation HDF5 (M3DC1 batches, XGC dirs)
-uses specialized loaders in `surge/datasets/`.
+Remove NaNs before training. Directories of stacked `.npy` arrays are read with
+`format="stacked_npy"` (see `surge/datasets/stacked_npy.py`); other nested
+HDF5 layouts need a custom reader.
 
 Generate the bundled tutorial dataset:
 

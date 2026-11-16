@@ -348,23 +348,6 @@ def test_plasma_stability_registered():
     assert resolve_benchmark_key("classification.plasma_stability") == "tabular.plasma_stability"
 
 
-def test_m3dc1_benchmark_registered():
-    from surge.benchmarks.registry import list_benchmarks
-    assert "fusion.m3dc1_sample" in list_benchmarks()
-
-
-def test_m3dc1_benchmark_runs_synthetic():
-    """fusion.m3dc1_sample should work with the synthetic fallback."""
-    from surge.benchmarks.registry import run_benchmark
-
-    result = run_benchmark(
-        "fusion.m3dc1_sample", seed=42, model_key="sklearn.random_forest"
-    )
-    assert result.benchmark_key == "fusion.m3dc1_sample"
-    assert "test_r2" in result.metrics
-    assert np.isfinite(result.metrics["test_r2"])
-
-
 # ---------------------------------------------------------------------------
 # Phase E — Vision adapters (registration + tiny synthetic test)
 # ---------------------------------------------------------------------------

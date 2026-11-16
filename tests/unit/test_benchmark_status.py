@@ -25,7 +25,7 @@ def test_each_benchmark_once_under_its_status(tmp_path):
     meta = load_metadata()
     _res(tmp_path, "plasma.constellaration_multioutput", "old", "2026-06-15T06:24:26Z", 0.937)
     _res(tmp_path, "plasma.constellaration_multioutput", "new", "2026-09-25T18-05-41Z", 0.916)
-    _res(tmp_path, "fusion.m3dc1_sample", "ridge", "2026-08-01T00:00:00Z", 0.9, synthetic=True)
+    _res(tmp_path, "plasma.constellaration", "ridge", "2026-08-01T00:00:00Z", 0.9, synthetic=True)
     md = render_status_md(tmp_path)
     sections = {}
     cur = None
@@ -40,7 +40,7 @@ def test_each_benchmark_once_under_its_status(tmp_path):
         homes = [s for s, ks in sections.items() if key in ks]
         assert homes == [STATUS_TITLES[m["status"]]], key
     assert "0.916" in md and "0.937" not in md
-    row = next(ln for ln in md.splitlines() if ln.startswith("| `fusion.m3dc1_sample`"))
+    row = next(ln for ln in md.splitlines() if ln.startswith("| `plasma.constellaration`"))
     assert "(synthetic fixture)" in row
     assert md == render_status_md(tmp_path)  # deterministic
 

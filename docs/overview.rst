@@ -19,8 +19,7 @@ High-Level Architecture
 
 * **Entry points**
 
-  - CLI: ``python -m examples.m3dc1_workflow --spec configs/m3dc1_demo.yaml``
-  - Notebook: ``notebooks/M3DC1_demo.ipynb`` (mirrors CLI spec + adds plots)
+  - CLI: ``surge run spec.yaml`` (see :doc:`quickstart`)
   - Python API: import ``SurrogateWorkflowSpec`` + ``run_surrogate_workflow``
 
 Dataset Handling
@@ -105,29 +104,17 @@ Each run creates a reproducible bundle:
      git.txt                   # git describe output
      hpo/<model>_hpo.json      # Optuna trials (if enabled)
 
-Visualization & Notebooks
--------------------------
+Visualization
+-------------
 
 * ``surge.viz`` provides reusable plotting utilities (density scatter, profile bands, violin/SNR, etc.)
-* ``notebooks/M3DC1_demo.ipynb`` demonstrates:
-
-  - Dataset auto-analysis
-  - Workflow execution (baseline spec; easy to swap in augmented spec)
-  - GT vs. prediction plots, per-mode scatter, violin/SNR panels, timing tables
-
-Baseline vs. Augmented Configs
-------------------------------
-
-* ``configs/m3dc1_demo.yaml`` – 1k-row smoke workflow (fast Optuna sweeps)
-* ``configs/m3dc1_demo_augmented.yaml`` – all 9,981 samples + 50-trial Optuna sweeps/model
-
-Use the CLI or notebook with either spec depending on how comprehensive you need the run to be.
+* ``examples/viz_theme_gallery.py`` shows the GT vs. prediction plots, per-mode scatter and violin/SNR panels.
 
 Next Steps
 ----------
 
 * Jump to :doc:`quickstart` for step-by-step installation and execution instructions
-* Explore ``examples/m3dc1_workflow.py`` (CLI) and ``notebooks/M3DC1_demo.ipynb`` (visual)
+* Explore ``examples/viz_theme_gallery.py`` (visual)
 * Inspect ``tests/test_workflow_new.py`` for lightweight examples of the new API
 
 

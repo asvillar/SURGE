@@ -1,4 +1,4 @@
-"""Stacked .npy directory loader (optional format `xgc` in SurrogateDataset)."""
+"""Stacked .npy directory loader (optional format `stacked_npy` in SurrogateDataset)."""
 
 from __future__ import annotations
 
@@ -81,9 +81,9 @@ def _load_stacked_npy(
 _load_olcf_npy = _load_stacked_npy
 
 
-class XGCDataset(SurrogateDataset):
+class StackedNpyDataset(SurrogateDataset):
     """
-    Stacked .npy directory layout (``format="xgc"`` in ``SurrogateDataset``).
+    Stacked .npy directory layout (``format="stacked_npy"`` in ``SurrogateDataset``).
 
     Constructors:
     - ``from_olcf_hackathon``: directory with ``data_nprev5_*`` naming (legacy name, kept for API stability)
@@ -98,7 +98,7 @@ class XGCDataset(SurrogateDataset):
         set_name: str = "set1",
         sample: Optional[int] = None,
         random_state: int = 42,
-    ) -> "XGCDataset":
+    ) -> "StackedNpyDataset":
         """
         Load from a directory that follows the ``data_nprev5_*`` file naming convention.
 
@@ -115,7 +115,7 @@ class XGCDataset(SurrogateDataset):
 
         Returns
         -------
-        XGCDataset
+        StackedNpyDataset
             Loaded dataset with input_0..input_200, output_0, output_1
         """
         df, input_cols, output_cols = _load_stacked_npy(
@@ -143,9 +143,9 @@ class XGCDataset(SurrogateDataset):
         output_names: Optional[List[str]] = None,
         sample: Optional[int] = None,
         random_state: int = 42,
-    ) -> "XGCDataset":
+    ) -> "StackedNpyDataset":
         """
-        Load XGC dataset from generic .npy input and target files.
+        Load a stacked-npy dataset from generic .npy input and target files.
 
         Parameters
         ----------
@@ -164,7 +164,7 @@ class XGCDataset(SurrogateDataset):
 
         Returns
         -------
-        XGCDataset
+        StackedNpyDataset
             Loaded dataset
         """
         data_path = Path(data_path)

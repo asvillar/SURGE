@@ -17,7 +17,7 @@ from .engine import (
 from .model.base import BaseModelAdapter
 from .model.registry import ModelRegistry, registry_summary
 from .dataset import SurrogateDataset
-from .datasets import M3DC1Dataset, XGCDataset
+from .datasets import StackedNpyDataset
 from .utils import get_data_path, setup_surge_path
 from .datagen import DataGenerator
 from .workflow.run import run_surrogate_workflow
@@ -47,22 +47,10 @@ try:
 except ImportError:
     DATASET_UTILS_AVAILABLE = False
 
-# M3D-C1 HDF5 loaders are facility-specific and are NOT part of the
-# installable wheel or the public tree (see surge.datasets.m3dc1 and the
-# SURGE_M3DC1_SCRIPTS environment variable).
-# `M3DC1Dataset` (exported below) imports them lazily when a dataset is
-# actually constructed, so pip-installed users get a clean `import surge`
-# and a clear ImportError only if they try to use the M3DC1 loader
-# without the scripts/ tree on sys.path. Prior versions attempted an
-# eager sys.path injection here; that silently failed for wheel installs
-# and polluted sys.path from import time, so it was removed.
-M3DC1_LOADER_AVAILABLE = False
-
 __all__ = [
     "SurrogateEngine",
     "SurrogateDataset",
-    "M3DC1Dataset",
-    "XGCDataset",
+    "StackedNpyDataset",
     "EngineRunConfig",
     "ModelSpec",
     "ModelRunResult",
@@ -92,10 +80,6 @@ if DATASET_UTILS_AVAILABLE:
         "dataframe_to_pytorch_dataset",
         "print_validation_report",
     ])
-
-# M3D-C1 HDF5 loader functions are intentionally NOT exported: they are
-# facility-specific (SURGE_M3DC1_SCRIPTS). Use `M3DC1Dataset`
-# from `surge.datasets.m3dc1` (exported below) which imports them lazily.
 
 # Print availability status when package is imported
 def _print_availability():

@@ -29,8 +29,8 @@ DEFAULT_MODEL_DISPLAY = {
     "random_forest_profiles": "Random Forest",
     "torch_mlp_mc_dropout": "MLP",
     "gpflow_gpr_profiles": "GPR",
-    "xgc_mlp_aparallel": "MLP",
-    "xgc_rf_aparallel": "Random Forest",
+    "mlp_aparallel": "MLP",
+    "rf_aparallel": "Random Forest",
 }
 
 
@@ -110,7 +110,7 @@ def viz_hpo(
     if not hpo_files:
         return []
 
-    # Build method names from filenames (xgc_mlp_aparallel_hpo -> MLP)
+    # Build method names from filenames (mlp_aparallel_hpo -> MLP)
     hpo_dict = {}
     for f in hpo_files:
         model_key = f.stem.replace("_hpo", "")
@@ -155,7 +155,7 @@ def viz_run(
     """
     Generate inference comparison plots for a SURGE run directory.
 
-    Works for any run (M3DC1, XGC, etc.) by auto-detecting outputs from
+    Works for any run (any dataset format) by auto-detecting outputs from
     prediction CSV columns (y_true_00, y_pred_00, ...).
 
     Parameters
@@ -167,7 +167,7 @@ def viz_run(
     shap_max_samples : int, default=500
         Max samples for SHAP (smaller = faster).
     include_datastreamset_eval : bool, default=False
-        If True, evaluate models on held-out dataset datastreamsets (XGC only).
+        If True, evaluate models on held-out dataset datastreamsets (stacked_npy format only).
     datastreamset_size : int, default=50000
         Rows per datastreamset for datastreamset evaluation.
     datastreamset_max : int, default=10
@@ -306,7 +306,7 @@ def viz_run(
         )
         saved_paths.extend(shap_paths)
 
-    # Segment-based evaluation (XGC only)
+    # Segment-based evaluation (stacked_npy format only)
     datastreamset_result: Optional[Dict[str, Any]] = None
     if include_datastreamset_eval:
         try:
@@ -379,8 +379,8 @@ def viz_shap(
     tree_only : bool, default=False
         If True, only run SHAP for tree models (skip KernelExplainer for non-tree).
     output_index : int, optional
-        For multi-output models, which output to explain (0-based). For XGC A_parallel,
-        output_1 = A_parallel. If None and dataset_format is xgc with 2 outputs, uses 1.
+        For multi-output models, which output to explain (0-based). For the A_parallel target,
+        output_1 = A_parallel. If None and dataset_format is stacked_npy with 2 outputs, uses 1.
 
     Returns
     -------
@@ -419,12 +419,12 @@ def viz_shap(
     with summary_file.open("r", encoding="utf-8") as f:
         summary = json.load(f)
 
-    # Infer output_index for XGC A_parallel: output_1 is A_parallel
+    # Infer output_index for the A_parallel target: output_1 is A_parallel
     shap_output_index = output_index
     if shap_output_index is None:
         fmt = (spec.dataset_format or "").lower()
         n_out = summary.get("dataset", {}).get("n_outputs", 0)
-        if fmt == "xgc" and n_out >= 2:
+        if fmt == "stacked_npy" and n_out >= 2:
             shap_output_index = 1
 
     dataset_path = Path(summary.get("dataset", {}).get("file_path", spec.dataset_path))
@@ -790,7 +790,7 @@ def viz_datastreamset_evaluation(
     Loads contiguous row ranges (datastreamsets) from the full dataset and computes
     R², RMSE, MAE per datastreamset. Use to test generalization to unseen data.
 
-    Only supported for XGC format (uses row_range). The workflow's train/val/test
+    Only supported for the stacked_npy format (uses row_range). The workflow's train/val/test
     come from a random sample; these datastreamsets are different contiguous regions.
 
     Parameters
@@ -845,8 +845,8 @@ def viz_datastreamset_evaluation(
         raise FileNotFoundError(f"Dataset not found: {dataset_path}")
 
     fmt = (spec.dataset_format or "").lower()
-    if fmt != "xgc":
-        LOG.warning("viz_datastreamset_evaluation only supports xgc format. Skip.")
+    if fmt != "stacked_npy":
+        LOG.warning("viz_datastreamset_evaluation only supports stacked_npy format. Skip.")
         return {}
 
     scalers_dir = run_dir / "scalers"

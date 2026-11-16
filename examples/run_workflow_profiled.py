@@ -1,16 +1,16 @@
 """
-Run the M3D-C1 surrogate workflow with cProfile enabled.
+Run a SURGE surrogate workflow with cProfile enabled.
 
 Saves profile to runs/<run_tag>/workflow.prof and prints a top-N summary by
 cumulative time so you can see where time is spent (e.g. torch_mlp fit, data loading).
 
 Note: Profiling adds overhead (often 2–5x slower per trial). If the run looks stuck
 at "Trial 0 started...", wait a few minutes or run the same config without profiling
-first to confirm trials complete: python -m examples.m3dc1_workflow --spec configs/m3dc1_debug_5trials.yaml --run-tag debug_5trials
+first to confirm trials complete: surge run spec.yaml
 
 Usage:
   conda activate surge
-  python -m examples.run_workflow_profiled --spec configs/m3dc1_debug_5trials.yaml --run-tag debug_5trials_profiled
+  python -m examples.run_workflow_profiled --spec spec.yaml --run-tag debug_5trials_profiled
 
 Then inspect:
   python -c "import pstats; p=pstats.Stats('runs/debug_5trials_profiled/workflow.prof'); p.sort_stats('cumulative'); p.print_stats(40)"
@@ -37,7 +37,7 @@ from surge.workflow.spec import SurrogateWorkflowSpec
 
 def parse_args():
     p = argparse.ArgumentParser(description="Run SURGE workflow with cProfile.")
-    p.add_argument("--spec", type=Path, default=Path("configs/m3dc1_debug_5trials.yaml"))
+    p.add_argument("--spec", type=Path, required=True)
     p.add_argument("--run-tag", type=str, default=None)
     p.add_argument("--output-dir", type=Path, default=None)
     p.add_argument("--top", type=int, default=40, help="Number of top functions to print in summary")

@@ -3,7 +3,7 @@
 All notable changes to SURGE (`surge-ml`). Follows
 [Keep a Changelog](https://keepachangelog.com); versions follow PEP 440.
 
-## [0.1.0] — 2026-10-30 (first public PyPI release)
+## [0.1.0] — 2026-11-16 (first public PyPI release)
 
 ### Added
 
@@ -187,6 +187,11 @@ All notable changes to SURGE (`surge-ml`). Follows
   the leaderboard is now artifact-driven HTML.
 - Generated artifacts from version control (MLflow state, benchmark
   report trees, backup files, tooling demos).
+- A simulation-code-specific batch reader, its spec options
+  (`dataset_source`, `batch_dir_*`) and its hidden sample benchmark; they
+  needed reader scripts that are not distributed with the package.
+- The stacked-directory `.npy` loader is now `StackedNpyDataset`
+  (`dataset_format: stacked_npy`), named for the layout it reads.
 
 [Unreleased]: https://github.com/asvillar/SURGE/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/asvillar/SURGE/releases/tag/v0.1.0

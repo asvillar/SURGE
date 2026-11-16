@@ -185,48 +185,13 @@ def run_surrogate_workflow(
                 spec.cv_folds,
             )
         next_step("Loading dataset...")
-        if spec.dataset_source == "m3dc1_batch":
-            from ..datasets import M3DC1Dataset
-            batch_dir = Path(spec.dataset_path)
-            if not batch_dir.is_dir():
-                raise FileNotFoundError(f"dataset_source=m3dc1_batch requires a directory: {batch_dir}")
-            _batch_kw = {}
-            if spec.batch_dir_filename:
-                _batch_kw["filename"] = spec.batch_dir_filename
-            dataset = M3DC1Dataset.from_batch_dir(
-                batch_dir,
-                mode_step=spec.batch_dir_mode_step,
-                psi_step=spec.batch_dir_psi_step,
-                target_shape=spec.batch_dir_target_shape,
-                include_eigenmodes=spec.batch_dir_include_eigenmodes,
-                verbose=True,
-                **_batch_kw,
-            )
-        elif spec.dataset_source == "m3dc1_batch_per_mode":
-            from ..datasets import M3DC1Dataset
-            batch_dir = Path(spec.dataset_path)
-            if not batch_dir.is_dir():
-                raise FileNotFoundError(
-                    f"dataset_source=m3dc1_batch_per_mode requires a directory: {batch_dir}"
-                )
-            _batch_kw = {}
-            if spec.batch_dir_filename:
-                _batch_kw["filename"] = spec.batch_dir_filename
-            dataset = M3DC1Dataset.from_batch_dir_per_mode(
-                batch_dir,
-                verbose=True,
-                **_batch_kw,
-            )
-            if spec.sample_rows:
-                dataset.df = dataset.df.sample(n=min(spec.sample_rows, len(dataset.df)), random_state=spec.seed)
-        else:
-            dataset = SurrogateDataset.from_path(
-                spec.dataset_path,
-                format=spec.dataset_format,
-                metadata_path=spec.metadata_path,
-                sample=spec.sample_rows,
-                analyzer_kwargs={"hints": spec.metadata_overrides, **spec.analyzer},
-            )
+        dataset = SurrogateDataset.from_path(
+            spec.dataset_path,
+            format=spec.dataset_format,
+            metadata_path=spec.metadata_path,
+            sample=spec.sample_rows,
+            analyzer_kwargs={"hints": spec.metadata_overrides, **spec.analyzer},
+        )
 
         next_step("Preparing splits and scalers...")
         engine = SurrogateEngine(

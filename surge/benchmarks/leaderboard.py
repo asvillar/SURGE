@@ -43,7 +43,6 @@ def _bench_data_root() -> Path:
             tabular/
                 sklearn_cache/  ← sklearn/OpenML downloads
             plasma/          ← QLkNN NPZ, C-Mod NPZ, Constellaration NPZ
-            fusion/m3dc1/    ← M3DC1 HDF5
             pde/             ← Burgers 1-D generated NPZ
             sequence/        ← Lorenz-63 generated NPZ
             classification/  ← UCI-downloaded classification NPZ files
@@ -953,7 +952,6 @@ def _dataset_loaders() -> dict[str, Any]:
         "ctr23.house_sales": lambda: _load_ctr23_house_sales(),
         "ctr23.brazilian_houses": lambda: _load_ctr23_brazilian_houses(),
         # DOE fusion plasma benchmarks
-        "fusion.m3dc1_sample":        lambda: _load_fusion_m3dc1_sample(),
         "plasma.cmod_density_limit":  lambda: _concat_fixed(_load_cmod_density_limit()),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
         "plasma.qlknn10d":            lambda: _load_qlknn10d(),
@@ -1434,41 +1432,6 @@ def _load_cmod_density_limit():
     np.savez_compressed(cache, X_train=Xtr, y_train=ytr, X_test=Xte, y_test=yte,
                         groups_train=gtr, groups_test=gte)
     return Xtr, ytr, Xte, yte
-
-
-def _load_fusion_m3dc1_sample():
-    """M3DC1 equilibrium surrogate — 13 MHD params → stability metric.
-
-    Searches for the HDF5 file in two locations (in order):
-      1. data/datasets/benchmarks/fusion/m3dc1/m3dc1_sample.hdf5  (unified cache)
-      2. data/datasets/M3DC1/m3dc1_sample.hdf5                    (legacy path)
-
-    Raises FileNotFoundError if neither location contains the file.
-    There is no synthetic fallback — results from this benchmark must
-    come from real M3DC1 data.
-    """
-    candidate_paths = [_bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5"]
-    if paths.repo_root() is not None:
-        candidate_paths.append(paths.datasets_root() / "M3DC1" / "m3dc1_sample.hdf5")
-    h5_path = next((p for p in candidate_paths if p.exists()), None)
-    if h5_path is None:
-        raise FileNotFoundError(
-            "M3DC1 HDF5 not found.  Place the file at:\n"
-            f"  {candidate_paths[0]}\n"
-            "or obtain it from the PPPL M3DC1 team.  "
-            "No synthetic fallback is provided — benchmark results must use real data."
-        )
-    try:
-        import h5py
-        with h5py.File(h5_path, "r") as f:
-            keys = list(f.keys())
-            X_key = next(k for k in keys if "X" in k or "input" in k.lower())
-            y_key = next(k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower())
-            X = np.asarray(f[X_key], dtype=float)
-            y = np.asarray(f[y_key], dtype=float).ravel()
-        return X, y
-    except Exception as exc:
-        raise RuntimeError(f"Failed to read M3DC1 HDF5 at {h5_path}: {exc}") from exc
 
 
 def _load_qlknn_transport():

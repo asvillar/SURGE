@@ -32,7 +32,6 @@ from .tasks import (
     run_classification_plasma_stability,
     run_constellaration_modb,
     run_constellaration_surfaces,
-    run_fusion_m3dc1_sample,
     run_multioutput_scm20d,
     run_pde_burgers_1d,
     run_pdebench_burgers_1d,
@@ -235,10 +234,6 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     ),
 
     # ── Plasma / fusion (DOE-relevant) ────────────────────────────────────────
-    "fusion.m3dc1_sample": (
-        run_fusion_m3dc1_sample, "plasma", "regression", "13→1 (n=2,000)",
-        "M3DC1 equilibrium surrogate — 13 MHD params → stability metric",
-    ),
     "plasma.cmod_density_limit": (
         None, "plasma", "classification", "6→2 (211,647 train / 52,738 test slices, grouped by discharge)",
         "Alcator C-Mod density-limit precursor — 6 plasma signals → binary state, "
@@ -498,16 +493,6 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "feature_shape": "10",
         "target_shape": "1",
         "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["fusion_surrogates", "jax"]},
-    },
-    "fusion.m3dc1_sample": {
-        "dataset_source": "M3DC1 HDF5 supplied out-of-band",
-        "license": "data-owner controlled",
-        "access": "local_file",
-        "cache_path": "data/datasets/benchmarks/fusion/m3dc1/m3dc1_sample.hdf5",
-        "sample_count": None,
-        "feature_shape": "13",
-        "target_shape": "1",
-        "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": ["h5py"]},
     },
     "plasma.constellaration": {
         "dataset_source": "proxima-fusion/constellaration on HuggingFace",

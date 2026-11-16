@@ -17,7 +17,7 @@ SURGE
 ``main`` and a `documented
 <https://github.com/S-Villar/SURGE/blob/main/README.md>`__ install +
 quickstart (``uv``, ``.[torch,onnx,dev]``, including ``h5py`` for
-HDF5/M3DC1 tests). The test suite: **52 passed, 1 skipped** in a full
+HDF5 tests). The test suite: **52 passed, 1 skipped** in a full
 dev environment (see :doc:`citation` for the formal cite).
 
 **SURGE** is a scientific surrogate-modeling library: a single
@@ -40,7 +40,7 @@ SURGE provides a fully automated AI/ML-powered pipeline for surrogate generation
 4. **Hyperparameter Optimization** – Optuna-driven sweeps (TPE or BoTorch) can be toggled per model via YAML or ``HPOConfig``; trials export to JSON.
 5. **Training & Validation** – Metrics (R², RMSE, MAE, MAPE) and timings (train/inference per sample) are recorded for train/val/test.
 6. **Artifacts** – Models, scalers, predictions, metrics, spec, environment snapshot, and git revision land under ``runs/<tag>/``.
-7. **Visualization** – ``surge.viz`` exposes density scatter, violin/SNR, correlation heatmaps, and per-mode scatter utilities; the M3DC1 notebook demonstrates them end-to-end.
+7. **Visualization** – ``surge.viz`` exposes density scatter, violin/SNR, correlation heatmaps, and and per-mode scatter utilities.
 
 This vertical "code → automation → surrogate inference" flow means you can move from raw simulation code to deployable, uncertainty-aware surrogate models with minimal boilerplate.
 
@@ -71,7 +71,7 @@ Core Functionalities
 - **Dataset analysis** – ``surge.dataset`` handles multi-format loads (CSV, HDF5, NetCDF, pickle) and enforces clean numeric frames before scaling.  
 - **Optuna integration** – per-model search spaces defined inline, supporting categorical lists (e.g., hidden layer templates) and loguniform ranges.  
 - **Artifact standardization** – consistent directory layout for reproducibility + notebooks/tests.  
-- **Notebook parity** – CLI runs and ``notebooks/M3DC1_demo.ipynb`` share the same configs/specs.  
+- **Spec parity** – CLI runs and Python API calls share the same YAML specs.  
 
 .. toctree::
    :maxdepth: 2

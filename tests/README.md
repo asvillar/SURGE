@@ -15,8 +15,6 @@ there is no pre-refactor API left in the tree.
 | `test_model_registry.py` | Listing, retrieval, and custom registration against `MODEL_REGISTRY` |
 | `test_model_profiling.py` | `model_size_bytes` / `inference_ms_per_sample` profile fields produced by the workflow |
 | `test_preprocessing.py` | Input / output column detection heuristics |
-| `test_m3dc1_workflow_modes.py` | M3DC1 dataset loader paths (pickle today, `h5py`-gated batch modes) |
-| `test_xgc_workflow_modes.py` | XGC dataset loader paths |
 | `test_model_comparison.py` | Multi-model comparison scaffold — currently guarded by a legacy `VISUALIZATION_AVAILABLE` flag and skips until refactored against `surge.viz`. |
 
 ## Running
@@ -33,7 +31,7 @@ pytest -q tests/test_e2e_release_smoke.py
 ```
 
 Expected in a fresh `.[torch,onnx,dev]` env: **52 passed, 1 skipped**
-(`h5py` is included in `dev` so the M3DC1 batch tests run). The skip:
+(`h5py` is included in `dev` so the HDF5 tests run). The skip:
 
 - 1 × `test_model_comparison.py` — legacy visualization scaffold;
   pending migration to `surge.viz.run_viz`.

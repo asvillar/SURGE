@@ -43,7 +43,6 @@ _DEFAULTS: dict[str, str] = {
     "classification.covertype": "sklearn.random_forest_classifier",
     "vision.mnist": "pytorch.lenet5",
     "vision.cifar10": "pytorch.resnet20",
-    "fusion.m3dc1_sample": "sklearn.random_forest",
     "plasma.qlknn_transport": "sklearn.random_forest",
     "plasma.cmod_density_limit": "sklearn.random_forest_classifier",
     "thewell.gray_scott": "sklearn.random_forest",
@@ -75,7 +74,6 @@ _TASK_TYPE: dict[str, str] = {
     "classification.covertype": "classification",
     "vision.mnist": "classification",
     "vision.cifar10": "classification",
-    "fusion.m3dc1_sample": "regression",
     "thewell.gray_scott": "regression",
     "thewell.turbulence_2d": "regression",
     "thewell.mhd": "regression",
@@ -1699,88 +1697,6 @@ def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None,
         passed=metrics["test_accuracy"] >= 0.91,
         message="CIFAR-10 (Krizhevsky 2009) — top-1 accuracy",
         extra={"n_train": len(X_train), "n_test": len(X_test)},
-    )
-
-
-# ---------------------------------------------------------------------------
-# Phase F late — Fusion benchmark
-# ---------------------------------------------------------------------------
-
-
-def run_fusion_m3dc1_sample(*, seed: int = 42, model_key: str | None = None,
-    model_kwargs: dict | None = None) -> "BenchmarkResult":
-    """M3DC1 equilibrium surrogate sample (Tier 2).
-
-    Data
-    ----
-    Tries the unified benchmark cache (``<bench_data_root>/fusion/m3dc1/
-    m3dc1_sample.hdf5``), then the legacy ``<repo>/data/datasets/M3DC1/
-    m3dc1_sample.hdf5`` path inside a checkout.  Falls back to a synthetic
-    inline fixture (same shape / difficulty) if neither is present, so that
-    CI and tests run without the large dataset.
-
-    Shape: 13 input features → 1 stability metric (R²).
-    Pass threshold: R² ≥ 0.70.
-    """
-    from sklearn.model_selection import train_test_split
-    from surge.benchmarks import paths  # local import avoids an import cycle
-
-    PRIMARY_H5_PATH = paths.bench_data_root() / "fusion" / "m3dc1" / "m3dc1_sample.hdf5"
-    if PRIMARY_H5_PATH.exists():
-        H5_PATH = PRIMARY_H5_PATH
-    else:
-        H5_PATH = paths.datasets_root() / "M3DC1" / "m3dc1_sample.hdf5"
-
-    X, y = None, None
-
-    # Attempt real HDF5 load.
-    if H5_PATH.exists():
-        try:
-            import h5py
-            with h5py.File(H5_PATH, "r") as f:
-                keys = list(f.keys())
-                X_key = [k for k in keys if "X" in k or "input" in k.lower()][0]
-                y_key = [k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower()][0]
-                X = np.asarray(f[X_key], dtype=float)
-                y = np.asarray(f[y_key], dtype=float).ravel()
-        except Exception:
-            X, y = None, None
-
-    # Synthetic fallback: linear combination + noise, 13 → 1.
-    if X is None or y is None:
-        rng = np.random.default_rng(seed)
-        n = 2000
-        X = rng.standard_normal((n, 13))
-        coefs = rng.uniform(-1.0, 1.0, 13)
-        y = X @ coefs + 0.1 * rng.standard_normal(n)
-        # Hint in the result that synthetic data was used.
-        _is_synthetic = True
-    else:
-        _is_synthetic = False
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
-
-    key = model_key or "sklearn.random_forest"
-    from surge.model.registry import MODEL_REGISTRY
-    adapter = MODEL_REGISTRY.create(key)
-
-    t0 = time.perf_counter()
-    adapter.fit(X_train, y_train)
-    y_pred = np.asarray(adapter.predict(X_test)).ravel()
-    elapsed = time.perf_counter() - t0
-
-    metrics = _reg_metrics(y_test, y_pred)
-    metrics["runtime_s"] = elapsed
-    note = f"(synthetic inline fixture — place real data at {PRIMARY_H5_PATH})" if _is_synthetic else ""
-    return BenchmarkResult(
-        benchmark_key="fusion.m3dc1_sample",
-        model_key=adapter.name,
-        tier="2",
-        task_type="regression",
-        metrics=metrics,
-        passed=metrics["test_r2"] >= 0.70,
-        message=f"M3DC1 equilibrium surrogate 13→1 {note}".strip(),
-        extra={"n_train": len(X_train), "n_test": len(X_test), "synthetic": _is_synthetic},
     )
 
 

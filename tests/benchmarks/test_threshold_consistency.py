@@ -23,7 +23,7 @@ FOCUS_KEYS = [
 KNOWN_DRIFT = {
     "tabular.airfoil_noise", "tabular.yacht_dynamics", "tabular.diabetes",
     "tabular.breast_cancer", "tabular.digits", "tabular.iris",
-    "fusion.m3dc1_sample", "plasma.cmod_density_limit",
+    "plasma.cmod_density_limit",
 }
 
 

@@ -62,7 +62,7 @@ class DataGenerator:
         # avoid creating editor backup files like file.py~.
         self.use_python_replacement = bool(use_python_replacement)
         # Tracks the most recent batch directory created by generate()
-        self.last_batch_dir = None
+        self.last_batch_path = None
 
     def _call_replace(self, varname: str, value, filepath: str):
         script_path = os.path.join(self.bin_dir, self.replace_script)
@@ -406,18 +406,18 @@ class DataGenerator:
         existing = [d for d in os.listdir(batch_root) if os.path.isdir(os.path.join(batch_root, d)) and d.startswith("batch")]
         idxs = [int(d.replace("batch", "")) for d in existing if d.replace("batch", "").isdigit()]
         next_idx = max(idxs) + 1 if idxs else 1
-        batch_dir = os.path.join(batch_root, f"batch{next_idx}")
+        batch_path = os.path.join(batch_root, f"batch{next_idx}")
         if self.dry_run:
-            print(f"[dry-run] would create batch directory: {batch_dir}")
+            print(f"[dry-run] would create batch directory: {batch_path}")
         else:
-            os.makedirs(batch_dir, exist_ok=False)
+            os.makedirs(batch_path, exist_ok=False)
         # record last created batch dir
-        self.last_batch_dir = batch_dir
+        self.last_batch_path = batch_path
 
         for idx in range(sample.shape[0]):
             caseidx = idx + 1
-            # Create the case directory inside the batch_dir (case names: case1, case2,...)
-            target_parent = batch_dir or out_dir
+            # Create the case directory inside the batch_path (case names: case1, case2,...)
+            target_parent = batch_path or out_dir
             if self.dry_run:
                 wdir = os.path.join(target_parent, f"case{caseidx}")
                 print(f"[dry-run] would create case directory: {wdir}")
@@ -475,8 +475,8 @@ class DataGenerator:
 
             results.append({"case": f"case{caseidx}", "dir": wdir, "params": assigned})
 
-        # If batch_dir provided, save samples and README
-        if batch_dir is not None and not self.dry_run:
+        # If batch_path provided, save samples and README
+        if batch_path is not None and not self.dry_run:
             meta = {
                 "inpnames": list(inpnames),
                 "ranges": list([list(r) for r in ranges]),
@@ -487,13 +487,13 @@ class DataGenerator:
                 "base_case_dir": base_case_dir,
                 "created_at": datetime.utcnow().isoformat() + "Z",
             }
-            npz_path = os.path.join(batch_dir, "samples.npz")
+            npz_path = os.path.join(batch_path, "samples.npz")
             np.savez_compressed(npz_path, X=samples, names=np.array(inpnames), integer_mask=np.array(integer_mask), meta=json.dumps(meta))
 
             # Write README with Markdown tables
-            readme_path = os.path.join(batch_dir, "README.md")
+            readme_path = os.path.join(batch_path, "README.md")
             with open(readme_path, "w", encoding="utf-8") as f:
-                bname = os.path.basename(batch_dir)
+                bname = os.path.basename(batch_path)
                 f.write(f"# Batch {bname}\n\n")
                 f.write(f"Created: {meta['created_at']}\n\n")
 
@@ -550,7 +550,7 @@ class DataGenerator:
             # Optional: save sampling plots
             if save_plots:
                 try:
-                    save_sampling_plots(samples, list(inpnames), batch_dir, title=f"{os.path.basename(batch_dir)}")
+                    save_sampling_plots(samples, list(inpnames), batch_path, title=f"{os.path.basename(batch_path)}")
                 except Exception as e:
                     print(f"[warn] failed to save plots: {e}")
 

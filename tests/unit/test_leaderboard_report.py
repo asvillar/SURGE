@@ -112,10 +112,10 @@ def _fake_tree(tmp_path: Path) -> Path:
     _write_result(root, "pde.burgers_1d", "sanity.model",
                   "2026-02-01T00-00-00Z", test_r2=1.0)
     # synthetic fixture
-    d = root / "fusion.m3dc1_sample" / "2026-02-01T00-00-00Z"
+    d = root / "plasma.constellaration" / "2026-02-01T00-00-00Z"
     d.mkdir(parents=True)
     (d / "result.json").write_text(json.dumps({
-        "benchmark_key": "fusion.m3dc1_sample", "model_key": "syn.model",
+        "benchmark_key": "plasma.constellaration", "model_key": "syn.model",
         "metrics": {"test_r2": 0.9}, "passed": True,
         "timestamp": "2026-02-01T00-00-00Z", "extra": {"synthetic": True}}))
     return root
@@ -178,7 +178,7 @@ def test_synthetic_excluded_from_pass_count(tmp_path: Path):
     _write_result(root, "plasma.qlknn10d", "new.model", "2026-11-02T00-00-00Z", test_r2=0.96)
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
                         demo_runs={}).read_text()
-    # fusion.m3dc1_sample is not ready/real and the tutorial california runs do
+    # plasma.constellaration is not ready/real and the tutorial california runs do
     # not count: tiles count only ready real runs; both qlknn10d runs pass
     assert "<b>2 / 2</b>" in text
 
@@ -306,13 +306,13 @@ def test_index_table_has_one_row_per_visible_benchmark(tmp_path: Path):
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
                         demo_runs={}).read_text()
     assert 'id="bench-index"' in text
-    # fusion.m3dc1_sample is hidden by metadata.yaml (visible: False), so only
+    # plasma.constellaration is hidden by metadata.yaml (visible: False), so only
     # 2 of the 3 benchmarks in the fake tree are visible/indexed
     assert text.count("<tr data-key='") == 2
     for key in ("tabular.california_housing", "pde.burgers_1d"):
         assert f"<tr data-key='{key}'" in text
         assert f"<a href='#{key}' class='idx-link'" in text
-    assert "<tr data-key='fusion.m3dc1_sample'" not in text
+    assert "<tr data-key='plasma.constellaration'" not in text
     # best-model haystack carries the winning model's key for search
     assert "const BENCH_INDEX" in text
     assert "new.model" in text[text.index("const BENCH_INDEX"):text.index("</script>",

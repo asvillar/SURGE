@@ -61,7 +61,6 @@ gpflow = [
 tensorflow = ["tensorflow>=2.21", "tf-keras>=2.21"]
 # SHAP feature importance; >=0.46 is the first NumPy-2-compatible release.
 shap = ["shap>=0.46"]
-# h5py is included so M3DC1 batch-mode tests run without an extra install.
 mlflow = ["mlflow>=2.0.0"]
 benchmarks = ["h5py>=3.0"]  # optuna is already a core dependency (see deps above)
 tabpfn = ["tabpfn>=2.0"]

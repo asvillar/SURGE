@@ -14,7 +14,7 @@ From PyPI (after publish)
 
    python -m pip install "surge-ml[torch,onnx,dev]"
 
-The ``dev`` extra pulls ``pytest``, ``ruff``, and ``h5py`` (HDF5 / M3DC1-related tests). For documentation builds, add the ``docs`` extra or install Sphinx dependencies (see the ``[docs]`` extra in ``pyproject.toml``).
+The ``dev`` extra pulls ``pytest``, ``ruff``, and ``h5py`` (HDF5-related tests). For documentation builds, add the ``docs`` extra or install Sphinx dependencies (see the ``[docs]`` extra in ``pyproject.toml``).
 
 From a clone (recommended for development)
 -------------------------------------------

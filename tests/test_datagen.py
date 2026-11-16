@@ -192,9 +192,9 @@ class TestGenerate:
         )
         
         assert len(results) == 3
-        assert gen.last_batch_dir is not None
+        assert gen.last_batch_path is not None
     
-    def test_generate_creates_batch_directory(self, temp_dir, sample_params, sample_ranges):
+    def test_generate_creates_batch_pathectory(self, temp_dir, sample_params, sample_ranges):
         """Test that generate creates batch directory."""
         gen = DataGenerator(dry_run=False, use_python_replacement=True)
         
@@ -220,8 +220,8 @@ class TestGenerate:
         )
         
         # Should create batch1 directory
-        batch_dirs = [d for d in batch_root.iterdir() if d.is_dir() and d.name.startswith('batch')]
-        assert len(batch_dirs) == 1
+        batch_paths = [d for d in batch_root.iterdir() if d.is_dir() and d.name.startswith('batch')]
+        assert len(batch_paths) == 1
 
 
 class TestGenerateRunsFromEquilibria:

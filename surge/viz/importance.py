@@ -274,9 +274,9 @@ def shap_grouped_importance(
     return names, np.array(vals)
 
 
-def xgc_201_group_specs() -> List[Tuple[str, List[int]]]:
+def grouped_201_specs() -> List[Tuple[str, List[int]]]:
     """
-    Group spec for XGC 201 inputs: 14 stages of 14 vars + 5 extra.
+    Group spec for 201-input stacked layouts: 14 stages of 14 vars + 5 extra.
 
     196 = 14 vars × 14 slots (stages/timesteps); 5 = extra (nprev=5).
     """
@@ -300,14 +300,14 @@ def plot_shap_grouped_bar(
     """
     Bar plot of mean |SHAP| per feature group.
 
-    For XGC 201 inputs, use xgc_201_group_specs().
+    For 201-input stacked layouts, use grouped_201_specs().
     """
     if not MATPLOTLIB_AVAILABLE:
         raise ImportError("matplotlib required for plot_shap_grouped_bar")
     if group_specs is None:
         n_features = shap_values.shape[1]
         if n_features == 201:
-            group_specs = xgc_201_group_specs()
+            group_specs = grouped_201_specs()
         else:
             group_specs = [(f"input_{i}", [i]) for i in range(min(20, n_features))]
     names, importance = shap_grouped_importance(shap_values, group_specs)
@@ -764,14 +764,14 @@ def run_shap_analysis(
                             results["tree_error"] = str(results.get("tree_error", "")) + f"; dot plot: {e}"
                         else:
                             raise
-                # Grouped SHAP for XGC 201 inputs (14 stages of 14 + 5 extra)
+                # Grouped SHAP for 201-input stacked layouts (14 stages of 14 + 5 extra)
                 n_feat = int(shap_tree.shape[1]) if hasattr(shap_tree, "shape") and shap_tree.ndim >= 2 else 0
                 if n_feat == 201:
                     try:
                         grouped_path = save_dir / "shap_summary_tree_grouped.png"
                         plot_shap_grouped_bar(
                             shap_tree,
-                            group_specs=xgc_201_group_specs(),
+                            group_specs=grouped_201_specs(),
                             title="SHAP importance by group (A_parallel, output_1)",
                             save_path=grouped_path,
                             dpi=dpi,

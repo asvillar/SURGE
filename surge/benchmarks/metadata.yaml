@@ -680,37 +680,6 @@ benchmarks:
   visible: true
   focus: false
   focus_note: "Need more explanation. Can we understand better parameters / visualize further the predictions we are making? How does it compare with State of the art models? Where is this published?"
-- key: fusion.m3dc1_sample
-  status: needs_rerun
-  status_note: "on-file result is the synthetic fallback fixture"
-  name: M3DC1 Tokamak Equilibrium Surrogate
-  capability: Scientific Domain
-  discipline: Fusion & Plasma Physics
-  tier: 2
-  citation: "Local sample file of M3D-C1 equilibrium parameters (not distributed with SURGE)"
-  url: https://m3dc1.pppl.gov
-  shape: 13 → 1
-  n: ~500
-  primary_metric: R²
-  threshold: R² ≥ 0.85
-  description: 'Tokamak MHD equilibrium surrogate: map equilibrium parameters to a stability/growth-rate
-    metric.'
-  task_explainer: "Thirteen normalised MHD equilibrium parameters are mapped to a single stability metric of a tokamak plasma computed by the M3D-C1 extended-MHD code. A surrogate would replace expensive 3D MHD runs. If the real HDF5 file is absent a synthetic linear fixture is used instead, so check the 'synthetic fixture' badge before trusting R²."
-  published_in: "Local sample file, not distributed; a synthetic fallback fixture is used when it is absent"
-  sota:
-    value: null
-    metric: "R²"
-    model: null
-    source: "BENCHMARK_SOTA_REVIEW (2026-09-24)"
-    url: "https://m3dc1.pppl.gov"
-    protocol_match: "unknown"
-    note: "no verified published number for this exact split/protocol; no published ML benchmark exists for this surrogate task"
-  inputs:
-  - {name: "equilibrium_params[0:13]", desc: "Normalised MHD equilibrium parameters (a.u.)"}
-  outputs:
-  - {name: "stability_metric", desc: "Stability / growth-rate metric (a.u.)"}
-  visible: false
-  focus: false
 - key: plasma.cmod_density_limit
   status: ready
   definition_date: 2026-11-04  # re-posed: discharge-grouped split, natural imbalance, AUROC gate

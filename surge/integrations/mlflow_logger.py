@@ -27,7 +27,7 @@ def log_surge_run(
     Log a SURGE run to MLflow: params, metrics, and artifacts.
 
     Args:
-        run_dir: Path to the run directory (e.g. runs/xgc_aparallel_set1_v2)
+        run_dir: Path to the run directory (e.g. runs/my_run)
         experiment_name: MLflow experiment name
         run_name: MLflow run name (default: run_dir.stem)
 

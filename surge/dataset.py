@@ -118,20 +118,20 @@ class SurrogateDataset:
         else:
             self.metadata = {}
 
-        # Build reader_kwargs; for xgc format, pass sample and hints
+        # Build reader_kwargs; for stacked_npy format, pass sample and hints
         _reader_kwargs = dict(reader_kwargs)
         fmt_lower = (format or "").lower()
-        is_xgc = fmt_lower == "xgc" or (fmt_lower in ("auto", "") and file_path.is_dir())
-        if is_xgc:
+        is_stacked_npy = fmt_lower == "stacked_npy" or (fmt_lower in ("auto", "") and file_path.is_dir())
+        if is_stacked_npy:
             _reader_kwargs.setdefault("sample", sample)
             if analyzer_kwargs and "hints" in analyzer_kwargs:
                 _reader_kwargs.update(analyzer_kwargs["hints"])
 
         self.df = self._read_file(file_path, format=format, **_reader_kwargs)
 
-        # Subsample only if not already done by format-specific loader (e.g. xgc)
+        # Subsample only if not already done by format-specific loader (e.g. stacked_npy)
         if sample is not None and 0 < sample < len(self.df):
-            if not is_xgc:
+            if not is_stacked_npy:
                 self.df = self.df.sample(n=sample, random_state=sample_random_state)
 
         self._analyze(
@@ -395,12 +395,12 @@ class SurrogateDataset:
         fmt = (format or "").lower()
         if fmt == "auto" or not fmt:
             if path.is_dir():
-                fmt = "xgc"
+                fmt = "stacked_npy"
             else:
                 fmt = path.suffix.lower().lstrip(".")
 
-        if fmt == "xgc":
-            return self._read_xgc(path, **reader_kwargs)
+        if fmt == "stacked_npy":
+            return self._read_stacked_npy(path, **reader_kwargs)
         if fmt == "csv":
             return pd.read_csv(path, **reader_kwargs)
         if fmt in ("pkl", "pickle"):
@@ -418,12 +418,12 @@ class SurrogateDataset:
             return self._read_netcdf(path, **reader_kwargs)
         raise ValueError(f"Unsupported dataset format '{fmt}' for file {path}")
 
-    def _read_xgc(self, path: Path, **reader_kwargs: Any) -> pd.DataFrame:
-        """Load stacked-directory .npy layout via XGCDataset (see ``surge.datasets.xgc``)."""
-        from .datasets.xgc import _load_stacked_npy
+    def _read_stacked_npy(self, path: Path, **reader_kwargs: Any) -> pd.DataFrame:
+        """Load stacked-directory .npy layout via StackedNpyDataset (see ``surge.datasets.stacked_npy``)."""
+        from .datasets.stacked_npy import _load_stacked_npy
 
         if not path.is_dir():
-            raise ValueError(f"XGC format requires a directory path, got: {path}")
+            raise ValueError(f"stacked_npy format requires a directory path, got: {path}")
 
         set_name = reader_kwargs.get("set_name", "set1")
         sample = reader_kwargs.get("sample")
