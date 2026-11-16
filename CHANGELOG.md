@@ -7,6 +7,9 @@ All notable changes to SURGE (`surge-ml`). Follows
 
 ### Added
 
+- **README**: states the open-source packages SURGE is built on, with their
+  logos (headline row and a table of what each is used for and which extra
+  installs it).
 - **Model portfolio**: 50-adapter registry across scikit-learn baselines,
   gradient boosting (XGBoost, LightGBM, CatBoost), PyTorch MLP families
   (MLP, residual, ensemble, classifier), operator learners (FNO 1D/2D,
@@ -134,6 +137,10 @@ All notable changes to SURGE (`surge-ml`). Follows
 
 ### Fixed
 
+- **Docs**: a workflow run does not write an ONNX file. The README and the
+  quickstart now describe the real route (`torch.onnx.export`, then
+  `surge.inference.load_session` and `infer`); `NOTICE` names the laboratory
+  that holds the funding contract.
 - **Uncertainty in workflow runs**: a model with `request_uncertainty: true`
   no longer aborts the run when its validation uncertainty is saved; the
   file now holds `mean` and `std`. `surge init --goal uncertainty` writes a

@@ -114,12 +114,12 @@ the original target units:
    model.load(f"{run_dir}/models/pytorch.mlp.joblib")
    y_hat = model.predict(scaler.transform(df.values))   # original units
 
-For PyTorch-backed models trained with the ``onnx`` extra installed, the
-same run directory also contains ``models/<key>.onnx`` that
-``onnxruntime`` can load without a Python dependency on SURGE or
-PyTorch.
+A workflow run does not write an ONNX file. With the ``onnx`` extra
+installed, export a PyTorch network yourself with ``torch.onnx.export``
+and run the file through ``surge.inference.load_session`` and ``infer``;
+``onnxruntime`` then needs neither SURGE nor PyTorch.
 
-Both round-trips are implemented end-to-end in
+The reload shown above is implemented end-to-end in
 ``examples/quickstart.py`` under ``--infer``; read the
 ``_demo_inference`` helper there for a working reference.
 

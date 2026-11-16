@@ -23,7 +23,7 @@ HDF5 tests). See :doc:`citation` for the formal cite.
 **declarative pipeline** (``run_surrogate_workflow``,
 ``SurrogateWorkflowSpec``) that covers data ingest, train/val/test
 splits, model adapters (scikit-learn, PyTorch MLP, optional GPflow), Optuna
-HPO, **artifact lineage** (``runs/<tag>/``), optional ONNX export, and
+HPO, **artifact lineage** (``runs/<tag>/``), ONNX Runtime inference helpers, and
 diagnostic plots (``surge.viz``).
 
 .. _surge-pipeline:

@@ -4,7 +4,6 @@
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](./pyproject.toml)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![MLflow](https://img.shields.io/badge/MLflow-integrated-0194E2?logo=mlflow&logoColor=white)](docs/GETTING_STARTED.md)
 [![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
 [![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asvillar/SURGE/blob/v0.1.0/examples/notebooks/surge_fusion_quickstart.ipynb)
@@ -20,6 +19,18 @@ databases lead the benchmark suite — on a pipeline that is domain-agnostic.
 
 **v0.1.0** · [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819) ·
 [DOI 10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
+
+<p align="center"><sub>Built on</sub><br/>
+<a href="https://numpy.org"><img src="https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white" alt="NumPy" height="28"/></a>
+<a href="https://scipy.org"><img src="https://img.shields.io/badge/SciPy-8CAAE6?style=for-the-badge&logo=scipy&logoColor=white" alt="SciPy" height="28"/></a>
+<a href="https://pandas.pydata.org"><img src="https://img.shields.io/badge/pandas-150458?style=for-the-badge&logo=pandas&logoColor=white" alt="pandas" height="28"/></a>
+<a href="https://scikit-learn.org"><img src="https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikitlearn&logoColor=white" alt="scikit-learn" height="28"/></a>
+<a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch" height="28"/></a>
+<a href="https://www.tensorflow.org"><img src="https://img.shields.io/badge/TensorFlow-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white" alt="TensorFlow" height="28"/></a>
+<a href="https://optuna.org"><img src="https://img.shields.io/badge/Optuna-002C76?style=for-the-badge&logo=optuna&logoColor=white" alt="Optuna" height="28"/></a>
+<a href="https://mlflow.org"><img src="https://img.shields.io/badge/MLflow-0194E2?style=for-the-badge&logo=mlflow&logoColor=white" alt="MLflow" height="28"/></a>
+<a href="https://onnx.ai"><img src="https://img.shields.io/badge/ONNX-005CED?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX" height="28"/></a>
+</p>
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/architecture.png"><img src="docs/assets/readme/architecture.png"
@@ -63,10 +74,12 @@ parity, and the leaderboard gaining models against the published gate.
   comparable.
 - **Automated HPO** (Optuna TPE / BoTorch) with per-epoch training logs
   and starred-best convergence plots.
-- **Deployment path**: trained PyTorch surrogates export to **ONNX**
-  with `onnxruntime` numeric-parity tests in CI — the route used for
-  real-time inference in the ICRF surrogate publications; Keras models
-  serialize to the portable `.keras` format, sklearn to joblib.
+- **Deployment path**: a PyTorch network exports to **ONNX** with
+  `torch.onnx.export`, and `surge.inference` loads and runs the exported
+  file with `onnxruntime`; CI checks that round trip for numeric parity —
+  the route used for real-time inference in the ICRF surrogate
+  publications. Keras models serialize to the portable `.keras` format,
+  sklearn to joblib.
 - **Benchmarks with receipts** (the *model-bench* suite): 29 curated
   benchmarks from UCI/OpenML to PDEBench, TheWell, MNIST/CIFAR-10, and
   fusion datasets (QLKNN transport, ConStellaration stellarator design),
@@ -446,9 +459,10 @@ runs/<tag>/
 └── plots/                    # parity, HPO convergence, training dashboards
 ```
 
-ONNX export (`pip install -e ".[onnx]"`) round-trips PyTorch surrogates
-through `onnxruntime` with numeric-parity tests — the path used for
-real-time inference deployments.
+A workflow run does not write an ONNX file. With the `onnx` extra
+(`pip install -e ".[onnx]"`), export a PyTorch network with
+`torch.onnx.export` and run it through `surge.inference.load_session` and
+`infer`; CI checks that round trip for numeric parity.
 
 ---
 
@@ -542,6 +556,33 @@ cuda→cpu, and the Apple GPU is **opt-in** (`SURGE_DEVICE=auto`) because
 not every architecture is MPS-safe — convolutional and spectral models
 are (identical R² to CPU), recurrent models are not. Model parallelism inside a workflow and multi-GPU training (DDP) are not
 supported yet.
+
+## Built on open-source software
+
+SURGE does not re-implement numerics, model families, search or tracking. It wires established, widely tested open-source packages into one workflow.
+
+| Software | What SURGE uses it for | Distribution | Installed with |
+|---|---|---|---|
+| [![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy&logoColor=white)](https://numpy.org) | Array and numerical core | `numpy` | core |
+| [![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white)](https://scipy.org) | Scientific routines in analysis figures and benchmark tasks | `scipy` | core |
+| [![pandas](https://img.shields.io/badge/pandas-150458?logo=pandas&logoColor=white)](https://pandas.pydata.org) | Tabular data loading and per-split parquet predictions | `pandas` | core |
+| [![Apache Arrow](https://img.shields.io/badge/Apache%20Arrow-000000?logo=apachearrow&logoColor=white)](https://arrow.apache.org) | Parquet reading and writing through pandas | `pyarrow` | core |
+| [![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org) | Baseline model families, preprocessing and metrics | `scikit-learn` | core |
+| [joblib](https://joblib.readthedocs.io) | Persisting fitted scalers and models | `joblib` | core |
+| [![PyYAML](https://img.shields.io/badge/PyYAML-CB171E?logo=yaml&logoColor=white)](https://pyyaml.org) | Reading and writing workflow specs | `pyyaml` | core |
+| [Matplotlib](https://matplotlib.org) | Figures and the visualization theme | `matplotlib` | core |
+| [![Optuna](https://img.shields.io/badge/Optuna-002C76?logo=optuna&logoColor=white)](https://optuna.org) | Hyperparameter search | `optuna` | core |
+| [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org) | Neural-network model families and training | `torch` | `torch` |
+| [![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?logo=tensorflow&logoColor=white)](https://www.tensorflow.org) / [![Keras](https://img.shields.io/badge/Keras-D00000?logo=keras&logoColor=white)](https://keras.io) | The `keras.mlp` adapter and user-supplied `build_fn` models | `tensorflow`, `tf-keras` | `tensorflow` |
+| [![ONNX](https://img.shields.io/badge/ONNX-005CED?logo=onnx&logoColor=white)](https://onnx.ai) / [ONNX Runtime](https://onnxruntime.ai) | Inference helpers that load and run exported models; the packages `torch.onnx.export` needs | `onnx`, `onnxscript`, `onnxruntime` | `onnx` |
+| [![MLflow](https://img.shields.io/badge/MLflow-0194E2?logo=mlflow&logoColor=white)](https://mlflow.org) | Optional experiment tracking | `mlflow` | `mlflow` |
+| [SHAP](https://shap.readthedocs.io) | Feature-importance figures | `shap` | `shap` |
+| [h5py](https://www.h5py.org) | HDF5 datasets and benchmark loaders | `h5py` | `benchmarks` |
+| [TabPFN](https://github.com/PriorLabs/TabPFN) | The TabPFN model adapter | `tabpfn` | `tabpfn` |
+| [The Well](https://github.com/PolymathicAI/the_well) | The Well benchmark loader | `the-well` | `thewell` |
+| [GPflow](https://gpflow.github.io/GPflow/) | Gaussian-process adapter; installed separately, see the `gpflow` extra | not a declared dependency | `gpflow` |
+
+Names and logos are trademarks of their respective projects; they appear here to state a dependency and do not imply endorsement of SURGE by those projects.
 
 ## Documentation
 

@@ -13,6 +13,13 @@ reproducible from its own `runs/<tag>/` directory.
 
 ![SURGE architecture: ingest & characterize, model & optimize, evaluate & quantify, report & deploy](https://raw.githubusercontent.com/asvillar/SURGE/v0.1.0/docs/assets/readme/architecture.png)
 
+**Built on**
+
+[![NumPy](https://img.shields.io/badge/NumPy-013243?style=flat&logo=numpy&logoColor=white)](https://numpy.org) [![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?style=flat&logo=scipy&logoColor=white)](https://scipy.org) [![pandas](https://img.shields.io/badge/pandas-150458?style=flat&logo=pandas&logoColor=white)](https://pandas.pydata.org) [![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat&logo=scikitlearn&logoColor=white)](https://scikit-learn.org) [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)](https://pytorch.org) [![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?style=flat&logo=tensorflow&logoColor=white)](https://www.tensorflow.org) [![Optuna](https://img.shields.io/badge/Optuna-002C76?style=flat&logo=optuna&logoColor=white)](https://optuna.org) [![MLflow](https://img.shields.io/badge/MLflow-0194E2?style=flat&logo=mlflow&logoColor=white)](https://mlflow.org) [![ONNX](https://img.shields.io/badge/ONNX-005CED?style=flat&logo=onnx&logoColor=white)](https://onnx.ai)
+
+Names and logos are trademarks of their respective projects; they appear here to state a dependency and do not imply endorsement of SURGE by those projects.
+
+
 ## Install
 
 ```bash
