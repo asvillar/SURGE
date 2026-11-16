@@ -1,7 +1,7 @@
 """
 Dataset analysis utilities used by the refactored SURGE stack.
 
-This module supersedes the legacy `surge.preprocessing` helpers and adds:
+This module analyses a dataset and infers input/output columns. It provides:
   * Metadata-aware input/output overrides (YAML or dict)
   * Multi-profile grouping hints for scientific surrogate targets
   * Optional sampling knobs for large datasets

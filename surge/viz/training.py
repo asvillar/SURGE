@@ -15,9 +15,6 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.figure import Figure
 

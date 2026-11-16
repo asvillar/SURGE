@@ -1,4 +1,4 @@
-"""Tier 0 and Tier 1 benchmark implementations (CPU, sklearn-only)."""
+"""Benchmark implementations: tabular, sequence, PDE, vision, TheWell and ConStellaration tasks."""
 
 from __future__ import annotations
 
@@ -614,7 +614,7 @@ def run_tabular_digits(*, seed: int = 42, model_key: str | None = None) -> Bench
 
 
 # ---------------------------------------------------------------------------
-# Sequence benchmarks (Phase C)
+# Sequence benchmarks
 # ---------------------------------------------------------------------------
 
 
@@ -878,7 +878,7 @@ def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# PDE benchmarks (Phase D1)
+# PDE benchmarks
 # ---------------------------------------------------------------------------
 
 
@@ -1096,7 +1096,7 @@ def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Phase F — SURGE-native Scientific Benchmarks (early part)
+# SURGE-native scientific benchmarks (early part)
 # ---------------------------------------------------------------------------
 
 
@@ -1436,7 +1436,7 @@ def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None
 
 
 # ---------------------------------------------------------------------------
-# Phase D2 — PDEBench benchmarks (Tier 3, requires HDF5 download)
+# PDEBench benchmarks (Tier 3, requires HDF5 download)
 # ---------------------------------------------------------------------------
 
 _PDEBENCH_DEFAULTS = {
@@ -1581,7 +1581,7 @@ def run_pdebench_shallow_water_2d(*, seed: int = 42, model_key: str | None = Non
 
 
 # ---------------------------------------------------------------------------
-# Phase E — Vision Benchmarks (Tier 2, torchvision)
+# Vision benchmarks (Tier 2, torchvision)
 # ---------------------------------------------------------------------------
 
 
@@ -1721,7 +1721,7 @@ def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Phase G — TheWell benchmarks (Tier 4, manual trigger, requires the-well)
+# TheWell benchmarks (Tier 4, manual trigger, requires the-well)
 # ---------------------------------------------------------------------------
 
 
@@ -1810,13 +1810,12 @@ def run_thewell_mhd(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Phase H — ConStellaration field benchmarks (boundary -> |B|, flux surfaces)
+# ConStellaration field benchmarks (boundary -> |B|, flux surfaces)
 #
 # Requires the downloaded VMEC wout subset cache (see
 # surge.benchmarks.loaders.constellaration.download_wout_subset); works on
-# whatever rows are present (today: 500 in wout_nfp3_subset_parts/) and
-# scales unchanged to the full ~26,897-row dataset once the download
-# finishes.
+# whatever rows are present (partial wout_nfp3_subset_parts/ or the merged
+# npz) and scales unchanged to the full ~26,897-row dataset.
 # ---------------------------------------------------------------------------
 
 
@@ -2000,9 +1999,8 @@ def run_constellaration_modb(*, seed: int = 42, model_key: str | None = None,
     predicted vs true). ``extra`` carries a mean-field baseline and a
     POD+ridge baseline (both median relative-L2).
 
-    Threshold PROVISIONAL: rel-L2 <= 0.05 — set from the first full-cache
-    (26,897-row) leaderboard, not yet run; today's 500-row cache is a smoke
-    test only.
+    Provisional threshold: rel-L2 <= 0.05; no full-data (26,897-row) run is
+    on file, and a 500-row subset is a smoke test only.
     """
     from surge.benchmarks.loaders.constellaration_fields import constellaration_modb_dataset
 
@@ -2032,8 +2030,7 @@ def run_constellaration_surfaces(*, seed: int = 42, model_key: str | None = None
     radius). ``extra`` carries the same mean-field / POD+ridge baselines as
     ``plasma.constellaration_modb``.
 
-    Threshold PROVISIONAL: rel-L2 <= 0.02 — set from the first full-cache
-    leaderboard, not yet run.
+    Provisional threshold: rel-L2 <= 0.02; no full-data run is on file.
     """
     from surge.benchmarks.loaders.constellaration_fields import constellaration_surfaces_dataset
 

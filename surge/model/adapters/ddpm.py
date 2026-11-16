@@ -9,14 +9,14 @@ from ...hpc import ResourceProfile
 
 _DDPM_INFO = ModelInfo(
     architecture=(
-        "Conditional Denoising Diffusion Probabilistic Model (DDPM) for 1D "
-        "field-to-field prediction: a learned reverse diffusion process that "
-        "iteratively denoises a Gaussian prior into a target field conditioned "
-        "on an input field. The denoising network is a 1D U-Net with sinusoidal "
-        "timestep embeddings and cross-attention conditioning. Training minimises "
-        "the simplified ELBO (mean squared error on predicted noise). At inference, "
-        "T reverse diffusion steps produce a sample; multiple samples give "
-        "aleatoric uncertainty estimates."
+        "Conditional denoising diffusion model (DDPM) for 1D field-to-field "
+        "prediction. The denoiser is a small 1D U-Net with residual convolution "
+        "blocks, one average-pool downsampling stage and one transposed-convolution "
+        "upsampling stage, and sinusoidal timestep embeddings; the conditioning "
+        "field is concatenated to the noisy field as an input channel (no "
+        "attention). Training minimises the mean squared error on the predicted "
+        "noise with a linear beta schedule. predict() runs the T-step ancestral "
+        "reverse process from Gaussian noise and returns a single sample."
     ),
     use_cases=[
         "Stochastic 1D field generation conditioned on an input (e.g. forcing → response)",

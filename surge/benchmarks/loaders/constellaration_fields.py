@@ -31,6 +31,7 @@ on the field arrays built here.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,8 @@ from .constellaration import (
     load_wout_subset,
     wout_boundary_to_r_cos_z_sin,
 )
+
+_LOG = logging.getLogger(__name__)
 
 DEFAULT_N_THETA_FIELD = 64
 DEFAULT_N_PHI_FIELD = 32
@@ -96,8 +99,8 @@ def load_constellaration_field_raw(
     benchmarks from whatever rows of the wout subset are present on disk.
 
     Accepts a partial ``*_parts/`` cache (prints how many rows were used) or
-    the finalized merged npz once the download completes; scales unchanged
-    from 500 rows today to the full ~26,897-row dataset.
+    the finalized merged npz; scales unchanged up to the full ~26,897-row
+    dataset.
 
     Returns a dict with (row-aligned, row count ``n``):
 
@@ -119,11 +122,9 @@ def load_constellaration_field_raw(
     data = load_wout_subset(path)
     n = len(data["plasma_config_id"])
     if not finalized_path.exists():
-        print(
-            f"[constellaration_fields] merged {finalized_path.name} not found yet; "
-            f"using {n} row(s) from *_parts/ chunks on disk (more will arrive as the "
-            "background download continues)",
-            flush=True,
+        _LOG.info(
+            "merged %s not found; using %d row(s) from *_parts/ chunks on disk",
+            finalized_path.name, n,
         )
 
     n_fp = int(np.asarray(data["nfp"]).ravel()[0])

@@ -160,7 +160,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "patience": ("int", 10, 30),
     },
     # ------------------------------------------------------------------
-    # Phase C — Temporal (CNN1D, LSTM, GRU)
+    # Temporal (CNN1D, LSTM, GRU)
     # ------------------------------------------------------------------
     "pytorch.cnn1d": {
         "hidden_channels": ("categorical", [32, 64, 128, 256]),
@@ -185,7 +185,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [32, 64, 128]),
     },
     # ------------------------------------------------------------------
-    # Phase D — PDE operators (FNO1d, DeepONet)
+    # PDE operators (FNO1d, DeepONet)
     # ------------------------------------------------------------------
     "pytorch.fno1d": {
         "n_modes": ("categorical", [8, 12, 16, 24]),
@@ -202,7 +202,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [32, 64, 128]),
     },
     # ------------------------------------------------------------------
-    # Phase E — Vision (LeNet-5, ResNet-20/56)
+    # Vision (LeNet-5, ResNet-20/56)
     # ------------------------------------------------------------------
     "pytorch.lenet5": {
         "learning_rate": ("float_log", 1e-4, 1e-2),
@@ -220,7 +220,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "weight_decay": ("float_log", 1e-5, 1e-2),
     },
     # ------------------------------------------------------------------
-    # Phase 1 — BoTorch GP
+    # BoTorch GP
     # ------------------------------------------------------------------
     "botorch.gp": {
         "kernel": ("categorical", ["rbf", "matern", "rbf_matern"]),
@@ -235,7 +235,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [128, 256, 512]),
     },
     # ------------------------------------------------------------------
-    # Phase 2 — KAN
+    # KAN
     # ------------------------------------------------------------------
     "pytorch.kan": {
         "hidden_dims": ("categorical", [
@@ -258,7 +258,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [64, 128, 256]),
     },
     # ------------------------------------------------------------------
-    # Phase 3 — FT-Transformer
+    # FT-Transformer
     # ------------------------------------------------------------------
     "pytorch.ft_transformer": {
         "d_model": ("categorical", [64, 128, 256]),
@@ -279,7 +279,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [64, 128, 256]),
     },
     # ------------------------------------------------------------------
-    # Phase 4 — Vision (ViT, AlexNet)
+    # Vision (ViT, AlexNet)
     # ------------------------------------------------------------------
     "pytorch.vit": {
         "d_model": ("categorical", [64, 128, 192]),
@@ -297,7 +297,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [64, 128, 256]),
     },
     # ------------------------------------------------------------------
-    # Phase 5 — 2D PDE (FNO2d, U-Net)
+    # 2D PDE (FNO2d, U-Net)
     # ------------------------------------------------------------------
     "pytorch.fno2d": {
         "n_modes": ("categorical", [8, 12, 16, 20]),
@@ -313,7 +313,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [4, 8, 16]),
     },
     # ------------------------------------------------------------------
-    # Phase 6 — VAE
+    # VAE
     # ------------------------------------------------------------------
     "pytorch.vae": {
         "latent_dim": ("categorical", [8, 16, 32, 64]),
@@ -323,7 +323,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [64, 128, 256]),
     },
     # ------------------------------------------------------------------
-    # Phase 7 — DDPM
+    # DDPM
     # ------------------------------------------------------------------
     "pytorch.ddpm": {
         "n_timesteps": ("categorical", [100, 200, 500]),
@@ -332,7 +332,7 @@ _SEARCH_SPACES: dict[str, dict[str, tuple]] = {
         "batch_size": ("categorical", [32, 64, 128]),
     },
     # ------------------------------------------------------------------
-    # Phase 8 — CGAN
+    # CGAN
     # ------------------------------------------------------------------
     "pytorch.cgan": {
         "latent_dim": ("categorical", [16, 32, 64]),

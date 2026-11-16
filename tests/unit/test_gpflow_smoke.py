@@ -1,8 +1,7 @@
 """Smoke tests for the GPflow adapters (optional TensorFlow stack).
 
-First-ever verification of gpflow.gpr / gpflow.multi_kernel: these were
-registered but untested since their introduction. Skips (never fails)
-without the [gpflow] extra installed.
+Checks that gpflow.gpr and gpflow.multi_kernel fit and predict. Skips
+(never fails) without the [gpflow] extra installed.
 """
 from __future__ import annotations
 

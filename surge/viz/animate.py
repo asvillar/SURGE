@@ -7,7 +7,7 @@ so they play as a smooth animation, and returns the list of paths.
 
 CLI::
 
-    python -m surge.viz.animate --run runs/qlknn_hpo_200_best \
+    python -m surge.viz.animate --run runs/my_run \
         --reports benchmark_reports --out out/anim --mode dark
 """
 
@@ -26,8 +26,6 @@ from pathlib import Path
 from typing import Callable
 
 import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.cm import ScalarMappable  # noqa: E402
@@ -522,14 +520,14 @@ def training_frames(history_json: Path, out_dir: Path, mode: str,
 # ----------------------------------------------------------------- encoding
 
 def _ffmpeg() -> str | None:
-    return shutil.which("ffmpeg") or (
-        "/opt/homebrew/bin/ffmpeg" if Path("/opt/homebrew/bin/ffmpeg").exists() else None)
+    return shutil.which("ffmpeg")
 
 
 def _run_ffmpeg(args: list[str]) -> None:
     exe = _ffmpeg()
     if exe is None:
-        raise RuntimeError("ffmpeg not found")
+        raise RuntimeError(
+            "ffmpeg was not found on PATH; install ffmpeg to encode video or GIF output")
     subprocess.run([exe, "-y", "-loglevel", "error", *args], check=True)
 
 
@@ -613,6 +611,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--fps", type=int, default=12)
     ap.add_argument("--no-frames", action="store_true", help="delete frame dirs afterwards")
     a = ap.parse_args(argv)
+    matplotlib.use("Agg")
     render_all(a.run, a.reports, a.out, a.mode, a.benchmark, a.fps, not a.no_frames)
 
 

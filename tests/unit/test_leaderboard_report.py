@@ -172,8 +172,8 @@ def test_full_layout_expands_tail_benchmarks(tmp_path: Path):
 
 def test_synthetic_excluded_from_pass_count(tmp_path: Path):
     root = _fake_tree(tmp_path)
-    # california housing is tutorial-tier since the fusion-first re-tiering, so
-    # give the pass-count tile a ready benchmark with two real runs
+    # california housing is tutorial-tier, so give the pass-count tile a
+    # ready benchmark with two real runs
     _write_result(root, "plasma.qlknn10d", "old.model", "2026-11-01T00-00-00Z", test_r2=0.97)
     _write_result(root, "plasma.qlknn10d", "new.model", "2026-11-02T00-00-00Z", test_r2=0.96)
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
@@ -231,7 +231,7 @@ def test_hidden_omitted_and_focus_section(tmp_path: Path):
     text = build_report(root, tmp_path / "lb.html", video=tmp_path / "none.mp4",
                         demo_runs={}, metadata_path=mp).read_text()
     assert 'id="pde.burgers_1d"' not in text
-    assert f"{n_hidden} benchmarks hidden by the maintainer" in text
+    assert f"{n_hidden} hidden benchmarks" in text
     assert "<section class='focus'>" in text
     assert "flagship tabular" not in text          # notes are internal by default
     assert "<span class='badge good'>focus</span>" in text
@@ -243,7 +243,7 @@ def test_hidden_omitted_and_focus_section(tmp_path: Path):
     pristine.write_text(re.sub(r"\n  (visible|focus|focus_note):[^\n]*", "", src.read_text()))
     plain = build_report(root, tmp_path / "p.html", video=tmp_path / "none.mp4",
                          demo_runs={}, metadata_path=pristine).read_text()
-    assert "hidden by the maintainer" not in plain and "class='focus'" not in plain
+    assert "hidden benchmarks" not in plain and "class='focus'" not in plain
 
 
 SOTA_KEYS = {"value", "metric", "model", "source", "url", "protocol_match", "note"}
@@ -409,3 +409,15 @@ def test_index_json_cannot_close_script_block():
     assert page.count("</script>") == n_open  # only the section's own closes
     for block in re.findall(r"<script\b[^>]*>(.*?)</script>", page, flags=re.S):
         assert "</script" not in block
+
+
+def test_demo_run_without_equals_is_an_argparse_error(monkeypatch, capsys):
+    import sys
+
+    from surge.report import leaderboard
+
+    monkeypatch.setattr(sys, "argv", ["leaderboard", "--demo-run", "no_equals_sign"])
+    with pytest.raises(SystemExit) as exc:
+        leaderboard.main()
+    assert exc.value.code == 2
+    assert "KEY=RUN_DIR" in capsys.readouterr().err

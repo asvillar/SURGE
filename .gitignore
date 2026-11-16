@@ -184,11 +184,8 @@ Temporary Items
 .apdisk
 
 # Project specific
-# NOTE: originally a blanket `models/` rule; narrowed 2026-04-21 to only
-# ignore runtime artifact trees (runs/<tag>/models/, data/**/models/), not
-# the tracked `surge/model*` source packages. A bare `models/` here caused
-# CI on a fresh clone to pick up `surge/models.py` while local checkouts
-# loaded an untracked `surge/models/` package — see commit 6f33d89.
+# Ignore runtime artifact trees (runs/<tag>/models/, data/**/models/), not
+# the tracked `surge/model*` source packages.
 runs/**/models/
 data/**/models/
 *.joblib
@@ -274,21 +271,12 @@ REFACTORING_SUMMARY.md
 *_REFACTORING*.md
 *_CHANGES*.md
 
-# OS files
-.DS_Store
-
 # Test artifacts and outputs
 test_outputs/
 
 slurm_logs/
 
-slurm_logs/
-
-# Batch logs
-logs/
-
 # Sphinx autosummary regenerates these on every build.
-docs/_build/
 docs/api_reference/generated/
 
 examples/viz_gallery_output/

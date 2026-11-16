@@ -17,8 +17,7 @@ SURGE
 ``main`` and a `documented
 <https://github.com/asvillar/SURGE/blob/main/README.md>`__ install +
 quickstart (``uv``, ``.[torch,onnx,dev]``, including ``h5py`` for
-HDF5 tests). The test suite: **52 passed, 1 skipped** in a full
-dev environment (see :doc:`citation` for the formal cite).
+HDF5 tests). See :doc:`citation` for the formal cite.
 
 **SURGE** is a scientific surrogate-modeling library: a single
 **declarative pipeline** (``run_surrogate_workflow``,
@@ -36,8 +35,8 @@ SURGE provides a fully automated AI/ML-powered pipeline for surrogate generation
 
 1. **Dataset Ingest** – ``SurrogateDataset`` auto-detects inputs/outputs, applies metadata overrides, drops NaNs, and summarizes stats/memory/missingness.
 2. **Splitting & Scaling** – ``SurrogateEngine`` builds deterministic train/val/test splits and applies ``StandardScaler`` bundles (stored per run).
-3. **Model Registry** – RFR (scikit-learn), Torch MLP with MC-Dropout, and GPflow GPR are registered adapters with unified ``fit/predict/predict_with_uncertainty`` APIs.
-4. **Hyperparameter Optimization** – Optuna-driven sweeps (TPE or BoTorch) can be toggled per model via YAML or ``HPOConfig``; trials export to JSON.
+3. **Model Registry** – RFR (scikit-learn), ``pytorch.mlp`` (MC-Dropout), and GPflow GPR are registered adapters with unified ``fit/predict/predict_with_uncertainty`` APIs.
+4. **Hyperparameter Optimization** – Optuna-driven sweeps (for example TPE) can be toggled per model via YAML or ``HPOConfig``; trials export to JSON.
 5. **Training & Validation** – Metrics (R², RMSE, MAE, MAPE) and timings (train/inference per sample) are recorded for train/val/test.
 6. **Artifacts** – Models, scalers, predictions, metrics, spec, environment snapshot, and git revision land under ``runs/<tag>/``.
 7. **Visualization** – ``surge.viz`` exposes density scatter, violin/SNR, correlation heatmaps, and and per-mode scatter utilities.
@@ -84,7 +83,6 @@ Core Functionalities
    BUILD_YOUR_OWN_SURROGATE
    CUSTOM_DATASET_TUTORIAL
    citation
-   comparison
    api_reference/index
 
 Quick Start

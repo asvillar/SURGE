@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Turbulence (TRL-2D) improvement battery — the untried levers.
+"""Turbulence (TRL-2D) variants evaluated at horizon 8.
 
-Tested against the SAME h=8 test set as the published study (verified
-vs the saved artifacts):
+The reference test set is the one stored in the turbulence study's
+artifacts (checked on load). Variants:
 
   A. temporal context — 4 input frames (the Well's own baseline setup)
   B. full resolution — 128x384 (no downsampling)
   C. stacking — blend POD+ridge with the saved U-Net prediction
   D. composition — h=2 model rolled out 4x vs direct h=8
+
+Needs: the TheWell TRL-2D data and examples/viz_gallery_output/thewell_turbulence_preds.npz.
+Run first: examples/thewell_turbulence_study.py (writes that file).
+Writes: relative-L2 results printed to stdout.
 
 Usage:  SURGE_DEVICE=auto python examples/thewell_turbulence_improve.py
 """
@@ -74,12 +78,16 @@ def main() -> None:
     # reference test set (h=8, 64x192, seed 0) — must match saved artifacts
     from examples.thewell_turbulence_study import load_trl2d
     (Xtr, ytr), (Xte, yte) = load_trl2d(800, 100, seed=0, horizon=8)
-    npz = np.load(OUT / "thewell_turbulence_preds.npz")
+    _npz = OUT / "thewell_turbulence_preds.npz"
+    if not _npz.exists():
+        raise SystemExit(f"missing input {_npz}. Run first: "
+                         "examples/thewell_turbulence_study.py")
+    npz = np.load(_npz)
     assert np.allclose(npz["yte"], yte, atol=1e-5)
     unet_pred = npz["pred__U-Net"].reshape(yte.shape)
     print(f"[ref] persistence {rel_l2(Xte, yte):.4f}  "
           f"U-Net {rel_l2(unet_pred, yte):.4f}  "
-          f"(published floor ~0.25)")
+          f"(reference U-Net)")
 
     # ── A. temporal context: 4 input frames ──────────────────────────
     # NOTE: 4-frame windows shift the valid (t, t+8) pair set, so this

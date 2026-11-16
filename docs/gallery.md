@@ -50,9 +50,9 @@ worst test samples, the signed-error field over the whole test set
 
 ![Field operator diagnostics](assets/gallery/field_operator.png)
 
-## In progress — Gray-Scott forecasting (direct 160-step U-Net 0.206 vs persistence 0.265 holds in both regimes; stepping does not beat persistence; see --rollout-longjump)
+## Gray-Scott forecasting
 
-Moved here from the README: this is work in progress, not a headline result. Status: `in_progress` in [`benchmarks/README.md`](benchmarks/README.md).
+The direct 160-step U-Net (median rel-L2 0.206) beats persistence (0.265) in both regimes; the stepping model does not beat persistence (see `--rollout-longjump`). The benchmark status is listed in [`benchmarks/README.md`](benchmarks/README.md).
 
 Operator forecasting on the Gray-Scott reaction–diffusion system from
 [TheWell](https://polymathic-ai.org/the_well/) (Ohana et al., NeurIPS
@@ -88,7 +88,7 @@ python examples/thewell_grayscott_study.py --rollout-gif
 
 ![Animated 24-step rollout on four Gray-Scott regimes: truth, U-Net rollout, frozen persistence and signed error](assets/readme/grayscott_rollout_cases.gif)
 
-Honest numbers: the stepping model already loses to persistence at a single step (0.17 vs 0.04), sits at median rel-L2 0.31 vs 0.21 after 160 steps and 0.87 vs 0.43 at 480.
+The stepping model already loses to persistence at a single step (0.17 vs 0.04), sits at median rel-L2 0.31 vs 0.21 after 160 steps and 0.87 vs 0.43 at 480.
 
 A regime-split re-score of
 the 160-step task (`--regime-split`, 400 test pairs) shows the direct
@@ -198,7 +198,7 @@ is where the GP earns its keep.
 
 ## Deep-ensemble uncertainty
 
-`pytorch.mlp_ensemble` mean ± 2σ with honest calibration: raw ensemble
+`pytorch.mlp_ensemble` mean ± 2σ with its calibration: raw ensemble
 spread is overconfident; σ-rescaling on a held-out split recovers
 near-Gaussian coverage.
 
@@ -266,6 +266,5 @@ linear, not because of any wave-physics advantage.
 **Helmholtz autoregressive rollout.** The animated rollout is the same
 pointwise rotation applied recursively 24 times over one harmonic
 cycle — a repeated linear identity, not evidence of long-horizon
-generalization. GIF retained at
-[`docs/assets/readme/helmholtz_rollout.gif`](assets/readme/helmholtz_rollout.gif)
-but no longer embedded in the README.
+generalization. The GIF is at
+[`docs/assets/readme/helmholtz_rollout.gif`](assets/readme/helmholtz_rollout.gif).

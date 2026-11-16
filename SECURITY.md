@@ -22,15 +22,24 @@ reporter in the release notes, unless the reporter prefers otherwise.
 
 ## Supported Versions
 
-SURGE is under active development ahead of its first tagged release
-(`0.1.0`). Security fixes land on the default branch and the latest
-released tag. Older pre-release snapshots are not supported.
+Security fixes land on the default branch and the latest released tag
+(`0.1.0` is the first release). Older pre-release snapshots are not
+supported.
 
 | Version      | Supported |
 | ------------ | --------- |
 | `main`       | yes       |
-| `0.1.x`      | yes (once tagged) |
+| `0.1.x`      | yes |
 | older snapshots | no     |
+
+## Loading files and downloading data
+
+- Model artifacts (`.joblib`, `.pt`) and pickle datasets (`.pkl`) are Python
+  pickles and execute code when loaded. Load only files you created or trust.
+- Benchmark datasets are downloaded over HTTPS from the cited public sources
+  and are not checksum-verified in this release.
+- `SURGE_INSECURE_SSL=1` and `SURGE_USE_SYSTEM_CA=1` are explicit opt-ins that
+  change certificate handling.
 
 ## Scope
 

@@ -4,8 +4,7 @@ Everything on the page is generated from machine-readable sources:
 
 * results        benchmark_reports/**/result.json   (aggregated mean ± std)
 * descriptions   surge/benchmarks/metadata.yaml     (names, citations, tiers,
-                 thresholds, IO documentation — extracted from the retired
-                 canvas leaderboard and the verification brief)
+                 thresholds, IO documentation; maintained in that file)
 
 The page needs no server and no network: spider charts are inline SVG
 rendered with the SURGE matplotlib theme, styling is inline CSS on the
@@ -682,7 +681,7 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
                  metadata_path: Path | None = None, maintainer: bool = False,
                  layout: str = "status") -> Path:
     """Build the single-file leaderboard. ``maintainer=True`` also prints the
-    maintainer's focus notes (internal working notes) in the Focus section;
+    maintainer notes in the Focus section;
     the default public page lists focus benchmarks by name only.
 
     ``layout``:
@@ -765,9 +764,9 @@ def build_report(reports_dir: Path, out_path: Path, mode: str = "dark",
                if maintainer and meta[k].get("focus_note") else "") + "</li>"
             for k in focus_keys)
         focus_html = ("<section class='focus'><h2 class='cat'>Focus</h2>"
-                      "<p class='tilenote'>benchmarks the maintainers are actively pushing further</p>"
+                      "<p class='tilenote'>benchmarks under active development</p>"
                       f"<ul>{items}</ul></section>")
-    hidden_html = (f"<p class='tilenote'>{len(hidden)} benchmarks hidden by the maintainer</p>"
+    hidden_html = (f"<p class='tilenote'>{len(hidden)} hidden benchmarks</p>"
                    if hidden else "")
 
     names = {k: meta.get(k, {}).get("name", k) for k in results}
@@ -839,13 +838,19 @@ def main() -> None:
                     help="HPO campaign replay for a benchmark (repeatable)")
     ap.add_argument("--anim-dir", default=None, help="pre-rendered *_<mode>.webm clips")
     ap.add_argument("--maintainer", action="store_true",
-                    help="include the maintainer's focus notes (internal view)")
+                    help="include maintainer notes in the Focus section")
     ap.add_argument("--layout", choices=("full", "status"), default="status",
                     help="'full': every visible benchmark expanded by category "
                          "(dense browsing); 'status' (default): ready/tutorial "
                          "expanded, in-progress/rerun/sanity collapsed")
     args = ap.parse_args()
-    demo_runs = dict(kv.split("=", 1) for kv in args.demo_run) or None
+    demo_runs = {}
+    for kv in args.demo_run:
+        key, sep, run_dir = kv.partition("=")
+        if not sep or not key or not run_dir:
+            ap.error(f"--demo-run expects KEY=RUN_DIR, got {kv!r}")
+        demo_runs[key] = run_dir
+    demo_runs = demo_runs or None
     out = build_report(Path(args.reports), Path(args.out), mode=args.mode,
                        video=Path(args.video) if args.video else None,
                        demo_runs=demo_runs, anim_dir=args.anim_dir,

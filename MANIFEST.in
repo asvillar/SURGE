@@ -4,7 +4,6 @@ include LICENSE
 include NOTICE
 include CITATION.cff
 include CHANGELOG.md
-include requirements.txt
 include pyproject.toml
 recursive-include surge *.py
 # distutils' sdist._add_defaults_optional() unconditionally globs

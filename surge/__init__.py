@@ -23,8 +23,8 @@ from .datagen import DataGenerator
 from .workflow.run import run_surrogate_workflow
 from .workflow.spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
-# Adapter registration happens eagerly inside `surge.model.__init__`
-# (see line 10 above); no extra import is required.
+# Adapter registration happens eagerly inside `surge.model.__init__`;
+# no extra import is required.
 
 
 def __getattr__(name: str):  # PEP 562: lazy GPflow probe (keeps lightweight CLIs quiet)
@@ -80,23 +80,3 @@ if DATASET_UTILS_AVAILABLE:
         "print_validation_report",
     ])
 
-# Print availability status when package is imported
-def _print_availability():
-    """Print information about available model backends."""
-    print("🚀 SURGE - Surrogate Unified Robust Generation Engine")
-    print(f"📦 Version: {__version__}")
-    print(f"👨‍💻 Author: {__author__}")
-    print()
-    print("Available Model Backends:")
-    print("  🔹 Scikit-learn: ✅ (RFR, MLP, GPR)")
-    print(f"  🔹 PyTorch: {'✅' if PYTORCH_AVAILABLE else '❌'} (Enhanced MLP)")
-    print(f"  🔹 GPflow: {'✅' if GPFLOW_AVAILABLE else '❌'} (Advanced GP)")
-    print()
-    if not PYTORCH_AVAILABLE:
-        print("💡 Install PyTorch for enhanced MLP models: pip install torch")
-    if not GPFLOW_AVAILABLE:
-        print("💡 Install GPflow for advanced GP models: pip install gpflow")
-    print()
-
-# Uncomment the line below to show availability on import
-# _print_availability()

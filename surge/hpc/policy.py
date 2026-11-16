@@ -213,7 +213,7 @@ def apply_policy(
     # Multi-GPU cap (v0.1.0)
     if spec.max_gpus > 1:
         _violate(
-            "max_gpus>1 is not supported in v0.1.0 (multi-GPU DDP is a "
+            "max_gpus>1 is not supported in v0.1.0 (multi-GPU DDP is "
             "planned for a later release). Clamping to 1."
         )
         spec = replace(spec, max_gpus=1)

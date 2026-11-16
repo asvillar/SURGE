@@ -15,9 +15,8 @@ def test_output_kinds_defaults_to_equilibrium_when_unset():
 
 
 def test_constellaration_multioutput_trains_only_the_8_equilibrium_metrics():
-    # The joint benchmark now trains on equilibrium-kind targets only — the
-    # geometry (closed-form) and derived (algebraic) labels are dropped from
-    # the spec entirely, not just reported as a sanity check.
+    # The joint benchmark spec lists equilibrium-kind targets only; the
+    # geometry (closed-form) and derived (algebraic) labels are not in it.
     outputs = CONSTELLARATION_MULTIOUTPUT_IO["outputs"]
     assert len(outputs) == 8
 

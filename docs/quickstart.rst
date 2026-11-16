@@ -8,8 +8,8 @@ the README but with a bit more narrative and a Sphinx-friendly layout.
 Prerequisites
 -------------
 
-* Python 3.10 or 3.11
-* SURGE installed in editable mode (see :doc:`setup/INSTALLATION`)::
+* Python 3.10 to 3.13
+* SURGE installed in editable mode (see :doc:`installation`)::
 
     pip install -e ".[torch,onnx]"
 
@@ -147,4 +147,3 @@ Next steps
 
 * :doc:`BUILD_YOUR_OWN_SURROGATE` — train on your data and embed new model adapters
 * :doc:`api_reference/index` — class and method reference
-* :doc:`comparison` — how SURGE compares to neighbouring tools

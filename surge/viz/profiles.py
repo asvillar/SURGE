@@ -114,7 +114,7 @@ def plot_profile_comparison_with_inset(
     figsize: Tuple[float, float] = (8, 6),
     save_path: Optional[Union[str, Path]] = None,
     dpi: int = 150,
-    xlabel: str = r"$\rho$ [-]",
+    xlabel: str = "x",
     ylabel: Optional[str] = None,
     units: Optional[str] = None,
     output_name: Optional[str] = None,
@@ -139,9 +139,9 @@ def plot_profile_comparison_with_inset(
         Dictionary mapping model names to predicted profiles.
         Format: {'model_a': y_pred_a, 'model_b': y_pred_b, ...}
     case_label : str, optional
-        Case label/identifier (e.g., "case 9476").
+        Case label/identifier (e.g., "case 1").
     case_metadata : dict, optional
-        Dictionary of case parameters to display (e.g., {'N_φ': 8, 'n_e0': 4.9e19}).
+        Dictionary of case parameters to display (e.g., {'param_a': 8, 'param_b': 4.9}).
     mse_values : dict, optional
         Dictionary mapping model names to MSE values.
         Format: {'model_a': 1.2e-8, 'model_b': 8.6e-8}.
@@ -157,7 +157,7 @@ def plot_profile_comparison_with_inset(
         Path to save figure.
     dpi : int, default=150
         Resolution for saved figures.
-    xlabel : str, default=r"$\rho$ [-]"
+    xlabel : str, default="x"
         X-axis label.
     ylabel : str, optional
         Y-axis label. Auto-generated if None.

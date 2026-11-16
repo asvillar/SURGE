@@ -22,7 +22,7 @@ BUDGETS = ("smoke", "standard", "thorough")
 _BUDGET_NOTES = {
     "smoke": "~1 min: subsampled data, few epochs, no HPO",
     "standard": "~10 min: full data, HPO 10 trials on the headline model",
-    "thorough": "hours: HPO 40 trials; rerun with --seeds 3 for error bars",
+    "thorough": "hours: HPO 40 trials on the headline model",
 }
 
 
@@ -34,8 +34,8 @@ def _ask(prompt: str, default: str, choices: tuple[str, ...] | None = None) -> s
         print(f"  please choose one of: {', '.join(choices)}")
 
 
-def _inspect(data_path: Path, sample_rows: int = 5000) -> dict[str, Any]:
-    """Load (a sample of) the dataset and characterize its columns."""
+def _inspect(data_path: Path) -> dict[str, Any]:
+    """Load the full dataset and characterize its columns."""
     from surge.dataset import SurrogateDataset
 
     ds = SurrogateDataset.from_path(data_path)
@@ -47,7 +47,7 @@ def _inspect(data_path: Path, sample_rows: int = 5000) -> dict[str, Any]:
 
 def _target_candidates(info: dict[str, Any]) -> list[str]:
     """Plausible target columns: known names first, then the last numeric."""
-    hints = ("target", "y", "label", "output", "efe", "gamma", "growth")
+    hints = ("target", "y", "label", "output", "gamma", "growth")
     numeric = info["numeric"]
     named = [c for c in numeric if any(h in c.lower() for h in hints)]
     tail = [c for c in reversed(numeric) if c not in named]
@@ -118,6 +118,19 @@ def _model_slate(goal: str, budget: str, n_rows: int,
     return slate
 
 
+def _scalar(value: Any) -> str:
+    """One YAML scalar, quoted only when plain style would alter it."""
+    import yaml
+
+    text = yaml.safe_dump(value, default_flow_style=True, width=10**9,
+                          allow_unicode=True).strip()
+    if text.endswith("\n..."):
+        text = text[:-4].strip()
+    elif text.endswith("..."):
+        text = text[:-3].strip()
+    return text
+
+
 def _render_yaml(data_path: Path, target: str, goal: str, budget: str,
                  info: dict[str, Any], slate: list[dict[str, Any]],
                  run_tag: str) -> str:
@@ -130,8 +143,8 @@ def _render_yaml(data_path: Path, target: str, goal: str, budget: str,
         f"({_BUDGET_NOTES[budget]})",
         "# validate: surge validate <this file> · run: surge run <this file>",
         "",
-        f"dataset_path: {data_path.resolve()}",
-        f"run_tag: {run_tag}",
+        f"dataset_path: {_scalar(str(data_path.resolve()))}",
+        f"run_tag: {_scalar(run_tag)}",
         "",
         "# hold-out fractions (train gets the remainder)",
         "test_fraction: 0.2",
@@ -152,9 +165,9 @@ def _render_yaml(data_path: Path, target: str, goal: str, budget: str,
         "# column is an input (edit these lists to drop or add columns)",
         "metadata_overrides:",
         "  inputs:",
-        *[f"    - {c}" for c in inputs],
+        *[f"    - {_scalar(c)}" for c in inputs],
         "  outputs:",
-        f"    - {target}",
+        f"    - {_scalar(target)}",
         "",
         "# every model trains on the same splits -> directly comparable",
         "models:",
@@ -235,9 +248,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     try:
         from surge.model.registry import MODEL_REGISTRY
-        available = set(MODEL_REGISTRY.list_keys()) if hasattr(
-            MODEL_REGISTRY, "list_keys") else set(
-            getattr(MODEL_REGISTRY, "_registry", {}))
+        available = set(MODEL_REGISTRY.keys())
     except Exception:  # noqa: BLE001
         available = {"sklearn.ridge", "sklearn.random_forest", "sklearn.mlp"}
 

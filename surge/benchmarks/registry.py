@@ -233,7 +233,7 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "TheWell 3D MHD turbulence (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
     ),
 
-    # ── Plasma / fusion (DOE-relevant) ────────────────────────────────────────
+    # ── Plasma / fusion ────────────────────────────────────────
     "plasma.cmod_density_limit": (
         None, "plasma", "classification", "6→2 (211,647 train / 52,738 test slices, grouped by discharge)",
         "Alcator C-Mod density-limit precursor — 6 plasma signals → binary state, "
@@ -269,7 +269,7 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "plasma.solpsnn_te_field": (
         None, "plasma", "regression", "8→5200 (n=5,756 train / 1,465 test)",
         "SOLPS-ITER electron-temperature field Te(104x50 B2 grid) from the same 8 scan "
-        "parameters; log10(Te) targets, fixed split. HIDDEN/provisional. "
+        "parameters; log10(Te) targets, fixed split. provisional. "
         "Dasbach & Wiesen 2023; Zenodo 10.5281/zenodo.19237127 (CC BY 4.0).",
     ),
     "plasma.constellaration": (
@@ -292,13 +292,13 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "plasma.constellaration_modb": (
         run_constellaration_modb, "plasma", "regression", "2×64×32→64×32 (n≤26,897)",
         "ConStellaration boundary (R,Z) → |B|(θ,φ) on the LCFS, from the VMEC wout subset. "
-        "PROVISIONAL threshold. [requires: downloaded wout subset, see "
+        "provisional threshold. [requires: downloaded wout subset, see "
         "surge.benchmarks.loaders.constellaration.download_wout_subset]",
     ),
     "plasma.constellaration_surfaces": (
         run_constellaration_surfaces, "plasma", "regression", "2×64×32→2×16×64 (n≤26,897)",
         "ConStellaration boundary (R,Z) → poloidal cross-sections (R(θ),Z(θ)) of the 16 stored "
-        "flux surfaces at φ=0, from the VMEC wout subset. PROVISIONAL threshold. "
+        "flux surfaces at φ=0, from the VMEC wout subset. provisional threshold. "
         "[requires: downloaded wout subset]",
     ),
 }

@@ -284,7 +284,7 @@ benchmarks:
     source: "literature review (2026-09-24)"
     url: "https://doi.org/10.1007/s10994-016-5546-z"
     protocol_match: "unknown"
-    note: "no verified published number for this exact split/protocol; the paper reports aRRMSE not R², and SURGE's shape/n (61->20, 8,966) disagrees with registry.py (61->16, 9,803)"
+    note: "no verified published number for this exact split/protocol; the paper reports aRRMSE, not R²"
   inputs:
   - {name: "features[0:61]", desc: "Product-price and lagged market features of the TAC SCM simulation (a.u.)"}
   outputs:
@@ -467,7 +467,7 @@ benchmarks:
     value: 0.978
     metric: "Accuracy"
     model: "Random forest"
-    source: "tasks.py:1076 docstring citing Arzamasov et al. 2018; SOTA review notes literature spread 0.96-0.999"
+    source: "Arzamasov et al. (2018); literature review notes literature spread 0.96-0.999"
     url: "https://archive.ics.uci.edu/dataset/471/electrical+grid+stability+simulated+data"
     protocol_match: "unknown"
     note: "wide literature spread depending on study and split"
@@ -521,8 +521,7 @@ benchmarks:
     model's newest saved run, so the residual MLP appears with its last capacity-sweep
     configuration, 0.77 λ, not the 0.91 λ default). 50 λ probe: rollouts stay
     bounded on the attractor (0/30 diverge, 100% still lobe-switching, climate error
-    0.16) — the surrogate learns the climate, not the weather. Next: rollout-aware
-    training (noise injection, multi-step loss) and HPO on VPT instead of NRMSE."
+    0.16) — the surrogate learns the climate, not the weather."
   name: Lorenz-63 Chaotic Forecasting
   capability: Time Series / Forecasting
   discipline: Nonlinear Dynamics & Chaos
@@ -616,7 +615,7 @@ benchmarks:
   status: tutorial
   status_note: "Natural-image classification with no surrogate-modelling content;
     kept as a plumbing/tutorial benchmark and a transfer-learning reference.
-    surge bench run 2026-10-21: pytorch.dino_linear_probe (frozen DINOv2
+    pytorch.dino_linear_probe (frozen DINOv2
     ViT-S/14 + LogisticRegression, literature linear-probe protocol) reaches
     accuracy 0.965 (gate 0.91); the from-scratch pytorch.resnet20 remains the
     scratch-training reference"
@@ -630,9 +629,7 @@ benchmarks:
   n: 60,000
   primary_metric: Accuracy
   threshold: Acc ≥ 0.91
-  threshold_note: Prior ResNet-20 run (28% acc) was invalid — train/predict normalization
-    mismatch + no val split. Fixed; re-run needed for official metrics. This
-    0.91 gate targets the from-scratch (no pretraining) regime — ResNet-20
+  threshold_note: The 0.91 gate targets the from-scratch (no pretraining) regime — ResNet-20
     trained only on CIFAR-10 itself, ~91.25% per He et al. 2016. It is not
     the bar for pretrained/transfer-learning models such as
     pytorch.dino_linear_probe, which should be judged against the DINOv2
@@ -704,7 +701,7 @@ benchmarks:
   focus: false
 - key: plasma.constellaration
   status: needs_rerun
-  status_note: "gate is 0.85; a rerun under this gate is pending"
+  status_note: "gate is 0.85; no run under this gate is on file yet"
   name: ConStellaration Stellarator Surrogate
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
@@ -839,7 +836,7 @@ benchmarks:
   focus: true
 - key: plasma.constellaration_modb
   status: in_progress
-  status_note: "field surrogates; 500/26,897 equilibria cached"
+  status_note: "field surrogates; results on file use a 500-equilibrium subset of the 26,897 available"
   name: ConStellaration |B| Field Surrogate
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
@@ -848,11 +845,10 @@ benchmarks:
     Fluids 26, 3553
   url: https://arxiv.org/abs/2506.19583
   shape: 2×64×32 → 64×32
-  n: 500 (of 26,897; grows as the wout download completes)
+  n: 500 (of 26,897 available)
   primary_metric: rel-L2 (median)
   threshold: rel-L2 ≤ 0.05
-  threshold_note: PROVISIONAL — set from the first full-cache leaderboard (not yet run);
-    today's 500-row cache is a smoke test only.
+  threshold_note: provisional threshold; no full-data run on file. Results on the 500-row subset are a smoke test only.
   description: 'Boundary shape → |B|(θ,φ) on the last closed flux surface: predict the
     field-strength map on the plasma boundary from the same 90 boundary Fourier coefficients
     as the scalar ConStellaration benchmarks.'
@@ -882,7 +878,7 @@ benchmarks:
   focus: true
 - key: plasma.constellaration_surfaces
   status: in_progress
-  status_note: "field surrogates; 500/26,897 equilibria cached"
+  status_note: "field surrogates; results on file use a 500-equilibrium subset of the 26,897 available"
   name: ConStellaration Flux-Surface Field Surrogate
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
@@ -891,10 +887,10 @@ benchmarks:
     Fluids 26, 3553
   url: https://arxiv.org/abs/2506.19583
   shape: 2×64×32 → 2×16×64
-  n: 500 (of 26,897; grows as the wout download completes)
+  n: 500 (of 26,897 available)
   primary_metric: rel-L2 (median)
   threshold: rel-L2 ≤ 0.02
-  threshold_note: PROVISIONAL — set from the first full-cache leaderboard (not yet run).
+  threshold_note: provisional threshold; no full-data run on file.
   description: 'Boundary shape → poloidal cross-sections of the 16 stored flux surfaces
     at φ=0: the stellarator analogue of a tokamak ψ-map.'
   io_note: 'Same X as plasma.constellaration_modb; y = R(θ),Z(θ) per surface (surface 0 =
@@ -923,7 +919,7 @@ benchmarks:
   focus: true
 - key: plasma.qlknn10d
   status: ready
-  status_note: "surge bench run 2026-10-21: residual MLP R² 0.9898 on 200k held-out QuaLiKiz fluxes (gate 0.95); trained with the benchmark-declared hyperparameters (batch 4096, 60 epochs)"
+  status_note: "residual MLP R² 0.9898 on 200k held-out QuaLiKiz fluxes (gate 0.95); trained with the benchmark-declared hyperparameters (batch 4096, 60 epochs)"
   name: QLKNN10D QuaLiKiz Training Data
   capability: Scientific Domain
   discipline: Fusion & Plasma Physics
@@ -1015,7 +1011,7 @@ benchmarks:
   focus: true
 - key: plasma.solpsnn_exhaust_scalars
   status: in_progress
-  status_note: "SOLPS-ITER exhaust scalars from the SOLPS-NN record (Dasbach & Wiesen 2023); fixed Sobol-train / random-test split. In-context Kumo Tabular reaches 8.6 % median relative error on the peak target heat flux against the published 13 % (five-fold tuned networks); the benchmark card, per-regime metrics and the gate are provisional."
+  status_note: "SOLPS-ITER exhaust scalars from the SOLPS-NN record (Dasbach & Wiesen 2023); fixed Sobol-train / random-test split. In-context Kumo Tabular reaches 8.4 % median relative error on the peak target heat flux against the published 13 % (five-fold tuned networks); the benchmark card, per-regime metrics and the gate are provisional."
   name: SOLPS-NN divertor exhaust scalars
   capability: Multi-output Regression
   discipline: Fusion & Plasma Physics

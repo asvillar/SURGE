@@ -404,6 +404,7 @@ class SurrogateDataset:
         if fmt == "csv":
             return pd.read_csv(path, **reader_kwargs)
         if fmt in ("pkl", "pickle"):
+            # Loads a pickle-based file: only load files you created or trust.
             _ensure_numpy_core_alias()
             return pd.read_pickle(path)
         if fmt in ("parquet", "pq"):

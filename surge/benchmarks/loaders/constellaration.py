@@ -330,7 +330,7 @@ def geometry_features(
 #
 # The 90-feature boundary + 12-metric cache used above
 # (``paper_nfp3_clip0.05.npz``, built by ``leaderboard._load_constellaration_
-# paper`` — surge/benchmarks/leaderboard.py:1491-1635) stores no row IDs, so
+# paper``) stores no row IDs, so
 # it cannot be joined against the separate ``vmecpp_wout`` HF config (one
 # full VMEC equilibrium per row, joined on ``plasma_config_id``). The
 # functions below recover those IDs by re-streaming the `default` HF config
@@ -347,7 +347,7 @@ def _default_data_dir() -> Path:
     return paths.datasets_root() / "constellaration"
 
 # Mirrors leaderboard._CONSTELLARATION_METRICS / METRIC_COLS_SRC
-# (surge/benchmarks/leaderboard.py:1475-1488, 1537) exactly. Percentile
+# (see ``leaderboard._load_constellaration_paper``) exactly. Percentile
 # clipping is per-column and order-independent, so only the *set* of columns
 # (not their order) needs to match for the recovered filter to be identical.
 _PAPER_METRIC_NAMES = [
@@ -368,14 +368,21 @@ _PAPER_METRIC_SRC_COLS = [m for m in _PAPER_METRIC_NAMES if m != "log_10_qi"] + 
 
 
 def _ensure_hf_ssl_env() -> None:
-    """Best-effort fix for TLS-inspecting corporate proxies (e.g. Zscaler)
-    whose root CA lives in the OS trust store but not in Python's
-    ``certifi`` bundle, which otherwise makes ``datasets``/``huggingface_hub``
+    """Opt-in TLS trust-store bridge for networks that re-sign TLS.
+
+    Some networks re-sign TLS traffic with a locally installed root
+    certificate that lives in the operating-system trust store but not in
+    Python's ``certifi`` bundle, which makes ``datasets``/``huggingface_hub``
     streaming fail with ``CERTIFICATE_VERIFY_FAILED``.
 
-    No-op if ``SSL_CERT_FILE`` is already set, if not on macOS, or if
-    anything below fails (falls back to certifi's default behaviour).
+    Does nothing unless ``SURGE_USE_SYSTEM_CA=1`` is set. When enabled (macOS
+    only, and only if ``SSL_CERT_FILE`` is not already set) it combines the
+    certifi bundle with the roots in the system keychain, writes the result
+    under the dataset directory and points ``SSL_CERT_FILE`` at it for this
+    process. Any failure falls back to certifi's default behaviour.
     """
+    if os.environ.get("SURGE_USE_SYSTEM_CA") != "1":
+        return
     if os.environ.get("SSL_CERT_FILE") or platform.system() != "Darwin":
         return
     try:
@@ -406,7 +413,7 @@ def _verify_ids_against_npz(
     )
     if not npz_path.exists():
         return
-    data = np.load(npz_path, allow_pickle=True)
+    data = np.load(npz_path, allow_pickle=False)
     X_ref = data["X"]
     if X_ref.shape != X.shape:
         raise RuntimeError(
@@ -431,8 +438,7 @@ def paper_filter_ids(
     row of the paper-filtered cache, by re-streaming the HF ``default``
     config and reproducing the exact filter used to build it (see the
     module-level docstring above and
-    ``leaderboard._load_constellaration_paper``,
-    surge/benchmarks/leaderboard.py:1491-1635): ``n_field_periods`` match,
+    ``leaderboard._load_constellaration_paper``): ``n_field_periods`` match,
     an optimised (DESC or VMEC) configuration, all 12 metrics finite, then a
     per-metric ``outlier_clip_pct`` percentile clip.
 
@@ -924,8 +930,8 @@ def load_wout_subset(path: "str | Path | None" = None) -> dict:
     ``meta_s_half``). Row ``i`` of every per-row array corresponds to
     ``plasma_config_id[i]``.
 
-    If the finalized ``path`` npz isn't written yet (a background download
-    still running), falls back to concatenating the ``<path>_parts/`` chunk
+    If the finalized ``path`` npz isn't written yet (a partial
+    download), falls back to concatenating the ``<path>_parts/`` chunk
     files on the fly, so progress can be inspected mid-run.
     """
     path = Path(path) if path else (_default_data_dir() / "wout_nfp3_subset.npz")

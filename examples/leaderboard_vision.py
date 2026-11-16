@@ -15,7 +15,7 @@ Usage
     python examples/leaderboard_vision.py --epochs 30
 
     # Via the surge CLI:
-    surge run -b cifar10 mnist -m all
+    surge bench -b cifar10 mnist -m all
 
 Models
 ------

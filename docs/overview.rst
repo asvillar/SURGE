@@ -1,7 +1,7 @@
 SURGE Overview
 ==============
 
-This page summarizes the key building blocks in SURGE after the Pre-ROSE refactor.
+This page summarizes the key building blocks in SURGE and how they fit together.
 Use it as a map when deciding which entry point (CLI, notebook, or Python API)
 best suits your workflow.
 
@@ -49,7 +49,7 @@ Model Registry & Adapters
 Adapters register themselves in ``surge.model.MODEL_REGISTRY``:
 
 * ``sklearn.random_forest`` – scikit-learn RandomForestRegressor with tree-based UQ
-* ``torch.mlp`` – PyTorch FNN (flexible hidden layers, MC-Dropout UQ)
+* ``pytorch.mlp`` – PyTorch FNN (flexible hidden layers, MC-Dropout UQ)
 * ``gpflow.gpr`` – GPflow Gaussian Process Regressor with mean/variance output
 
 Each adapter implements ``fit``, ``predict``, ``predict_with_uncertainty`` (optional),
@@ -100,8 +100,8 @@ Each run creates a reproducible bundle:
      metrics.json
      workflow_summary.json
      spec.yaml
-     environment.txt           # pip freeze
-     git.txt                   # git describe output
+     env.txt                   # pip freeze
+     git_rev.txt               # git revision
      hpo/<model>_hpo.json      # Optuna trials (if enabled)
 
 Visualization

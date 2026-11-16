@@ -86,7 +86,7 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
     Training uses a DataLoader (mini-batches on CPU, batches moved to device). Optional
     ``epoch_train_sample_fraction`` (e.g. 0.6) draws a fresh random subset of training
     rows each epoch before batching. Set ``log_progress`` to log train/val RMSE (scaled
-    targets, sqrt of MSE over all profile dimensions) each epoch.
+    targets, sqrt of MSE over all output dimensions) each epoch.
     """
 
     def __init__(self, input_size, hidden_layers, output_size=1, dropout_rate=0.1,
@@ -322,8 +322,8 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
                     epochs_without_improvement += 1
                 if self.log_progress:
                     _LOGGER.info(
-                        "[torch.mlp] epoch %d/%d | train_RMSE(scaled profiles)=%.6f | "
-                        "val_RMSE(scaled profiles)=%.6f | train_rows=%d/%d | patience=%d/%d",
+                        "[torch.mlp] epoch %d/%d | train_RMSE(scaled outputs)=%.6f | "
+                        "val_RMSE(scaled outputs)=%.6f | train_rows=%d/%d | patience=%d/%d",
                         epoch + 1,
                         self.n_epochs,
                         train_rmse,
@@ -343,7 +343,7 @@ class PyTorchMLP(nn.Module if TORCH_AVAILABLE else object):
                 entry["val_rmse_scaled"] = None
                 if self.log_progress:
                     _LOGGER.info(
-                        "[torch.mlp] epoch %d/%d | train_RMSE(scaled profiles)=%.6f | "
+                        "[torch.mlp] epoch %d/%d | train_RMSE(scaled outputs)=%.6f | "
                         "train_rows=%d/%d (no val — set patience + val in engine)",
                         epoch + 1,
                         self.n_epochs,
@@ -535,6 +535,8 @@ class PyTorchMLPModel:
     def load(self, filepath):
         """
         Load a saved PyTorch model.
+
+        Loads a pickle-based file: only load files you created or trust.
         """
         checkpoint = torch.load(filepath, map_location="cpu", weights_only=False)
         config = dict(checkpoint["model_config"])

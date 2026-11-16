@@ -1,9 +1,8 @@
 # Contributing to SURGE
 
 Thank you for your interest in contributing. SURGE is in an early
-pre-1.0 phase; the goal for the `0.1.0` DOE open-source release is a
-small, well-tested, well-documented core. Contributions that keep the
-public surface narrow and the release docs honest are especially
+pre-1.0 phase; the goal is a small, well-tested, well-documented core. Contributions that keep the
+public surface narrow and the docs accurate are especially
 welcome.
 
 For security-sensitive issues, please use the private channel described
@@ -18,9 +17,9 @@ python -m pip install -e ".[dev]"
 pytest -q tests/
 ```
 
-The test suite should report `N passed, M skipped, 0 failed`. The
-skipped tests are legacy pre-refactor tests; they are out of scope for
-`0.1.0`.
+The test suite should report `N passed, M skipped, 0 failed`. Skipped
+tests are those that need an optional backend or dataset that is not
+installed.
 
 ## What "ready to merge" looks like
 

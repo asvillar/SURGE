@@ -446,7 +446,7 @@ def run_compute_resource_analysis(verbose=1):
         print(cpu_metrics)
 
     # Model recommendations (experimental)
-    print('\nMODEL RECOMMENDATIONS (experimental - under construction)')
+    print('\nMODEL RECOMMENDATIONS (experimental)')
     print('-' * 60)
     try:
         if system_info.get('gpu_available') and system_info.get('device') and system_info.get('device') != 'cpu':
@@ -456,7 +456,7 @@ def run_compute_resource_analysis(verbose=1):
             print(' - No suitable GPU detected: scikit-learn RandomForest or CPU-based PyTorch is recommended.')
             print('   Example: RandomForest with n_jobs=-1 for parallel training.')
         print(' - Consider model size vs available RAM; if RAM < 8GB use smaller models or batch training.')
-        print(' - Note: these model recommendations are experimental and under construction; validate before production.')
+        print(' - Note: these model recommendations are experimental; validate before production.')
     except Exception:
         print(' - Model recommendations: unavailable')
 

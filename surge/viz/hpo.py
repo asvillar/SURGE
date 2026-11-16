@@ -65,9 +65,22 @@ def robust_hpo_ylim(
     return float(lo), float(hi), float(pad), masks
 
 
+def _detect_hpo_metric(hpo_data_list: List[dict], default: str = "r2") -> str:
+    """Metric name recorded with the trials, else ``default``."""
+    for data in hpo_data_list:
+        if not isinstance(data, dict):
+            continue
+        for key in ("metric", "metric_name", "objective"):
+            val = data.get(key)
+            if isinstance(val, str) and val.strip():
+                name = val.strip().lower()
+                return name[4:] if name.startswith("val_") else name
+    return default
+
+
 def plot_hpo_convergence(
     hpo_files: Union[str, Path, List[Union[str, Path]]],
-    metric: str = "r2",
+    metric: Optional[str] = None,
     method_names: Optional[List[str]] = None,
     reference_value: Optional[float] = None,
     reference_label: str = "Reference",
@@ -91,9 +104,10 @@ def plot_hpo_convergence(
     hpo_files : str, Path, or list
         Path(s) to HPO JSON file(s). If multiple files, assumes different methods.
         Or can be list of paths for multiple methods.
-    metric : str, default="r2"
-        Metric to plot: "r2", "rmse", "mse". Note: HPO files use "val_rmse" by default.
-        Will auto-detect from file if possible.
+    metric : str, optional
+        Metric to plot: "r2", "rmse", "mse". ``None`` (default) auto-detects:
+        the metric recorded in the HPO file (``metric``/``metric_name``/
+        ``objective`` key, with any ``val_`` prefix removed) if present, else "r2".
     method_names : list, optional
         Names for each method (e.g., ["Random", "Optuna TPE", "Optuna BoTorch"]).
         If None, tries to infer from filenames or uses generic names.
@@ -178,6 +192,9 @@ def plot_hpo_convergence(
     if linestyles is None:
         linestyles = {name: '--' for name in method_names}
     
+    if metric is None:
+        metric = _detect_hpo_metric(hpo_data_list)
+
     # Determine metric direction
     if metric.lower() == "r2":
         higher_is_better = True

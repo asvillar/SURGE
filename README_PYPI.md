@@ -5,7 +5,7 @@ integrates Scientific Machine Learning (SciML) and AutoML features,
 uncertainty quantification (UQ), and MLOps-style provenance in a single
 declarative pipeline. One YAML spec (or Python API) covers
 **load → schema → split → train → HPO → metrics → UQ → artifacts → figures**,
-backed by an extensible registry of 40+ model adapters across scikit-learn,
+backed by an extensible registry of 50 model adapters across scikit-learn,
 PyTorch, TensorFlow/Keras, and Gaussian-process backends — with every run
 reproducible from its own `runs/<tag>/` directory.
 
@@ -29,7 +29,7 @@ pip install surge-ml
 | `gpflow` | TF stack for GPflow GPs — finish with `pip install gpflow --no-deps` (its published metadata pins numpy<2, unresolvable next to the TF floor above, though GPflow itself runs fine on NumPy 2.x) | `pip install "surge-ml[gpflow]"` |
 | `all` | torch + onnx + shap + mlflow + benchmarks + tensorflow (not gpflow — see the no-deps note above) | `pip install "surge-ml[all]"` |
 
-Requires Python 3.10–3.12.
+Requires Python 3.10 to 3.13.
 
 ## Quickstart
 
@@ -79,7 +79,7 @@ artifacts. Headline numbers from the fusion benchmarks:
   MIT-PSFC open database on the natural 1.4 % imbalance: random forest AUROC
   0.9999 against 0.973 for the Greenwald-fraction scaling (gate AUROC ≥ 0.99).
 - **SOLPS-NN divertor exhaust** (in progress) — an in-context tabular
-  foundation model (`kumo.tabular_regressor`) reaches 9.3 % median relative
+  foundation model (`kumo.tabular_regressor`) reaches 8.4 % median relative
   error on the peak target heat flux with no training, against the
   published 13 % from tuned five-fold networks.
 
@@ -89,7 +89,7 @@ Full ledger with per-benchmark status: [docs/benchmarks/README.md](https://githu
 
 ## Learn more
 
-- [Full README](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md) — architecture, highlights, visualization system, all 40+ model adapters
+- [Full README](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md) — architecture, highlights, visualization system, all 50 model adapters
 - [Getting started](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/GETTING_STARTED.md)
 - [Benchmark ledger](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/benchmarks/README.md) — status, gates and data citations per benchmark
 - [References](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md#references) — the datasets, architectures and software behind the suite

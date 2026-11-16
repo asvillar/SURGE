@@ -7,7 +7,7 @@ All notable changes to SURGE (`surge-ml`). Follows
 
 ### Added
 
-- **Model portfolio**: 44-adapter registry across scikit-learn baselines,
+- **Model portfolio**: 50-adapter registry across scikit-learn baselines,
   gradient boosting (XGBoost, LightGBM, CatBoost), PyTorch MLP families
   (MLP, residual, ensemble, classifier), operator learners (FNO 1D/2D,
   DeepONet, U-Net), sequence models (LSTM, GRU, CNN1D), vision models
@@ -126,7 +126,7 @@ All notable changes to SURGE (`surge-ml`). Follows
 - **ConvNeXt U-Net** backend, used for probabilistic turbulence
   forecasting (CRPS).
 - **Packaging**: PyPI-ready sdist/wheel (`uv build`), benchmark metadata
-  shipped as package data, Python 3.10–3.12, a PyPI-safe long description
+  shipped as package data, Python 3.10 to 3.13, a PyPI-safe long description
   (`README_PYPI.md`), a `SURGE_DATA_DIR` data-root resolver with a
   `~/.cache/surge` fallback for installed wheels, an sdist that no longer
   ships `tests/`, `docs/`, or `examples/`, an `all` extra, and a single
@@ -161,6 +161,16 @@ All notable changes to SURGE (`surge-ml`). Follows
   instead of assuming a file name.
 - Maintainer notes, an internal development log and dead links removed
   from the benchmark ledger and the documentation.
+- `surge init` writes valid YAML when column names or the data path
+  contain characters such as `:`, `#`, quotes or spaces.
+- Importing `surge.viz` no longer switches the matplotlib backend; the
+  command-line tools select a file backend themselves.
+- A run folder keeps a copy of the spec it was started from; `surge viz`
+  writes the HPO convergence figure.
+- `DataGenerator`: seeded Latin-hypercube sampling is reproducible,
+  `out_dir` is required, and nothing is written inside the package.
+- The helper that reads root certificates from the system keychain runs
+  only with `SURGE_USE_SYSTEM_CA=1`.
 
 ### Changed
 
@@ -203,6 +213,10 @@ All notable changes to SURGE (`surge-ml`). Follows
   needed reader scripts that are not distributed with the package.
 - The stacked-directory `.npy` loader is now `StackedNpyDataset`
   (`dataset_format: stacked_npy`), named for the layout it reads.
+- Conda environment files and `requirements.txt` (they contradicted
+  `pyproject.toml`), four Optuna demo scripts that did not use SURGE, a
+  guide for an API that no longer exists, and case generation tied to one
+  simulation code's input layout.
 
 [Unreleased]: https://github.com/asvillar/SURGE/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/asvillar/SURGE/releases/tag/v0.1.0

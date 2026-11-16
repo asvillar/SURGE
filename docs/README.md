@@ -29,6 +29,3 @@ python -m pip install -e ".[docs]"
 make -C docs html
 # Open docs/_build/html/index.html
 ```
-
-## Navigation index
-

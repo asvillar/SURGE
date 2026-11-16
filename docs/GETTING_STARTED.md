@@ -1,6 +1,6 @@
 # Getting started with SURGE
 
-One page from zero to a trained surrogate with figures. Python 3.10–3.12.
+One page from zero to a trained surrogate with figures. Python 3.10 to 3.13.
 
 ## 1 · Install (2 minutes)
 

@@ -38,7 +38,7 @@ def log_surge_run(
         import mlflow
     except ImportError:
         LOG.warning(
-            "MLflow not installed. Install with: pip install surge[mlflow]"
+            "MLflow not installed. Install with: pip install \"surge-ml[mlflow]\""
         )
         return False
 

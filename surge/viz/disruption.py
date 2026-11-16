@@ -1,5 +1,7 @@
 """Publication ROC figure for disruption-style binary classifiers.
 
+This is figure code for the public C-Mod density-limit benchmark.
+
 ``roc_figure`` draws the full ROC (a) and the low-false-alarm zoom (b, log x),
 the regime in which a disruption predictor is judged, with AUROC in the legend
 and the TPR at fixed false-alarm rates in a compact table.
@@ -45,11 +47,14 @@ def _roc(y_true, y_score):
 def roc_figure(curves: dict[str, tuple[np.ndarray, np.ndarray]], *,
                baseline: tuple[str, np.ndarray, np.ndarray] | None = None,
                fpr_marks: Sequence[float] = (0.01, 0.05),
-               mode: str = "light", out_stem=None):
+               mode: str = "light", out_stem=None,
+               tpr_label: str = "true positive rate",
+               fpr_label: str = "false positive rate"):
     """ROC (a) and low-false-alarm zoom (b) for ``{label: (y_true, y_score)}``.
 
     ``baseline`` = (label, y_true, y_score) is drawn dashed in ``ink2`` (e.g.
-    a Greenwald-fraction physics rule). Returns the ``Figure``; pass
+    a Greenwald-fraction physics rule). ``tpr_label`` / ``fpr_label`` set the
+    axis labels; pass benchmark-specific wording from the caller. Returns the ``Figure``; pass
     ``out_stem`` to also export png/svg/pdf.
     """
     import matplotlib.pyplot as plt
@@ -88,8 +93,8 @@ def roc_figure(curves: dict[str, tuple[np.ndarray, np.ndarray]], *,
             b.text(m, 0.02, f" {100 * m:g} % FPR", rotation=90, fontsize=6.5,
                    color=p["muted"], va="bottom", ha="right")
         for ax in (a, b):
-            ax.set_xlabel("false positive rate (false alarms)")
-            ax.set_ylabel("true positive rate (precursor slices caught)")
+            ax.set_xlabel(fpr_label)
+            ax.set_ylabel(tpr_label)
         a.legend(loc="lower right", fontsize=7)
         head = "TPR at " + " / ".join(mlabels) + " FPR"
         width = max(len(e[0]) for e in entries)

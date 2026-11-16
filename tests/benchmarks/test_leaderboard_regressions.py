@@ -1,5 +1,5 @@
-"""Regression tests for PR #18 review findings (lorenz gate, sweep defaults,
-lorenz cache validation, --no-predictions in sweeps)."""
+"""Leaderboard regression tests: lorenz gate, sweep defaults, lorenz cache
+validation and --no-predictions in sweeps."""
 
 from __future__ import annotations
 

@@ -184,10 +184,7 @@ def validate_payload(payload: Any, *, check_models: bool = True) -> list[str]:
     if check_models:
         try:
             from surge.model.registry import MODEL_REGISTRY
-            known_keys = set(MODEL_REGISTRY.list_keys()) if hasattr(
-                MODEL_REGISTRY, "list_keys") else None
-            if known_keys is None:
-                known_keys = {k for k in getattr(MODEL_REGISTRY, "_registry", {})}
+            known_keys = set(MODEL_REGISTRY.keys())
         except Exception:  # noqa: BLE001 - validation must not hard-require torch
             known_keys = None
 

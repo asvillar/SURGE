@@ -54,7 +54,6 @@ def _load_stacked_npy(
     prefix = _resolve_stack_prefix(data_dir, set_name)
     data_path = data_dir / f"{prefix}_data.npy"
     target_path = data_dir / f"{prefix}_target.npy"
-    var_all_path = data_dir / f"{prefix}_var_all.npy"
 
     if not data_path.exists():
         raise FileNotFoundError(
@@ -86,14 +85,6 @@ def _load_stacked_npy(
     df_data = pd.DataFrame(data, columns=input_cols)
     df_target = pd.DataFrame(target, columns=output_cols)
     df = pd.concat([df_data, df_target], axis=1)
-
-    if var_all_path.exists():
-        var_all = np.load(var_all_path, allow_pickle=True)
-        if hasattr(var_all, "tolist"):
-            var_all = var_all.tolist()
-        # Store in metadata for reference; fewer variable names than input
-        # columns suggests each variable spans several slots (e.g. stages)
-        pass  # Could add df.attrs["var_all"] = var_all if needed
 
     return df, input_cols, output_cols
 

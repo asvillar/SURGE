@@ -12,7 +12,7 @@ Usage
     python examples/leaderboard_pde.py --full
 
     # Via the surge CLI:
-    surge run --category pde -m all
+    surge bench --category pde -m all
 
 Benchmarks
 ----------

@@ -24,12 +24,9 @@ from .hpo import plot_hpo_convergence
 
 LOG = logging.getLogger(__name__)
 
-# Default model display names (short labels for plots)
-DEFAULT_MODEL_DISPLAY = {
-    "random_forest_profiles": "Random Forest",
-    "torch_mlp_mc_dropout": "MLP",
-    "gpflow_gpr_profiles": "GPR",
-}
+# Optional display-name overrides (model name -> plot label). Empty by default:
+# labels fall back to the model name.
+DEFAULT_MODEL_DISPLAY: Dict[str, str] = {}
 
 
 def load_predictions(
@@ -125,7 +122,8 @@ def viz_hpo(
             dpi=dpi,
         )
         return [str(save_path)]
-    except Exception:
+    except Exception as exc:
+        LOG.warning("HPO convergence figure not written: %s", exc)
         return []
 
 
@@ -165,13 +163,13 @@ def viz_run(
     shap_max_samples : int, default=500
         Max samples for SHAP (smaller = faster).
     include_datastreamset_eval : bool, default=False
-        If True, evaluate models on held-out dataset datastreamsets (stacked_npy format only).
+        If True, evaluate models on held-out row blocks (stacked ``.npy`` layout only).
     datastreamset_size : int, default=50000
-        Rows per datastreamset for datastreamset evaluation.
+        Rows per block for the held-out block evaluation.
     datastreamset_max : int, default=10
-        Max datastreamsets to evaluate.
+        Max blocks to evaluate.
     datastreamset_eval_set : str, optional
-        Override set_name for datastreamset eval (e.g. another stack in the same folder).
+        Override set_name for the block evaluation (e.g. another stack in the same folder).
 
     Returns
     -------
@@ -304,7 +302,7 @@ def viz_run(
         )
         saved_paths.extend(shap_paths)
 
-    # Segment-based evaluation (stacked_npy format only)
+    # Held-out block evaluation (stacked_npy format only)
     datastreamset_result: Optional[Dict[str, Any]] = None
     if include_datastreamset_eval:
         try:
@@ -316,7 +314,7 @@ def viz_run(
                 eval_set_name=datastreamset_eval_set,
             )
         except Exception as e:
-            LOG.warning("Segment evaluation failed: %s", e)
+            LOG.warning("Held-out block evaluation failed: %s", e)
 
     out: Dict[str, Any] = {"r2": all_r2, "saved_paths": [str(p) for p in saved_paths]}
     if datastreamset_result:
@@ -559,13 +557,25 @@ def _load_or_build_train_ranges(
             return json.load(f)
 
     # Fallback: build from training predictions (for runs before this feature)
-    pred_files = list((run_dir / "predictions").glob("*_train.csv"))
+    from ..dataset import SurrogateDataset
+
+    pred_dir = run_dir / "predictions"
+    pred_files = sorted(pred_dir.glob("*_train.parquet")) + sorted(pred_dir.glob("*_train.csv"))
     if not pred_files:
         LOG.warning("No train_data_ranges.json and no train predictions. Skip in-range check.")
         return None
 
-    pred_df = pd.read_csv(pred_files[0])
+    try:
+        if pred_files[0].suffix == ".parquet":
+            pred_df = pd.read_parquet(pred_files[0])
+        else:
+            pred_df = pd.read_csv(pred_files[0])
+    except Exception as e:
+        LOG.warning("Could not read train predictions %s: %s", pred_files[0], e)
+        return None
     if "index" not in pred_df.columns:
+        LOG.warning("Train predictions %s have no 'index' column. Skip in-range check.",
+                    pred_files[0])
         return None
     indices = pred_df["index"].values.astype(int)
 
@@ -779,28 +789,31 @@ def viz_datastreamset_evaluation(
     output_key: str = "output_0",
 ) -> Dict[str, Any]:
     """
-    Evaluate trained models on held-out datastreamsets of the dataset.
+    Evaluate trained models on held-out blocks of the dataset.
 
-    Loads contiguous row ranges (datastreamsets) from the full dataset and computes
-    R², RMSE, MAE per datastreamset. Use to test generalization to unseen data.
+    This evaluation applies to the stacked ``.npy`` layout only; for any other
+    dataset format it is skipped with a log message.
+
+    Loads contiguous row ranges (blocks) from the full dataset and computes
+    R², RMSE, MAE per block. Use to test generalization to unseen data.
 
     Only supported for the stacked_npy format (uses row_range). The workflow's train/val/test
-    come from a random sample; these datastreamsets are different contiguous regions.
+    come from a random sample; these blocks are different contiguous regions.
 
     Parameters
     ----------
     run_dir : Path
         SURGE workflow run directory.
     output_dir : Path, optional
-        Where to save datastreamset_stats.json. Default: run_dir/plots.
+        Where to save the block evaluation stats. Default: run_dir/plots.
     datastreamset_size : int, default=50000
-        Rows per datastreamset.
+        Rows per block.
     max_datastreamsets : int, default=10
-        Max number of datastreamsets to evaluate (datastreamset 0 = rows 0:datastreamset_size, etc.).
+        Max number of blocks to evaluate (block 0 = rows 0:datastreamset_size, etc.).
     datastreamset_offset : int, default=0
-        Start from this datastreamset index (datastreamset_offset * datastreamset_size).
+        Start from this block index (datastreamset_offset * datastreamset_size).
     eval_set_name : str, optional
-        Override set_name when loading datastreamsets (e.g. another stack in the same folder).
+        Override set_name when loading blocks (e.g. another stack in the same folder).
         If None, uses spec.metadata_overrides.set_name (train set), if any.
     output_key : str, default="output_0"
         Which output ("output_<i>") drives drift detection and the plots; the first
@@ -809,7 +822,7 @@ def viz_datastreamset_evaluation(
     Returns
     -------
     dict
-        Per-model, per-datastreamset R², RMSE, MAE; and path to saved JSON.
+        Per-model, per-block R², RMSE, MAE; and path to saved JSON.
     """
     from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
@@ -827,7 +840,7 @@ def viz_datastreamset_evaluation(
         )
 
     if not YAML_AVAILABLE:
-        raise ImportError("PyYAML required for viz_datastreamset_evaluation.")
+        raise ImportError("PyYAML is required for the held-out block evaluation.")
 
     with spec_file.open("r", encoding="utf-8") as f:
         spec_dict = yaml.safe_load(f)
@@ -843,7 +856,7 @@ def viz_datastreamset_evaluation(
 
     fmt = (spec.dataset_format or "").lower()
     if fmt != "stacked_npy":
-        LOG.warning("viz_datastreamset_evaluation only supports stacked_npy format. Skip.")
+        LOG.warning("Held-out block evaluation applies to the stacked .npy layout only; skipped for dataset format %r.", fmt_name)
         return {}
 
     scalers_dir = run_dir / "scalers"
@@ -898,7 +911,7 @@ def viz_datastreamset_evaluation(
                 analyzer_kwargs={"hints": hints, **(spec.analyzer or {})},
             )
         except Exception as e:
-            LOG.warning("Failed to load %s: %s", datastreamset_key, e)
+            LOG.warning("Failed to load block %s: %s", datastreamset_key, e)
             continue
 
         if dataset.df is None or len(dataset.df) == 0:
@@ -991,10 +1004,8 @@ def _plot_datastreamset_evaluation(
     run_dir: Optional[Path] = None,
     output_key: str = "output_0",
 ) -> None:
-    """Plot R², RMSE, prediction error vs datastreamset index; shade out-of-range datastreamsets."""
+    """Plot R², RMSE, prediction error vs block index; shade out-of-range blocks."""
     try:
-        import matplotlib
-        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
         return
@@ -1103,7 +1114,7 @@ def _plot_datastreamset_evaluation(
                 ax_rmse.axvspan(datastreamset_indices[i] - 0.4, datastreamset_indices[i] + 0.4, alpha=0.2, color="red")
 
     ax_r2.set_ylabel("R² score")
-    ax_r2.set_title(f"Generalization: R² vs held-out datastreamset ({output_label}, red = out-of-range)")
+    ax_r2.set_title(f"Generalization: R² vs held-out block ({output_label}, red = out-of-range)")
     if ref_r2_train is not None:
         ax_r2.axhline(ref_r2_train, color="gray", linestyle="--", alpha=0.7, label=f"Train R²={ref_r2_train:.3f}")
     if ref_r2_val is not None:
@@ -1131,9 +1142,9 @@ def _plot_datastreamset_evaluation(
     else:
         ax_r2.set_ylim(bottom=0)
 
-    ax_rmse.set_xlabel("Segment index" if not has_in_range and ax_input_range is None else "")
+    ax_rmse.set_xlabel("Block index" if not has_in_range and ax_input_range is None else "")
     ax_rmse.set_ylabel("RMSE")
-    ax_rmse.set_title(f"Prediction error (RMSE) vs held-out datastreamset ({output_label})")
+    ax_rmse.set_title(f"Prediction error (RMSE) vs held-out block ({output_label})")
     if has_model_metrics:
         ax_rmse.legend(loc="best", fontsize=9)
     else:
@@ -1160,7 +1171,7 @@ def _plot_datastreamset_evaluation(
         ax_inrange.legend(loc="best", fontsize=9)
         ax_inrange.grid(True, alpha=0.3, axis="y")
         if ax_input_range is None:
-            ax_inrange.set_xlabel("Segment index")
+            ax_inrange.set_xlabel("Block index")
 
     # Input range evolution: how min/max of OOD inputs change across datastreamsets
     if ax_input_range is not None:
@@ -1191,8 +1202,8 @@ def _plot_datastreamset_evaluation(
                 ax_input_range.plot(datastreamset_indices, mins_norm, "o--", color=c, markersize=5, alpha=0.9)
                 ax_input_range.plot(datastreamset_indices, maxs_norm, "s-", color=c, markersize=5, alpha=0.9, label=col)
             ax_input_range.set_ylabel("Normalized value (0–1 = train range)")
-            ax_input_range.set_xlabel("Datastreamset index")
-            ax_input_range.set_title("Input range evolution: OOD inputs min/max vs datastreamset (top 6)")
+            ax_input_range.set_xlabel("Block index")
+            ax_input_range.set_title("Input range evolution: OOD inputs min/max vs block (top 6)")
             ax_input_range.set_ylim(-0.1, 1.5)
             ax_input_range.legend(loc="upper right", fontsize=7, ncol=2)
             ax_input_range.grid(True, alpha=0.3)
@@ -1226,14 +1237,14 @@ def _plot_datastreamset_evaluation(
                 if is_oor:
                     ax_degrad.axvspan(datastreamset_indices[i] - 0.4, datastreamset_indices[i] + 0.4, alpha=0.2, color="red")
                     ax_mae.axvspan(datastreamset_indices[i] - 0.4, datastreamset_indices[i] + 0.4, alpha=0.2, color="red")
-        ax_degrad.set_ylabel("R² degradation (train − datastreamset)")
-        ax_degrad.set_title("R² drop vs held-out datastreamset (higher = worse generalization)")
+        ax_degrad.set_ylabel("R² degradation (train − block)")
+        ax_degrad.set_title("R² drop vs held-out block (higher = worse generalization)")
         ax_degrad.axhline(0, color="gray", linestyle="-", alpha=0.5)
         ax_degrad.legend(loc="best", fontsize=9)
         ax_degrad.grid(True, alpha=0.3)
         ax_mae.set_ylabel("MAE (|pred − true|)")
-        ax_mae.set_xlabel("Segment index")
-        ax_mae.set_title("Mean absolute error vs held-out datastreamset")
+        ax_mae.set_xlabel("Block index")
+        ax_mae.set_title("Mean absolute error vs held-out block")
         ax_mae.legend(loc="best", fontsize=9)
         ax_mae.grid(True, alpha=0.3)
         plt.tight_layout()

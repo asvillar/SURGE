@@ -45,7 +45,7 @@ torch = ["torch>=1.9.0"]
 # extra gets you the full export → reload → parity path.
 onnx = ["onnx>=1.14", "onnxscript>=0.1", "onnxruntime>=1.17"]
 # TensorFlow/GPflow model families. Floors are the NumPy-2-compatible set
-# documented in requirements.txt (mainline TF >= 2.21 everywhere,
+# used by this project (mainline TF >= 2.21 everywhere,
 # including Apple Silicon — tensorflow-macos is dead).
 # gpflow itself is NOT listed: its published metadata pins numpy<2 (and
 # tensorflow-macos on arm64), which is unresolvable next to TF >= 2.21,
@@ -64,7 +64,7 @@ shap = ["shap>=0.46"]
 mlflow = ["mlflow>=2.0.0"]
 benchmarks = ["h5py>=3.0"]  # optuna is already a core dependency (see deps above)
 tabpfn = ["tabpfn>=2.0"]
-kumo = ["structured-data-models>=0.2"]
+kumo = ["structured-data-models>=0.2; python_version >= '3.11'"]  # that package supports Python 3.11+ only
 thewell = ["the-well"]
 # Convenience bundle pulling in SURGE's own other extras. Deliberately
 # excludes gpflow (its published metadata pins numpy<2, unresolvable next

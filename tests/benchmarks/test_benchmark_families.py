@@ -1,4 +1,5 @@
-"""Smoke tests for Phases C, D1, D2, E, F, G additions.
+"""Smoke tests for the temporal, operator, PDEBench, scientific, vision and
+TheWell benchmark families.
 
 These tests verify registration, shapes, and quick benchmark runs.  They
 do NOT train full models or download large datasets — they only check that
@@ -17,7 +18,7 @@ requires_torch = pytest.mark.skipif(
     reason="torch not installed (optional dependency)")
 
 # ---------------------------------------------------------------------------
-# Phase C — Temporal adapters
+# Temporal adapters
 # ---------------------------------------------------------------------------
 
 
@@ -106,7 +107,7 @@ def test_lorenz_rk4_integrator():
 
 
 # ---------------------------------------------------------------------------
-# Phase D1 — FNO + DeepONet + Burgers
+# FNO + DeepONet + Burgers
 # ---------------------------------------------------------------------------
 
 
@@ -183,7 +184,7 @@ def test_relative_l2_metric():
 
 
 # ---------------------------------------------------------------------------
-# Phase D2 — PDEBench loader (import/guard only, no download)
+# PDEBench loader (import/guard only, no download)
 # ---------------------------------------------------------------------------
 
 
@@ -310,7 +311,7 @@ def test_pdebench_shallow_water_loader_synthetic(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Phase F — Scientific benchmarks
+# Scientific benchmarks
 # ---------------------------------------------------------------------------
 
 
@@ -349,7 +350,7 @@ def test_plasma_stability_registered():
 
 
 # ---------------------------------------------------------------------------
-# Phase E — Vision adapters (registration + tiny synthetic test)
+# Vision adapters (registration + tiny synthetic test)
 # ---------------------------------------------------------------------------
 
 
@@ -416,7 +417,7 @@ def test_vision_benchmarks_registered():
 
 
 # ---------------------------------------------------------------------------
-# Phase G — TheWell (registration + guard check)
+# TheWell (registration + guard check)
 # ---------------------------------------------------------------------------
 
 

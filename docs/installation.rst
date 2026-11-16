@@ -4,7 +4,7 @@ Installation
 Requirements
 ------------
 
-* **Python:** 3.10 or 3.11 (see ``requires-python`` in the root ``pyproject.toml``).
+* **Python:** 3.10 to 3.13 (see ``requires-python`` in the root ``pyproject.toml``).
 * **Install name:** the PyPI distribution is **surge-ml**; the import name is **surge**.
 
 From PyPI (after publish)
@@ -43,7 +43,7 @@ include:
 * **torch** — PyTorch (MLP adapter, etc.)
 * **onnx** — export and ONNX Runtime checks
 * **dev** — test and lint tools plus ``h5py``
-* **docs** — Sphinx, Furo, MyST (for this site)
+* **docs** — Sphinx, the Read the Docs theme, MyST, and the autodoc/bibtex/numpydoc helpers (for this site)
 
 Verify
 ------

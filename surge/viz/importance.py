@@ -54,8 +54,6 @@ except ImportError:
     SHAP_AVAILABLE = False
 
 try:
-    import matplotlib
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     MATPLOTLIB_AVAILABLE = True
 except ImportError:

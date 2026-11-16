@@ -7,8 +7,9 @@ Two workflows live under this guide:
 | Train **existing** SURGE models on **your data** (CSV, PKL, H5) | [Part I — Your dataset](#part-i--train-on-your-own-data) |
 | **Embed a new model type** into SURGE (new adapter) | [Part II — Embed a new model](#part-ii--embed-a-new-model-in-surge) |
 
-> **CLI note:** `surge run` is for **built-in benchmarks** only. Custom data and
-> custom workflow specs use `run_surrogate_workflow` / `examples/run_workflow.py`.
+> **CLI note:** `surge run spec.yaml` runs a workflow spec on your own data;
+> `surge bench` runs the built-in benchmarks. The same spec can be run from Python
+> with `run_surrogate_workflow` / `examples/run_workflow.py`.
 
 ---
 
@@ -238,7 +239,7 @@ PyTorch adapters: load via the adapter class (`model.load(path)`) — see
 | Wrong columns as I/O | Use `metadata_path`, not only `metadata_overrides` |
 | `ModuleNotFoundError: torch` | `pip install -e ".[torch]"` |
 | Run dir exists | `overwrite_existing_run: true` or new `run_tag` |
-| Used `surge run -b my.csv` | Use workflow spec instead |
+| Used `surge bench -b my.csv` | `surge bench` runs built-in benchmarks only; use `surge run spec.yaml` |
 
 ---
 
@@ -268,20 +269,19 @@ Your data  →  SurrogateDataset  →  Engine (split + scale)
 |---------|-----------|------------------|
 | **`fit(X, y)`** | **Yes** | Always |
 | **`predict(X)`** | **Yes** | Always; return `(n_samples, n_outputs)` |
-| **`mark_fitted()`** | **Yes** | End of `fit` if you track state manually |
-| **`ensure_fitted()`** | **Yes** | Start of `predict` if you track state manually |
+| **`mark_fitted()`** | Optional hook | The engine calls it after `fit`; override only if you track state |
 | **`save` / `load`** | **Strongly recommended** | Workflow writes `models/<name>.joblib`; without this, runs are not reloadable |
 | **Multi-output `y`** | **Yes** (shape) | Support 1D and 2D targets even if you only use scalar outputs today |
 | **`resource_profile`** | Recommended | CPU/GPU policy, worker semantics — drives `[surge.fit]` banner |
 | **`uses_internal_preprocessing`** | If true | You normalize inside the backend (common for PyTorch tabular) |
 | **`handles_output_scaling`** | If true | You inverse-transform targets inside `predict` |
-| **`predict_with_uncertainty`** | Optional | Set `supports_uq`; workflow can store UQ JSON |
+| **`predict_with_uncertainty`** | Optional | Workflow stores UQ JSON when it works |
 | **`training_history`** | Optional | Epoch losses for `surge.viz` training plots |
 | **HPO `search_space`** | Optional | Expose tunable params in YAML; document sensible ranges |
 | **`ModelInfo` (`_INFO`)** | Recommended | Architecture, use cases, strengths — shown in docs/tooling |
 | **Optional import guard** | Recommended | `try: import torch` pattern so base install still works |
 | **Unit test** | Recommended | At least fit → predict on synthetic `(N, F)` data |
-| **Benchmark registration** | Optional | Add to `surge/benchmarks/registry.py` for `surge run` leaderboards |
+| **Benchmark registration** | Optional | Add to `surge/benchmarks/registry.py` for `surge bench` leaderboards |
 
 ### Naming and registration
 

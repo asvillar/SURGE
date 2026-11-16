@@ -33,7 +33,7 @@ def test_grouped_bar_requires_group_specs():
 
 def test_model_label_falls_back_to_model_name():
     assert run_viz._model_short_name("my_custom_model") == "My Custom Model"
-    assert run_viz._model_short_name("torch_mlp_mc_dropout") == "MLP"
+    assert run_viz._model_short_name("torch_mlp_mc_dropout") == "Torch Mlp Mc Dropout"
 
 
 def test_default_output_is_first_and_set_name_optional():

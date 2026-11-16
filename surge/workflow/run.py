@@ -10,7 +10,7 @@ import re
 import sys
 import warnings
 from dataclasses import asdict, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -258,12 +258,13 @@ def run_surrogate_workflow(
         sys.stderr = TeeText(_real_err, log_fp)
         if invocation:
             save_run_invocation(paths, invocation)
-            spec_src = invocation.get("spec_path")
+            spec_src = (invocation.get("config_source")
+                        or invocation.get("spec_path"))
             if spec_src:
                 copy_invoked_config_source(paths, Path(spec_src))
         save_spec(spec.to_dict(), paths)
 
-        # Save training data min/max for in-distribution checks on new datastreamsets
+        # Save training data min/max for in-distribution checks on new datasets
         proc = engine.get_processed_splits()
         save_train_data_ranges(
             proc.X_train,
@@ -394,7 +395,7 @@ def run_surrogate_workflow(
                 )
             except ImportError:
                 LOGGER.warning(
-                    "MLflow not installed. pip install surge[mlflow]"
+                    "MLflow not installed. pip install \"surge-ml[mlflow]\""
                 )
 
         _progress_step(total_steps, total_steps, f"Done. Artifacts in {paths.root}")
@@ -414,7 +415,7 @@ def run_surrogate_workflow(
 # ---------------------------------------------------------------------------
 def _default_run_tag(file_path: Optional[Path]) -> str:
     prefix = file_path.stem if file_path else "dataset"
-    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     return f"{prefix}_{timestamp}"
 
 

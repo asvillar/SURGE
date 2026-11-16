@@ -184,7 +184,7 @@ _BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
     # SOLPS-NN exhaust: the scalar benchmark uses the default tabular regression
     # sweep (incl. kumo.tabular_regressor when installed); the 5200-output field
     # excludes tree ensembles (an RF stores n_nodes x 5200 values per tree and
-    # exhausted a 17 GB laptop).
+    # can exhaust the memory of a laptop).
     "plasma.solpsnn_te_field": ["pytorch.mlp", "pytorch.residual_mlp", "sklearn.ridge"],
     # Sequence / time-series benchmarks — include temporal models
     "sequence.lorenz63":         _SEQUENCE_MODELS,
@@ -951,7 +951,7 @@ def _dataset_loaders() -> dict[str, Any]:
         "ctr23.diamonds": lambda: _load_ctr23_diamonds(),
         "ctr23.house_sales": lambda: _load_ctr23_house_sales(),
         "ctr23.brazilian_houses": lambda: _load_ctr23_brazilian_houses(),
-        # DOE fusion plasma benchmarks
+        # Fusion plasma benchmarks
         "plasma.cmod_density_limit":  lambda: _concat_fixed(_load_cmod_density_limit()),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
         "plasma.qlknn10d":            lambda: _load_qlknn10d(),
@@ -1360,7 +1360,7 @@ def _load_ctr23_brazilian_houses():
 
 
 # ---------------------------------------------------------------------------
-# DOE Fusion plasma dataset loaders
+# Fusion plasma dataset loaders
 # ---------------------------------------------------------------------------
 
 _CMOD_URL = ("https://raw.githubusercontent.com/MIT-PSFC/"
@@ -2038,7 +2038,7 @@ _GATE_THRESHOLDS: dict[str, tuple[str, float]] = {
     # CIFAR-10: ResNet-20 paper result is 91.25% (He et al. 2016).
     # Threshold set at 91.0% to allow ±0.25% seed variance.
     "vision.cifar10": ("test_accuracy", 0.910),
-    # DOE fusion plasma benchmarks
+    # Fusion plasma benchmarks
     "plasma.cmod_density_limit": ("test_auroc", 0.99),  # Greenwald scaling gives 0.973 on this split
     "plasma.qlknn_transport": ("test_r2", 0.90),
     "plasma.qlknn10d": ("test_r2", 0.95),

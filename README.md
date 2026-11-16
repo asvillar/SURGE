@@ -7,7 +7,7 @@
 [![MLflow](https://img.shields.io/badge/MLflow-integrated-0194E2?logo=mlflow&logoColor=white)](docs/GETTING_STARTED.md)
 [![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
 [![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asvillar/SURGE/blob/release/0.1.0/examples/notebooks/surge_fusion_quickstart.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asvillar/SURGE/blob/v0.1.0/examples/notebooks/surge_fusion_quickstart.ipynb)
 
 **Surrogate Unified Robust Generation Engine** — train, tune, evaluate, and
 export scientific surrogate models from a single declarative workflow.
@@ -47,7 +47,7 @@ parity, and the leaderboard gaining models against the published gate.
 - **One workflow, many sciences.** Tabular scalars, multi-output targets,
   1D/2D fields, sequences, and images move through the same pipeline —
   models plug in through a registry, not through per-project scripts.
-- **40+ registered model adapters across four ML backends** —
+- **50 registered model adapters across four ML backends** —
   **scikit-learn** (RF, GBM, ridge, logistic, GPR), boosted trees
   (**XGBoost / LightGBM / CatBoost**), **PyTorch** (MLP families,
   FNO / DeepONet / U-Net operator learners, LSTM/GRU,
@@ -67,7 +67,7 @@ parity, and the leaderboard gaining models against the published gate.
   with `onnxruntime` numeric-parity tests in CI — the route used for
   real-time inference in the ICRF surrogate publications; Keras models
   serialize to the portable `.keras` format, sklearn to joblib.
-- **Benchmarks with receipts** (the *model-bench* suite): 30+ curated
+- **Benchmarks with receipts** (the *model-bench* suite): 29 curated
   benchmarks from UCI/OpenML to PDEBench, TheWell, MNIST/CIFAR-10, and
   fusion datasets (QLKNN transport, ConStellaration stellarator design),
   each with citation, threshold, and machine-readable results.
@@ -80,12 +80,12 @@ parity, and the leaderboard gaining models against the published gate.
 
 ## Model benchmarking
 
-SURGE ships a curated suite of 30+ benchmarks, each with a citation, a published pass threshold and mandatory baselines, and every run writes machine-readable `result.json` artifacts (repeated seeds, mean ± std, runtime). Not every benchmark is equally mature, so the ledger states per-benchmark status plainly.
+SURGE ships a curated suite of 29 benchmarks, each with a citation, a published pass threshold and mandatory baselines, and every run writes machine-readable `result.json` artifacts (repeated seeds, mean ± std, runtime). Not every benchmark is equally mature, so the ledger states per-benchmark status plainly.
 
 **[Full benchmark ledger with per-benchmark status → docs/benchmarks/README.md](docs/benchmarks/README.md)**
 
-The ledger documents 28 benchmark cards in five tiers (ready, in progress, needs rerun,
-tutorial, sanity); 21 are public in the HTML report and 7 stay hidden while their data
+The suite defines 29 benchmark cards in five tiers (3 ready, 5 in progress, 3 needs rerun,
+17 tutorial, 1 sanity); 22 are public in the HTML report and 7 stay hidden while their data
 pipeline or gate is still being established. Every card carries its data citation and
 the published state-of-the-art line it is scored against — the sources are collected in
 [References](#references) below. The fusion benchmarks are the point of the
@@ -164,8 +164,8 @@ only the members a task needs from the 17.6 GB archive by HTTP byte ranges
 (about 290 MB). The in-progress `plasma.solpsnn_exhaust_scalars` benchmark
 is the first SURGE task where an in-context tabular foundation model
 (`kumo.tabular_regressor`, NVIDIA Kumo Tabular, no training) beats the
-published tuned five-fold networks: **median relative error 9.3 % on the
-peak target heat flux against the published 13 %**, in 25 s on a laptop
+published tuned five-fold networks: **median relative error 8.4 % on the
+peak target heat flux against the published 13 %**, in about 80 s on a
 CPU; a tuned residual MLP reaches 18 %:
 
 <p align="center">
@@ -278,7 +278,7 @@ surge report --out leaderboard.html                       # interactive dashboar
 
 ## Install
 
-**Requirements:** Python **3.10 – 3.12**. Package name: **`surge-ml`** ·
+**Requirements:** Python **3.10 to 3.13**. Package name: **`surge-ml`** ·
 import name: **`surge`**.
 
 With [uv](https://docs.astral.sh/uv/) (recommended):
@@ -414,7 +414,7 @@ Full guide: [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.m
 ### 6 · Benchmarks
 
 ```bash
-surge-benchmark --list                                        # 30+ curated benchmarks
+surge-benchmark --list                                        # 29 curated benchmarks
 surge-benchmark -b synthetic.regression_1d -m sklearn.random_forest --no-save
 surge-benchmark -b tabular.california_housing -m all --seeds 5   # leaderboard, mean±std
 surge-benchmark -b pde.burgers_1d --compare-models pytorch.fno1d,pytorch.residual_mlp
@@ -506,7 +506,7 @@ from pathlib import Path; log_surge_run(Path('runs/qlknn_multi_hpo'))"
 ```
 
 <p align="center">
-  <img src="docs/assets/readme/mlflow_tracking.png" width="820"
+  <img src="docs/assets/readme/mlflow_tracking.png" width="620"
        alt="A SURGE QLKNN run in the MLflow UI: 24 per-model train/val/test metrics, parameters, and artifacts logged"/>
 </p>
 <p align="center"><sub><em>A real SURGE run in the MLflow UI — per-model
@@ -540,9 +540,8 @@ surge bench -b plasma.qlknn_transport -m all --seeds 3 --parallel 4
 Device selection is deliberately conservative: the default stays
 cuda→cpu, and the Apple GPU is **opt-in** (`SURGE_DEVICE=auto`) because
 not every architecture is MPS-safe — convolutional and spectral models
-are (identical R² to CPU), recurrent models are not. The safety table
-lives in,
-with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
+are (identical R² to CPU), recurrent models are not. Model parallelism inside a workflow and multi-GPU training (DDP) are not
+supported yet.
 
 ## Documentation
 
