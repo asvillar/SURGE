@@ -14,7 +14,11 @@ over a held-out TRL-2D trajectory and compares against the truth on:
   (d) cold-phase mass fraction vs time                (the TRL observable:
       radiative mixing drives net hot->cold mass flux)
 
-Usage (after the protocol study):
+Needs: cunet_wellprotocol.joblib and wellprotocol_preds.npz in
+examples/viz_gallery_output/.
+Run first: examples/thewell_wellprotocol_study.py (writes both).
+
+Usage:
     SURGE_DEVICE=auto python examples/thewell_rollout_stats.py [--steps 40]
 """
 from __future__ import annotations
@@ -66,7 +70,11 @@ def load_model():
     from surge.model.backends.convnext_unet import _CNextUNet
     from surge.utils import resolve_device
 
-    d = joblib.load(OUT / "cunet_wellprotocol.joblib")
+    _path = OUT / "cunet_wellprotocol.joblib"
+    if not _path.exists():
+        raise SystemExit(f"missing input {_path}. Run first: "
+                         "examples/thewell_wellprotocol_study.py")
+    d = joblib.load(_path)
     cfg = d["config"]
     net = _CNextUNet(N_HIST * N_FIELDS, N_FIELDS, cfg["base_channels"],
                      cfg["depth"], cfg["blocks_per_stage"])
@@ -99,7 +107,11 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=40)
     args = ap.parse_args()
 
-    npz = np.load(OUT / "wellprotocol_preds.npz")
+    _npz = OUT / "wellprotocol_preds.npz"
+    if not _npz.exists():
+        raise SystemExit(f"missing input {_npz}. Run first: "
+                         "examples/thewell_wellprotocol_study.py")
+    npz = np.load(_npz)
     mu, sd = npz["norm_mu"], npz["norm_sd"]
 
     traj = load_trajectory(0)

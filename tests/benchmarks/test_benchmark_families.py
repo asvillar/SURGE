@@ -1,4 +1,5 @@
-"""Smoke tests for Phases C, D1, D2, E, F, G additions.
+"""Smoke tests for the temporal, operator, PDEBench, scientific, vision and
+TheWell benchmark families.
 
 These tests verify registration, shapes, and quick benchmark runs.  They
 do NOT train full models or download large datasets — they only check that
@@ -17,7 +18,7 @@ requires_torch = pytest.mark.skipif(
     reason="torch not installed (optional dependency)")
 
 # ---------------------------------------------------------------------------
-# Phase C — Temporal adapters
+# Temporal adapters
 # ---------------------------------------------------------------------------
 
 
@@ -106,7 +107,7 @@ def test_lorenz_rk4_integrator():
 
 
 # ---------------------------------------------------------------------------
-# Phase D1 — FNO + DeepONet + Burgers
+# FNO + DeepONet + Burgers
 # ---------------------------------------------------------------------------
 
 
@@ -183,7 +184,7 @@ def test_relative_l2_metric():
 
 
 # ---------------------------------------------------------------------------
-# Phase D2 — PDEBench loader (import/guard only, no download)
+# PDEBench loader (import/guard only, no download)
 # ---------------------------------------------------------------------------
 
 
@@ -310,7 +311,7 @@ def test_pdebench_shallow_water_loader_synthetic(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Phase F — Scientific benchmarks
+# Scientific benchmarks
 # ---------------------------------------------------------------------------
 
 
@@ -348,25 +349,8 @@ def test_plasma_stability_registered():
     assert resolve_benchmark_key("classification.plasma_stability") == "tabular.plasma_stability"
 
 
-def test_m3dc1_benchmark_registered():
-    from surge.benchmarks.registry import list_benchmarks
-    assert "fusion.m3dc1_sample" in list_benchmarks()
-
-
-def test_m3dc1_benchmark_runs_synthetic():
-    """fusion.m3dc1_sample should work with the synthetic fallback."""
-    from surge.benchmarks.registry import run_benchmark
-
-    result = run_benchmark(
-        "fusion.m3dc1_sample", seed=42, model_key="sklearn.random_forest"
-    )
-    assert result.benchmark_key == "fusion.m3dc1_sample"
-    assert "test_r2" in result.metrics
-    assert np.isfinite(result.metrics["test_r2"])
-
-
 # ---------------------------------------------------------------------------
-# Phase E — Vision adapters (registration + tiny synthetic test)
+# Vision adapters (registration + tiny synthetic test)
 # ---------------------------------------------------------------------------
 
 
@@ -433,7 +417,7 @@ def test_vision_benchmarks_registered():
 
 
 # ---------------------------------------------------------------------------
-# Phase G — TheWell (registration + guard check)
+# TheWell (registration + guard check)
 # ---------------------------------------------------------------------------
 
 

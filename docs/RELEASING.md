@@ -121,7 +121,7 @@ gh release create v<version> --draft --title "surge-ml <version>" \
 
 ## Pre-publish checklist
 
-- [ ] `pytest -q` green on 3.10–3.12 (CI matrix)
+- [ ] `pytest -q` green on 3.10 to 3.13 (CI matrix)
 - [ ] Version bumped in `surge/__init__.__version__` only; `CHANGELOG.md`
       and both `date-released` fields in `CITATION.cff` match
 - [ ] `rm -rf dist && uv build` — clean sdist + wheel

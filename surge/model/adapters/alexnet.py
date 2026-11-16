@@ -9,12 +9,12 @@ from ...hpc import ResourceProfile
 
 _ALEXNET_INFO = ModelInfo(
     architecture=(
-        "AlexNet adapted for small images (32×32 / 28×28): five convolutional "
-        "layers with ReLU activations and max-pooling, followed by three fully "
-        "connected layers with dropout (p=0.5). Batch normalisation replaces the "
-        "original Local Response Normalisation to stabilise training on small datasets. "
-        "The original architecture used 227×227 ImageNet inputs; this variant "
-        "reduces the first conv stride and kernel size to suit CIFAR-10/MNIST."
+        "AlexNet-style CNN for small images: five 3x3 convolutional layers "
+        "(64, 192, 384, 256, 256 channels) with ReLU, three max-pooling stages and "
+        "an adaptive average pool to 2x2, followed by a classifier of two dropout "
+        "(p=0.5) fully connected layers (1024, 512 units) and a linear output. "
+        "No batch normalisation or local response normalisation. Trained with "
+        "cross-entropy loss; the input channel count is configurable."
     ),
     use_cases=[
         "Image classification benchmarks on 32×32 or 28×28 inputs (CIFAR-10, MNIST)",

@@ -73,8 +73,8 @@ def test_task_mismatch_passes_through_unknown_models():
 
 
 def test_run_benchmark_rejects_mismatched_model():
-    pytest.importorskip("torch")  # references pytorch.mlp; skip on the no-torch job
     """The gate must fire BEFORE training, not inside metric computation."""
+    pytest.importorskip("torch")  # references pytorch.mlp; skip on the no-torch job
     from surge.benchmarks.registry import run_benchmark
 
     with pytest.raises(ValueError, match="regressor"):
@@ -441,7 +441,7 @@ def test_multioutput_reg_extras_without_names_or_kinds_unchanged():
 def test_constellaration_multioutput_loader_returns_8_equilibrium_columns():
     """The joint benchmark loader must select only the 8 equilibrium-kind
     columns (dataset_io.CONSTELLARATION_MULTIOUTPUT_IO), in spec order —
-    the paper-filtered cache on disk still has all 12."""
+    the paper-filtered cache on disk has all 12."""
     from surge.benchmarks.dataset_io import get_benchmark_io
     from surge.benchmarks.leaderboard import (
         _load_constellaration_multioutput,
@@ -469,8 +469,8 @@ def test_constellaration_multioutput_loader_returns_8_equilibrium_columns():
 
 
 def test_constellaration_paper_spec_still_has_12_outputs():
-    """plasma.constellaration_paper is untouched (paper parity) — only the
-    joint constellaration_multioutput benchmark drops to equilibrium-only."""
+    """plasma.constellaration_paper keeps all 12 outputs (paper parity); only the
+    joint constellaration_multioutput benchmark is equilibrium-only."""
     from surge.benchmarks.leaderboard import _load_constellaration_paper
 
     try:

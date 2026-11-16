@@ -1,22 +1,29 @@
 #!/usr/bin/env python
-"""Live/offline training-loss viewer for SURGE leaderboard runs.
+"""Live/offline training-loss viewer for JSONL logs written by SURGE.
+
+``surge bench ... --train-log-file PATH`` appends one JSON record per epoch to
+PATH; this script lists, summarises and plots such files. There is no default
+log location: pass the folder or file you gave to ``--train-log-file``.
 
 Usage examples
 --------------
-# List all available training log files
-python scripts/plot_training.py --list
+# Write a log while benchmarking
+surge bench -b synthetic.regression_1d -m pytorch.mlp --train-log-file logs/mlp.jsonl
 
-# Print a quick text summary of the latest epoch for every running model
-python scripts/plot_training.py --status
+# List the training logs under a folder
+python scripts/plot_training.py --list --log-root logs
 
-# Plot loss curves for one file and save to PNG
-python scripts/plot_training.py benchmark_reports/training_logs/vision_cifar10/pytorch_resnet56_seed42.jsonl
+# Print a quick text summary of the latest epoch of every log
+python scripts/plot_training.py --status --log-root logs
 
-# Plot loss curves and open an interactive window (requires a display)
-python scripts/plot_training.py --show benchmark_reports/training_logs/vision_mnist/pytorch_resnet20_seed42.jsonl
+# Plot loss curves for one file and save next to it as PNG
+python scripts/plot_training.py logs/mlp.jsonl
 
-# Overlay val_loss from multiple runs on one chart
-python scripts/plot_training.py --compare benchmark_reports/training_logs/plasma_constellaration_paper/
+# Same, with a log-scaled loss axis and an interactive window
+python scripts/plot_training.py --show --log-scale logs/mlp.jsonl
+
+# Overlay val_loss from every log in a folder on one chart
+python scripts/plot_training.py --compare logs/
 """
 from __future__ import annotations
 
@@ -24,6 +31,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 
@@ -88,9 +96,8 @@ def cmd_list(root: Path) -> None:
         last = records[-1] if records else {}
         status = _fmt_record(last) if last else "(no epoch records yet)"
         age = os.path.getmtime(p)
-        import time
         age_s = int(time.time() - age)
-        print(f"  {p.relative_to(root.parent.parent) if root.parent.parent.exists() else p}")
+        print(f"  {p}")
         print(f"    epochs logged: {n}   last modified: {age_s}s ago")
         print(f"    latest: {status}\n")
 
@@ -130,7 +137,7 @@ def cmd_plot(paths: list[Path], *, show: bool, log_scale: bool, save: Path | Non
         print("matplotlib is required: pip install matplotlib")
         sys.exit(1)
 
-    from surge.viz.training import load_training_history, plot_training_dashboard
+    from surge.viz.training import plot_training_dashboard
 
     for src in paths:
         records = _read_epochs(src)
@@ -140,6 +147,8 @@ def cmd_plot(paths: list[Path], *, show: bool, log_scale: bool, save: Path | Non
         out = save or src.with_suffix(".png")
         title = src.stem
         fig = plot_training_dashboard(records, model_name=title, save_path=None)
+        if log_scale and fig.axes:
+            fig.axes[0].set_yscale("log")  # first panel is the loss
         if save:
             fig.savefig(save, dpi=150, bbox_inches="tight")
             print(f"Saved: {save}")
@@ -151,7 +160,7 @@ def cmd_plot(paths: list[Path], *, show: bool, log_scale: bool, save: Path | Non
         plt.close(fig)
 
 
-def cmd_compare(directory: Path, *, metric: str, show: bool, save: Path | None) -> None:
+def cmd_compare(directory: Path, *, metric: str, show: bool, log_scale: bool, save: Path | None) -> None:
     try:
         import matplotlib
         if not show:
@@ -176,7 +185,7 @@ def cmd_compare(directory: Path, *, metric: str, show: bool, save: Path | None) 
         print("All logs empty, nothing to compare")
         return
     out = save or (directory / f"compare_{metric}.png")
-    fig = compare_training_curves(histories, metric=metric, title=f"{directory.name} — {metric}")
+    fig = compare_training_curves(histories, metric=metric, log_scale=log_scale, title=f"{directory.name} — {metric}")
     fig.savefig(out, dpi=150, bbox_inches="tight")
     print(f"Saved comparison chart: {out}")
     if show:
@@ -228,7 +237,7 @@ def main() -> None:
     parser.add_argument(
         "--log-scale",
         action="store_true",
-        help="Use log scale on y-axis",
+        help="Use a log scale on the loss axis (plots) or y-axis (--compare)",
     )
     parser.add_argument(
         "--save",
@@ -237,9 +246,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--log-root",
-        default="benchmark_reports/training_logs",
+        default=".",
         metavar="DIR",
-        help="Root directory for training logs (default: benchmark_reports/training_logs)",
+        help="Folder searched (recursively) for *.jsonl logs by --list/--status (default: .)",
     )
     args = parser.parse_args()
 
@@ -260,7 +269,7 @@ def main() -> None:
 
     if args.compare:
         for p in args.paths:
-            cmd_compare(Path(p), metric=args.metric, show=args.show, save=save)
+            cmd_compare(Path(p), metric=args.metric, show=args.show, log_scale=args.log_scale, save=save)
         return
 
     # Default: plot each given file

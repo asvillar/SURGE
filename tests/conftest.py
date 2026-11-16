@@ -5,6 +5,10 @@ This file configures pytest to handle warnings appropriately and set default tes
 """
 import warnings
 
+import matplotlib
+
+matplotlib.use("Agg")  # keep the suite headless
+
 # Filter out common warnings that are expected but not critical
 warnings.filterwarnings(
     "ignore",

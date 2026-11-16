@@ -54,7 +54,7 @@ def multiout_data():
     return X[:60], Y[:60], X[60:], Y[60:]
 
 
-# ── Sklearn baselines (Group C) ───────────────────────────────────────────────
+# ── Sklearn baselines ───────────────────────────────────────────────
 
 
 def test_ridge_registered():
@@ -131,7 +131,7 @@ def test_catboost_classifier_fit_predict_proba(clf_data):
     assert proba.shape == (len(X_te), 2)
 
 
-# ── BoTorch GP (Group D) ──────────────────────────────────────────────────────
+# ── BoTorch GP ──────────────────────────────────────────────────────
 
 
 def test_botorch_gp_registered():
@@ -204,7 +204,7 @@ def test_botorch_sparse_gp_fit_predict():
     assert preds.shape == (20,)
 
 
-# ── FT-Transformer (Group E) ──────────────────────────────────────────────────
+# ── FT-Transformer ──────────────────────────────────────────────────
 
 
 def test_ft_transformer_registered():
@@ -245,7 +245,7 @@ def test_ft_transformer_classifier_fit_predict_proba(clf_data):
     assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-5)
 
 
-# ── KAN (Group E) ─────────────────────────────────────────────────────────────
+# ── KAN ─────────────────────────────────────────────────────────────
 
 
 def test_kan_registered():
@@ -288,7 +288,7 @@ def test_kan_classifier_fit_predict(clf_data):
     assert set(np.unique(preds)).issubset({0, 1})
 
 
-# ── Vision models (Group F) ───────────────────────────────────────────────────
+# ── Vision models ───────────────────────────────────────────────────
 
 
 @pytest.fixture()
@@ -376,7 +376,7 @@ def test_resnet56_fit_predict(img_data):
     assert preds.shape == (len(X_te),)
 
 
-# ── PDE / operator models (Group G) ──────────────────────────────────────────
+# ── PDE / operator models ──────────────────────────────────────────
 
 
 def test_fno2d_registered():
@@ -445,7 +445,7 @@ def test_unet_flat_input():
         adapter.predict(rng.standard_normal((2, 15)).astype("float32"))
 
 
-# ── Generative / conditional models (Group H) ─────────────────────────────────
+# ── Generative / conditional models ─────────────────────────────────
 
 
 def test_vae_registered():
@@ -527,7 +527,7 @@ def test_cgan_fit_predict():
     assert np.isfinite(preds).all()
 
 
-# ── MLP Ensemble (Group I) ────────────────────────────────────────────────────
+# ── MLP Ensemble ────────────────────────────────────────────────────
 
 
 def test_mlp_ensemble_registered():

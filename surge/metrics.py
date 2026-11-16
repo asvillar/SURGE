@@ -30,7 +30,7 @@ def summarize(results):
 
 
 # ---------------------------------------------------------------------------
-# Classification (Phase 2 — benchmark plan; all delegate to scikit-learn)
+# Classification Classification metrics (all delegate to scikit-learn)
 # ---------------------------------------------------------------------------
 
 

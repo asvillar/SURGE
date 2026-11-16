@@ -18,7 +18,7 @@ Design goals (v0.1.0):
 * Emit exactly one ``[surge.fit] ...`` banner per model train so users can
   tell "what worker count is being used" at a glance, as asked.
 
-Out of scope for v0.1.0 (tracked in docs/ROADMAP.md):
+Out of scope for v0.1.0:
 
 * Multi-GPU DDP/FSDP — ``max_gpus > 1`` currently produces a warning and is
   clamped to 1.
@@ -61,7 +61,7 @@ class ResourceSpec:
         datasets)".
     max_gpus
         Cap on the number of GPUs actually used. ``1`` in v0.1.0; higher
-        values currently warn and clamp (see docs/ROADMAP.md).
+        values currently warn and clamp.
     pin_memory
         Torch DataLoader ``pin_memory`` flag. Ignored by sklearn.
     persistent_workers
@@ -213,8 +213,8 @@ def apply_policy(
     # Multi-GPU cap (v0.1.0)
     if spec.max_gpus > 1:
         _violate(
-            "max_gpus>1 is not supported in v0.1.0 (multi-GPU DDP is a "
-            "v0.2.0 item; see docs/ROADMAP.md). Clamping to 1."
+            "max_gpus>1 is not supported in v0.1.0 (multi-GPU DDP is "
+            "planned for a later release). Clamping to 1."
         )
         spec = replace(spec, max_gpus=1)
 

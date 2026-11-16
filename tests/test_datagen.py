@@ -1,9 +1,10 @@
 """
 Tests for DataGenerator class.
 
-Tests parameter sampling, file replacement, batch generation, and equilibria modes.
+Tests parameter sampling, file replacement, and batch generation.
 """
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -40,6 +41,24 @@ class TestDataGeneratorInit:
         gen = DataGenerator()
         assert gen is not None
         assert gen.dry_run is False
+        # No script directory configured: built-in replacement is the default.
+        assert gen.bin_dir is None
+        assert gen.use_python_replacement is True
+
+    def test_default_replaces_without_external_script(self, temp_dir, monkeypatch):
+        """A plain DataGenerator() edits a variable with no external script."""
+        monkeypatch.delenv("SURGE_DATAGEN_BIN", raising=False)
+        inp = os.path.join(temp_dir, "input.dat")
+        with open(inp, "w") as f:
+            f.write("alpha = 1\nbeta = 2\n")
+        DataGenerator()._call_replace("alpha", 7, inp)
+        with open(inp) as f:
+            text = f.read()
+        assert "alpha = 7" in text and "beta = 2" in text
+
+    def test_explicit_script_dir_disables_builtin(self):
+        gen = DataGenerator(bin_dir="/some/dir")
+        assert gen.bin_dir == "/some/dir"
         assert gen.use_python_replacement is False
     
     def test_init_dry_run(self):
@@ -192,7 +211,7 @@ class TestGenerate:
         )
         
         assert len(results) == 3
-        assert gen.last_batch_dir is not None
+        assert gen.last_batch_path is not None
     
     def test_generate_creates_batch_directory(self, temp_dir, sample_params, sample_ranges):
         """Test that generate creates batch directory."""
@@ -213,6 +232,7 @@ class TestGenerate:
             integer_mask=integer_mask,
             n_samples=2,
             method='random',
+            out_dir=temp_dir,
             batch_root=str(batch_root),
             base_case_dir=str(batch_root),
             seed=42,
@@ -220,200 +240,88 @@ class TestGenerate:
         )
         
         # Should create batch1 directory
-        batch_dirs = [d for d in batch_root.iterdir() if d.is_dir() and d.name.startswith('batch')]
-        assert len(batch_dirs) == 1
-
-
-class TestGenerateRunsFromEquilibria:
-    """Test generate_runs_from_equilibria method."""
-    
-    def test_generate_runs_set_mode(self, temp_dir, sample_params, sample_ranges):
-        """Test generating runs in 'set' mode."""
-        gen = DataGenerator(dry_run=False, use_python_replacement=True)
-        
-        # Create source run directory with equilibria
-        source_dir = Path(temp_dir) / "source_run"
-        source_dir.mkdir()
-        
-        # Create two equilibrium directories
-        for eq_name in ['sparc_1300', 'sparc_1301']:
-            eq_dir = source_dir / eq_name
-            eq_dir.mkdir()
-            input_file = eq_dir / "C1input"
-            input_file.write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
-        
-        integer_mask = [True, False, False]
-        out_root = Path(temp_dir) / "output"
-        out_root.mkdir()
-        
-        results = gen.generate_runs_from_equilibria(
-            inpnames=sample_params,
-            inputfilename="C1input",
-            source_run_dir=str(source_dir),
-            ranges=sample_ranges,
-            integer_mask=integer_mask,
-            n_runs=2,
-            method='lhs',
-            out_root=str(out_root),
-            equilibria_mode='set',
-            seed=42
-        )
-        
-        assert len(results) == 2  # Should create 2 runs
-        # Check that run directories exist
-        run1 = out_root / "run1"
-        run2 = out_root / "run2"
-        assert run1.exists()
-        assert run2.exists()
-        # Check that both runs have both equilibria
-        assert (run1 / "sparc_1300").exists()
-        assert (run1 / "sparc_1301").exists()
-        assert (run2 / "sparc_1300").exists()
-        assert (run2 / "sparc_1301").exists()
-    
-    def test_generate_runs_fixed_mode(self, temp_dir, sample_params, sample_ranges):
-        """Test generating runs in 'fixed' mode (single equilibrium)."""
-        gen = DataGenerator(dry_run=False, use_python_replacement=True)
-        
-        # Create source run directory with multiple equilibria
-        source_dir = Path(temp_dir) / "source_run"
-        source_dir.mkdir()
-        
-        # Create multiple equilibrium directories
-        for eq_name in ['sparc_1300', 'sparc_1301', 'sparc_234321']:
-            eq_dir = source_dir / eq_name
-            eq_dir.mkdir()
-            input_file = eq_dir / "C1input"
-            input_file.write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
-        
-        integer_mask = [True, False, False]
-        out_root = Path(temp_dir) / "output"
-        out_root.mkdir()
-        
-        results = gen.generate_runs_from_equilibria(
-            inpnames=sample_params,
-            inputfilename="C1input",
-            source_run_dir=str(source_dir),
-            ranges=sample_ranges,
-            integer_mask=integer_mask,
-            n_runs=3,
-            method='lhs',
-            out_root=str(out_root),
-            equilibria_mode='fixed',
-            seed=42
-        )
-        
-        assert len(results) == 3  # Should create 3 runs
-        # Check that run directories exist
-        for run_idx in [1, 2, 3]:
-            run_dir = out_root / f"run{run_idx}"
-            assert run_dir.exists()
-            # In fixed mode, should only have first equilibrium (sparc_1300)
-            assert (run_dir / "sparc_1300").exists()
-            assert not (run_dir / "sparc_1301").exists()
-            # Check metadata includes equilibrium name
-            assert results[run_idx - 1]['equilibrium'] == 'sparc_1300'
-    
-    def test_generate_runs_per_case_mode(self, temp_dir, sample_params, sample_ranges):
-        """Test generating runs in 'per_case' mode."""
-        gen = DataGenerator(dry_run=False, use_python_replacement=True)
-        
-        # Create source run directory with equilibria
-        source_dir = Path(temp_dir) / "source_run"
-        source_dir.mkdir()
-        
-        # Create two equilibrium directories
-        for eq_name in ['sparc_1300', 'sparc_1301']:
-            eq_dir = source_dir / eq_name
-            eq_dir.mkdir()
-            input_file = eq_dir / "C1input"
-            input_file.write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
-        
-        integer_mask = [True, False, False]
-        out_root = Path(temp_dir) / "output"
-        out_root.mkdir()
-        
-        results = gen.generate_runs_from_equilibria(
-            inpnames=sample_params,
-            inputfilename="C1input",
-            source_run_dir=str(source_dir),
-            ranges=sample_ranges,
-            integer_mask=integer_mask,
-            n_runs=2,
-            method='lhs',
-            out_root=str(out_root),
-            equilibria_mode='per_case',
-            seed=42
-        )
-        
-        # Should create runs for each equilibrium
-        assert len(results) == 4  # 2 equilibria × 2 runs
-        # Check structure: sparc_1300/run1, sparc_1300/run2, etc.
-        assert (out_root / "sparc_1300" / "run1").exists()
-        assert (out_root / "sparc_1300" / "run2").exists()
-        assert (out_root / "sparc_1301" / "run1").exists()
-        assert (out_root / "sparc_1301" / "run2").exists()
-    
-    def test_generate_runs_invalid_mode(self, temp_dir, sample_params, sample_ranges):
-        """Test that invalid equilibria_mode raises error."""
-        gen = DataGenerator(dry_run=True)
-        
-        source_dir = Path(temp_dir) / "source_run"
-        source_dir.mkdir()
-        (source_dir / "sparc_1300").mkdir()
-        
-        with pytest.raises(ValueError, match="equilibria_mode must be"):
-            gen.generate_runs_from_equilibria(
-                inpnames=sample_params,
-                inputfilename="C1input",
-                source_run_dir=str(source_dir),
-                ranges=sample_ranges,
-                integer_mask=[True, False, False],
-                n_runs=1,
-                equilibria_mode='invalid_mode',
-                seed=42
-            )
+        batch_paths = [d for d in batch_root.iterdir() if d.is_dir() and d.name.startswith('batch')]
+        assert len(batch_paths) == 1
 
 
 class TestSamplesFileGeneration:
     """Test that samples.npz and metadata are saved correctly."""
-    
+
     def test_samples_file_saved(self, temp_dir, sample_params, sample_ranges):
-        """Test that samples.npz is saved."""
+        """samples.npz is written into the batch folder."""
         gen = DataGenerator(dry_run=False, use_python_replacement=True)
-        
-        source_dir = Path(temp_dir) / "source_run"
-        source_dir.mkdir()
-        eq_dir = source_dir / "sparc_1300"
-        eq_dir.mkdir()
-        (eq_dir / "C1input").write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
-        
-        out_root = Path(temp_dir) / "output"
-        out_root.mkdir()
-        
-        gen.generate_runs_from_equilibria(
+        base = Path(temp_dir) / "base"
+        base.mkdir()
+        (base / "input.dat").write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
+        out_dir = Path(temp_dir) / "output"
+
+        gen.generate(
             inpnames=sample_params,
-            inputfilename="C1input",
-            source_run_dir=str(source_dir),
+            inputfilename="input.dat",
             ranges=sample_ranges,
             integer_mask=[True, False, False],
-            n_runs=3,
-            out_root=str(out_root),
-            equilibria_mode='set',
-            seed=42
+            n_samples=3,
+            out_dir=str(out_dir),
+            base_case_dir=str(base),
+            seed=42,
         )
-        
-        # Check that samples.npz exists
-        samples_file = out_root / "samples.npz"
+
+        samples_file = Path(gen.last_batch_path) / "samples.npz"
         assert samples_file.exists()
-        
-        # Load and verify contents
         data = np.load(samples_file)
-        assert 'X' in data
-        assert 'names' in data
-        assert data['X'].shape[0] == 3  # 3 runs
-        assert data['X'].shape[1] == 3  # 3 parameters
-        assert len(data['names']) == 3
+        assert data["X"].shape == (3, 3)
+        assert len(data["names"]) == 3
+
+
+class TestGenerateDefaults:
+    """out_dir, batch_root, seed and confirmation defaults."""
+
+    def _kwargs(self, temp_dir, sample_params, sample_ranges):
+        base = Path(temp_dir) / "base"
+        base.mkdir(exist_ok=True)
+        (base / "input.dat").write_text("ntor = 5\npscale = 1.0\nbatemanscale = 0.5\n")
+        return dict(
+            inpnames=sample_params,
+            inputfilename="input.dat",
+            ranges=sample_ranges,
+            n_samples=3,
+            base_case_dir=str(base),
+        )
+
+    def test_out_dir_required(self, temp_dir, sample_params, sample_ranges):
+        gen = DataGenerator(use_python_replacement=True)
+        with pytest.raises(ValueError, match="out_dir is required"):
+            gen.generate(**self._kwargs(temp_dir, sample_params, sample_ranges))
+
+    def test_batch_root_defaults_under_out_dir(self, temp_dir, sample_params, sample_ranges):
+        gen = DataGenerator(use_python_replacement=True)
+        out_dir = Path(temp_dir) / "out"
+        gen.generate(out_dir=str(out_dir), seed=1, **self._kwargs(temp_dir, sample_params, sample_ranges))
+        assert Path(gen.last_batch_path).parent == out_dir / "batches"
+
+    def test_no_prompt_by_default(self, temp_dir, sample_params, sample_ranges, monkeypatch):
+        def _boom(*a, **k):
+            raise AssertionError("input() must not be called by default")
+
+        monkeypatch.setattr("builtins.input", _boom)
+        gen = DataGenerator(use_python_replacement=True)
+        gen.generate(out_dir=str(Path(temp_dir) / "out"), seed=1,
+                     **self._kwargs(temp_dir, sample_params, sample_ranges))
+
+    @pytest.mark.parametrize("method", ["lhs", "random"])
+    def test_seed_reproducible_in_generate(self, temp_dir, sample_params, sample_ranges, method):
+        runs = []
+        for k in range(2):
+            gen = DataGenerator(use_python_replacement=True)
+            gen.generate(out_dir=str(Path(temp_dir) / f"o{k}"), method=method, seed=7,
+                         **self._kwargs(temp_dir, sample_params, sample_ranges))
+            runs.append(np.load(Path(gen.last_batch_path) / "samples.npz")["X"])
+        np.testing.assert_array_equal(runs[0], runs[1])
+
+    def test_make_samples_lhs_seeded(self, sample_ranges):
+        gen = DataGenerator(use_python_replacement=True)
+        args = (3, 5, sample_ranges, [False] * 3, "lhs")
+        np.testing.assert_array_equal(gen._make_samples(*args, seed=3), gen._make_samples(*args, seed=3))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Tests for surge.metrics classification helpers (Phase 2)."""
+"""Tests for surge.metrics classification helpers."""
 
 from __future__ import annotations
 

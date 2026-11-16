@@ -32,7 +32,6 @@ from .tasks import (
     run_classification_plasma_stability,
     run_constellaration_modb,
     run_constellaration_surfaces,
-    run_fusion_m3dc1_sample,
     run_multioutput_scm20d,
     run_pde_burgers_1d,
     run_pdebench_burgers_1d,
@@ -234,11 +233,7 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
         "TheWell 3D MHD turbulence (Ohana et al. NeurIPS 2024) [requires the-well pkg]",
     ),
 
-    # ── Plasma / fusion (DOE-relevant) ────────────────────────────────────────
-    "fusion.m3dc1_sample": (
-        run_fusion_m3dc1_sample, "plasma", "regression", "13→1 (n=2,000)",
-        "M3DC1 equilibrium surrogate — 13 MHD params → stability metric",
-    ),
+    # ── Plasma / fusion ────────────────────────────────────────
     "plasma.cmod_density_limit": (
         None, "plasma", "classification", "6→2 (211,647 train / 52,738 test slices, grouped by discharge)",
         "Alcator C-Mod density-limit precursor — 6 plasma signals → binary state, "
@@ -274,7 +269,7 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "plasma.solpsnn_te_field": (
         None, "plasma", "regression", "8→5200 (n=5,756 train / 1,465 test)",
         "SOLPS-ITER electron-temperature field Te(104x50 B2 grid) from the same 8 scan "
-        "parameters; log10(Te) targets, fixed split. HIDDEN/provisional. "
+        "parameters; log10(Te) targets, fixed split. provisional. "
         "Dasbach & Wiesen 2023; Zenodo 10.5281/zenodo.19237127 (CC BY 4.0).",
     ),
     "plasma.constellaration": (
@@ -297,13 +292,13 @@ _META: dict[str, tuple[Callable, str, str, str, str]] = {
     "plasma.constellaration_modb": (
         run_constellaration_modb, "plasma", "regression", "2×64×32→64×32 (n≤26,897)",
         "ConStellaration boundary (R,Z) → |B|(θ,φ) on the LCFS, from the VMEC wout subset. "
-        "PROVISIONAL threshold. [requires: downloaded wout subset, see "
+        "provisional threshold. [requires: downloaded wout subset, see "
         "surge.benchmarks.loaders.constellaration.download_wout_subset]",
     ),
     "plasma.constellaration_surfaces": (
         run_constellaration_surfaces, "plasma", "regression", "2×64×32→2×16×64 (n≤26,897)",
         "ConStellaration boundary (R,Z) → poloidal cross-sections (R(θ),Z(θ)) of the 16 stored "
-        "flux surfaces at φ=0, from the VMEC wout subset. PROVISIONAL threshold. "
+        "flux surfaces at φ=0, from the VMEC wout subset. provisional threshold. "
         "[requires: downloaded wout subset]",
     ),
 }
@@ -331,6 +326,7 @@ _SHORT_ALIASES: dict[str, str] = {
     "covertype":            "tabular.covertype",
     "plasma_stability":     "tabular.plasma_stability",
     "classification.plasma_stability": "tabular.plasma_stability",
+    "classification.covertype": "tabular.covertype",
     # CTR-23
     "abalone":              "ctr23.abalone",
     "bike_sharing":         "ctr23.bike_sharing",
@@ -497,16 +493,6 @@ _DATASET_METADATA_OVERRIDES: dict[str, dict[str, Any]] = {
         "feature_shape": "10",
         "target_shape": "1",
         "resource_expectation": {"device": "cpu/gpu", "memory_tier": "medium", "optional_dependencies": ["fusion_surrogates", "jax"]},
-    },
-    "fusion.m3dc1_sample": {
-        "dataset_source": "M3DC1 HDF5 supplied out-of-band",
-        "license": "data-owner controlled",
-        "access": "local_file",
-        "cache_path": "data/datasets/benchmarks/fusion/m3dc1/m3dc1_sample.hdf5",
-        "sample_count": None,
-        "feature_shape": "13",
-        "target_shape": "1",
-        "resource_expectation": {"device": "cpu", "memory_tier": "medium", "optional_dependencies": ["h5py"]},
     },
     "plasma.constellaration": {
         "dataset_source": "proxima-fusion/constellaration on HuggingFace",

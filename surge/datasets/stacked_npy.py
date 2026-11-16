@@ -1,4 +1,4 @@
-"""Stacked .npy directory loader (optional format `xgc` in SurrogateDataset)."""
+"""Stacked .npy directory loader (optional format `stacked_npy` in SurrogateDataset)."""
 
 from __future__ import annotations
 
@@ -11,17 +11,38 @@ import pandas as pd
 from ..dataset import SurrogateDataset
 
 
+def _resolve_stack_prefix(data_dir: Path, set_name: Optional[str]) -> str:
+    """Return the file-name prefix of the stack to load from ``data_dir``.
+
+    A stack is a set of files ``<prefix>_data.npy`` and ``<prefix>_target.npy``
+    (optionally ``<prefix>_var_all.npy``). If ``set_name`` is given it is used
+    as the prefix; otherwise the directory must hold exactly one stack.
+    """
+    if set_name:
+        return str(set_name)
+    prefixes = sorted(p.name[: -len("_data.npy")] for p in data_dir.glob("*_data.npy"))
+    if len(prefixes) == 1:
+        return prefixes[0]
+    if not prefixes:
+        raise FileNotFoundError(f"No '<name>_data.npy' file found in {data_dir}")
+    raise ValueError(
+        f"Several stacks found in {data_dir}: {prefixes}. Pass set_name=<prefix> to choose one."
+    )
+
+
 def _load_stacked_npy(
     data_dir: Union[str, Path],
-    set_name: str = "set1",
+    set_name: Optional[str] = None,
     sample: Optional[int] = None,
     random_state: int = 42,
     row_range: Optional[tuple[int, int]] = None,
 ) -> tuple[pd.DataFrame, List[str], List[str]]:
     """
-    Load a conventional stacked-.npy directory into a DataFrame.
+    Load a stacked-.npy directory into a DataFrame.
 
-    File naming: data_nprev5_{set_name}_data.npy, _target.npy, _var_all.npy
+    File naming: ``<set_name>_data.npy``, ``<set_name>_target.npy`` and an
+    optional ``<set_name>_var_all.npy``. If ``set_name`` is None, the single
+    ``*_data.npy`` stack found in the directory is used.
 
     Parameters
     ----------
@@ -30,15 +51,14 @@ def _load_stacked_npy(
         evaluation (e.g. row_range=(50000, 100000) for a held-out chunk).
     """
     data_dir = Path(data_dir)
-    prefix = f"data_nprev5_{set_name}"
+    prefix = _resolve_stack_prefix(data_dir, set_name)
     data_path = data_dir / f"{prefix}_data.npy"
     target_path = data_dir / f"{prefix}_target.npy"
-    var_all_path = data_dir / f"{prefix}_var_all.npy"
 
     if not data_path.exists():
         raise FileNotFoundError(
             f"Expected data file not found: {data_path}. "
-            f"Check set_name (e.g. 'set1' or 'set2_beta0p5')."
+            f"Check set_name (the file-name prefix before '_data.npy')."
         )
     if not target_path.exists():
         raise FileNotFoundError(f"Target file not found: {target_path}")
@@ -66,72 +86,16 @@ def _load_stacked_npy(
     df_target = pd.DataFrame(target, columns=output_cols)
     df = pd.concat([df_data, df_target], axis=1)
 
-    if var_all_path.exists():
-        var_all = np.load(var_all_path, allow_pickle=True)
-        if hasattr(var_all, "tolist"):
-            var_all = var_all.tolist()
-        # Store in metadata for reference; 14 vars vs 201 inputs suggests
-        # each var has multiple spatial points
-        pass  # Could add df.attrs["var_all"] = var_all if needed
-
     return df, input_cols, output_cols
 
 
-# Backward-compatible name used by some notebooks and tests.
-_load_olcf_npy = _load_stacked_npy
-
-
-class XGCDataset(SurrogateDataset):
+class StackedNpyDataset(SurrogateDataset):
     """
-    Stacked .npy directory layout (``format="xgc"`` in ``SurrogateDataset``).
+    Stacked .npy directory layout (``format="stacked_npy"`` in ``SurrogateDataset``).
 
     Constructors:
-    - ``from_olcf_hackathon``: directory with ``data_nprev5_*`` naming (legacy name, kept for API stability)
     - ``from_npy``: explicit path to input and target arrays
     """
-
-    @classmethod
-    def from_olcf_hackathon(
-        cls,
-        data_dir: Union[str, Path],
-        *,
-        set_name: str = "set1",
-        sample: Optional[int] = None,
-        random_state: int = 42,
-    ) -> "XGCDataset":
-        """
-        Load from a directory that follows the ``data_nprev5_*`` file naming convention.
-
-        Parameters
-        ----------
-        data_dir : str or Path
-            Path to the directory containing the .npy stacks
-        set_name : str
-            Dataset set name: "set1" (lower beta) or "set2_beta0p5"
-        sample : int, optional
-            Subsample for testing (e.g. 10000). If None, load full dataset.
-        random_state : int
-            Random seed for subsampling
-
-        Returns
-        -------
-        XGCDataset
-            Loaded dataset with input_0..input_200, output_0, output_1
-        """
-        df, input_cols, output_cols = _load_stacked_npy(
-            data_dir,
-            set_name=set_name,
-            sample=sample,
-            random_state=random_state,
-        )
-        dataset = cls()
-        dataset.load_from_dataframe(
-            df,
-            input_columns=input_cols,
-            output_columns=output_cols,
-        )
-        dataset.file_path = Path(data_dir)
-        return dataset
 
     @classmethod
     def from_npy(
@@ -143,9 +107,9 @@ class XGCDataset(SurrogateDataset):
         output_names: Optional[List[str]] = None,
         sample: Optional[int] = None,
         random_state: int = 42,
-    ) -> "XGCDataset":
+    ) -> "StackedNpyDataset":
         """
-        Load XGC dataset from generic .npy input and target files.
+        Load a stacked-npy dataset from generic .npy input and target files.
 
         Parameters
         ----------
@@ -164,7 +128,7 @@ class XGCDataset(SurrogateDataset):
 
         Returns
         -------
-        XGCDataset
+        StackedNpyDataset
             Loaded dataset
         """
         data_path = Path(data_path)

@@ -199,11 +199,11 @@ def save_model_card(
     training_config: Optional[Mapping[str, Any]] = None,
 ) -> Path:
     """
-    Save a model card (JSON) with model size and metadata for AmSC-style tracking.
+    Save a model card (JSON) with model size and metadata for run tracking.
 
     Writes runs/<tag>/model_card_<name>.json with n_params, file_size_bytes, backend, etc.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     model_path = paths.models_dir / f"{model_name}.joblib"
     file_size_bytes = model_path.stat().st_size if model_path.exists() else 0
@@ -215,7 +215,7 @@ def save_model_card(
         "n_params": n_params,
         "file_size_bytes": file_size_bytes,
         "training_config": dict(training_config) if training_config else {},
-        "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     target = paths.root / f"model_card_{model_name}.json"
     _write_json(target, payload)
@@ -238,7 +238,7 @@ def save_train_data_ranges(
     """
     Save min/max of training data (in model-input space) for in-distribution checks.
 
-    Use when evaluating new datastreamsets: compare datastreamset min/max to these ranges.
+    Use when evaluating new datasets: compare dataset min/max to these ranges.
     """
     target = paths.root / "train_data_ranges.json"
     payload = {

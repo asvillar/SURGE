@@ -13,7 +13,7 @@ Usage
     python examples/leaderboard_tabular.py
 
     # Via the surge CLI:
-    surge run --category tabular --task-type regression -m all
+    surge bench --category tabular --task-type regression -m all
 
 Benchmarks
 ----------

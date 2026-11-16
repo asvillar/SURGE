@@ -1,327 +1,161 @@
-"""
-Template for creating a custom CNN adapter for SURGE.
+"""Template for a custom model adapter: a small 1-D CNN on torch.
 
-This is a complete, working example that you can copy and modify for your own model.
-To use this:
-1. Copy this file to surge/models/adapters/cnn_adapter.py
-2. Update surge/models/adapters/__init__.py to import it
-3. Use it in your workflows with key="torch.cnn"
+Copy this file, rename the classes and change the key. The pieces are:
+
+1. A backend class with ``fit`` / ``predict`` (and optionally ``save`` /
+   ``load``). ``torch`` is imported inside ``fit`` and ``predict`` only, so the
+   module imports without torch installed.
+2. An adapter subclassing ``surge.model.base.BaseModelAdapter`` that sets
+   ``name``, ``backend`` and implements ``_build_model``.
+3. One ``register_model(...)`` call, which makes the key usable from a spec
+   (``models: - key: custom.cnn``) and from ``MODEL_REGISTRY.create``.
+
+Registration of the built-in adapters happens in ``surge/model/__init__.py``.
+A model that lives outside the package registers itself when its module is
+imported, so import it before running a spec.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Optional
 
 import numpy as np
 
 from surge.model.base import BaseModelAdapter
-from surge.model.registry import MODEL_REGISTRY
+from surge.model.registry import register_model
 
-try:
-    import torch
-    import torch.nn as nn
-    from torch.utils.data import DataLoader, TensorDataset
-    
-    TORCH_AVAILABLE = True
-except ImportError:
-    torch = None
-    nn = None
-    DataLoader = None
-    TensorDataset = None
-    TORCH_AVAILABLE = False
+MODEL_KEY = "custom.cnn"
 
 
-# Define your model architecture
-if TORCH_AVAILABLE:
-    class CNNModel(nn.Module):
-        """1D CNN for tabular data."""
-        
-        def __init__(
-            self,
-            input_dim: int,
-            output_dim: int,
-            conv_channels: Sequence[int] = (64, 128, 256),
-            kernel_sizes: Sequence[int] = (3, 3, 3),
-            dropout: float = 0.2,
-            fc_layers: Sequence[int] = (128,),
-        ) -> None:
-            super().__init__()
-            
-            # Convolutional layers
-            self.conv_layers = nn.ModuleList()
-            prev_channels = 1
-            for out_channels, kernel_size in zip(conv_channels, kernel_sizes):
-                self.conv_layers.append(
-                    nn.Sequential(
-                        nn.Conv1d(prev_channels, out_channels, kernel_size, padding=kernel_size//2),
-                        nn.ReLU(),
-                        nn.BatchNorm1d(out_channels),
-                        nn.Dropout(dropout),
-                    )
-                )
-                prev_channels = out_channels
-            
-            # Calculate flattened size
-            self.flattened_size = conv_channels[-1] * input_dim
-            
-            # Fully connected layers
-            self.fc_layers = nn.ModuleList()
-            prev_size = self.flattened_size
-            for fc_size in fc_layers:
-                self.fc_layers.append(
-                    nn.Sequential(
-                        nn.Linear(prev_size, fc_size),
-                        nn.ReLU(),
-                        nn.Dropout(dropout),
-                    )
-                )
-                prev_size = fc_size
-            
-            # Output layer
-            self.output_layer = nn.Linear(prev_size, output_dim)
-        
-        def forward(self, x):
-            # Reshape: (batch, features) -> (batch, 1, features)
-            x = x.unsqueeze(1)
-            
-            # Convolutional layers
-            for conv in self.conv_layers:
-                x = conv(x)
-            
-            # Flatten
-            x = x.view(x.size(0), -1)
-            
-            # Fully connected layers
-            for fc in self.fc_layers:
-                x = fc(x)
-            
-            return self.output_layer(x)
+class TinyCNNRegressor:
+    """Backend: 1-D convolutions over the feature axis, then a linear head."""
 
-else:
-    class CNNModel:
-        pass
-
-
-# Create the adapter
-class CNNAdapter(BaseModelAdapter):
-    """PyTorch CNN adapter for SURGE."""
-    
-    name = "CNN"
-    backend = "torch"
-    supports_uq = False
-    supports_serialization = True
-    
     def __init__(
         self,
-        *,
-        conv_channels: Sequence[int] = (64, 128, 256),
-        kernel_sizes: Sequence[int] = (3, 3, 3),
-        dropout: float = 0.2,
-        fc_layers: Sequence[int] = (128,),
-        batch_size: int = 256,
+        channels: int = 16,
+        kernel_size: int = 3,
+        n_epochs: int = 50,
         learning_rate: float = 1e-3,
-        weight_decay: float = 1e-5,
-        epochs: int = 200,
-        device: Optional[str] = None,
-        **params: Any,
+        batch_size: int = 64,
+        random_state: int = 0,
     ) -> None:
-        if not TORCH_AVAILABLE:
-            raise ImportError("PyTorch is required for CNNAdapter.")
-        
-        super().__init__(
-            conv_channels=tuple(conv_channels),
-            kernel_sizes=tuple(kernel_sizes),
-            dropout=dropout,
-            fc_layers=tuple(fc_layers),
-            batch_size=batch_size,
-            learning_rate=learning_rate,
-            weight_decay=weight_decay,
-            epochs=epochs,
-            device=device,
-            **params,
+        self.channels = channels
+        self.kernel_size = kernel_size
+        self.n_epochs = n_epochs
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.random_state = random_state
+        self._net: Any = None
+        self.training_history: list[dict] = []
+
+    def _make_net(self, n_features: int, n_outputs: int) -> Any:
+        import torch.nn as nn
+
+        return nn.Sequential(
+            nn.Conv1d(1, self.channels, self.kernel_size, padding=self.kernel_size // 2),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(self.channels * n_features, n_outputs),
         )
-        
-        self.device = torch.device(
-            device or ("cuda" if torch.cuda.is_available() else "cpu")
-        )
-        self.model: Optional[CNNModel] = None
-        self.training_history: list[Dict[str, float]] = []
-    
-    def fit(self, X, y) -> "CNNAdapter":
-        """Train the CNN model."""
-        X_np = np.asarray(X, dtype=np.float32)
-        y_np = np.asarray(y, dtype=np.float32)
-        if y_np.ndim == 1:
-            y_np = y_np.reshape(-1, 1)
-        
-        input_dim = X_np.shape[1]
-        output_dim = y_np.shape[1]
-        
-        self.model = CNNModel(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            conv_channels=self.params["conv_channels"],
-            kernel_sizes=self.params["kernel_sizes"],
-            dropout=self.params["dropout"],
-            fc_layers=self.params["fc_layers"],
-        ).to(self.device)
-        
-        self.params["input_dim"] = input_dim
-        self.params["output_dim"] = output_dim
-        
-        dataset = TensorDataset(
-            torch.from_numpy(X_np),
-            torch.from_numpy(y_np)
-        )
-        loader = DataLoader(
-            dataset,
-            batch_size=self.params["batch_size"],
-            shuffle=True,
-        )
-        
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.params["learning_rate"],
-            weight_decay=self.params["weight_decay"],
-        )
-        criterion = nn.MSELoss()
-        
-        self.training_history.clear()
-        self.model.train()
-        n_samples = len(loader.dataset)
-        
-        for epoch in range(self.params["epochs"]):
-            epoch_loss = 0.0
-            for batch_x, batch_y in loader:
-                batch_x = batch_x.to(self.device)
-                batch_y = batch_y.to(self.device)
-                
-                optimizer.zero_grad()
-                preds = self.model(batch_x)
-                loss = criterion(preds, batch_y)
+
+    def fit(self, X: Any, y: Any) -> "TinyCNNRegressor":
+        import torch
+
+        torch.manual_seed(self.random_state)
+        X = np.asarray(X, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32)
+        if y.ndim == 1:
+            y = y[:, None]
+        self._net = self._make_net(X.shape[1], y.shape[1])
+        opt = torch.optim.Adam(self._net.parameters(), lr=self.learning_rate)
+        loss_fn = torch.nn.MSELoss()
+        Xt = torch.from_numpy(X)[:, None, :]  # (N, 1, n_features)
+        yt = torch.from_numpy(y)
+        self.training_history = []
+        for epoch in range(self.n_epochs):
+            perm = torch.randperm(len(Xt))
+            total = 0.0
+            for i in range(0, len(Xt), self.batch_size):
+                idx = perm[i : i + self.batch_size]
+                opt.zero_grad()
+                loss = loss_fn(self._net(Xt[idx]), yt[idx])
                 loss.backward()
-                optimizer.step()
-                
-                epoch_loss += loss.detach().item() * len(batch_x)
-            
-            avg_loss = epoch_loss / max(1, n_samples)
-            self.training_history.append({
-                "epoch": epoch,
-                "loss": float(avg_loss),
-            })
-        
-        self.model.eval()
-        self.mark_fitted()
+                opt.step()
+                total += loss.item() * len(idx)
+            self.training_history.append({"epoch": epoch, "train_loss": total / len(Xt)})
         return self
-    
-    def predict(self, X):
-        """Make predictions."""
-        self.ensure_fitted()
-        assert self.model is not None
-        
-        self.model.eval()
-        X_tensor = torch.from_numpy(np.asarray(X, dtype=np.float32)).to(self.device)
-        
+
+    def predict(self, X: Any) -> np.ndarray:
+        import torch
+
+        if self._net is None:
+            raise ValueError("Model must be fitted before predicting")
+        self._net.eval()
         with torch.no_grad():
-            predictions = self.model(X_tensor).cpu().numpy()
-        
-        return predictions
-    
-    def save(self, path: Path) -> None:
-        """Save the trained model."""
-        if self.model is None:
-            raise RuntimeError("Model not trained yet.")
-        
-        payload = {
-            "state_dict": self.model.state_dict(),
-            "params": self.params,
-        }
-        torch.save(payload, path)
-    
-    def load(self, path: Path) -> "CNNAdapter":
-        """Load a trained model."""
-        payload = torch.load(path, map_location=self.device)
-        self.params.update(payload.get("params", {}))
-        
-        input_dim = self.params.get("input_dim")
-        output_dim = self.params.get("output_dim")
-        if input_dim is None or output_dim is None:
-            raise ValueError("Saved model missing input/output dimensions.")
-        
-        self.model = CNNModel(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            conv_channels=self.params["conv_channels"],
-            kernel_sizes=self.params["kernel_sizes"],
-            dropout=self.params["dropout"],
-            fc_layers=self.params["fc_layers"],
-        ).to(self.device)
-        
-        self.model.load_state_dict(payload["state_dict"])
-        self.mark_fitted()
-        return self
+            out = self._net(torch.from_numpy(np.asarray(X, dtype=np.float32))[:, None, :])
+        return out.numpy()
+
+    def save(self, path: str) -> None:
+        import torch
+
+        torch.save({"state": self._net.state_dict(), "n_features": self._n_features()}, path)
+
+    def load(self, path: str, n_outputs: int = 1) -> None:
+        """Loads a pickle-based file: only load files you created or trust."""
+        import torch
+
+        blob = torch.load(path, weights_only=False)
+        self._net = self._make_net(blob["n_features"], n_outputs)
+        self._net.load_state_dict(blob["state"])
+
+    def _n_features(self) -> int:
+        return int(self._net[-1].in_features // self.channels)
 
 
-# Register the adapter in the live SURGE registry (the same one the
-# engine, workflow, and benchmarks resolve model keys against).
-if TORCH_AVAILABLE:
-    MODEL_REGISTRY.register(
-        "torch.cnn",
-        CNNAdapter,
-        aliases=["cnn", "conv1d", "torch_cnn"],
-    )
+class CNNAdapter(BaseModelAdapter):
+    """Adapter: the object the engine and the registry talk to."""
+
+    name = MODEL_KEY
+    backend = "pytorch"  # the engine passes X_val / y_val to fit() for torch backends
+
+    default_params: Dict[str, Any] = {"channels": 16, "kernel_size": 3, "n_epochs": 50}
+
+    def _build_model(self, **kwargs: Any) -> TinyCNNRegressor:
+        params = dict(self.default_params)
+        params.update(kwargs)
+        return TinyCNNRegressor(**params)
+
+    def fit(
+        self,
+        X: Any,
+        y: Any,
+        X_val: Optional[Any] = None,
+        y_val: Optional[Any] = None,
+        **_: Any,
+    ) -> None:
+        self._model.fit(X, y)
+
+    def predict(self, X: Any) -> np.ndarray:
+        return self._model.predict(X)
+
+    def save(self, path: Any) -> None:
+        self._model.save(str(path))
+
+    def load(self, path: Any) -> None:
+        """Loads a pickle-based file: only load files you created or trust."""
+        self._model.load(str(path))
 
 
-# Example usage:
+# Registration: key, adapter class, optional aliases.
+register_model(CNNAdapter, key=MODEL_KEY, aliases=["custom_cnn"])
+
+
 if __name__ == "__main__":
-    import pandas as pd
-    from surge import SurrogateEngine, SurrogateDataset, ModelSpec, EngineRunConfig
-    
-    # Create synthetic data
-    np.random.seed(42)
-    n_samples = 1000
-    n_features = 20
-    n_outputs = 2
-    
-    X = np.random.randn(n_samples, n_features)
-    y = X[:, :2] + 0.1 * np.random.randn(n_samples, n_outputs)
-    
-    # Create dataset
-    df = pd.DataFrame(X, columns=[f"feature_{i}" for i in range(n_features)])
-    for i in range(n_outputs):
-        df[f"output_{i}"] = y[:, i]
-    
-    dataset = SurrogateDataset.from_dataframe(
-        df,
-        input_columns=[f"feature_{i}" for i in range(n_features)],
-        output_columns=[f"output_{i}" for i in range(n_outputs)],
-    )
-    
-    # Create engine
-    engine = SurrogateEngine(
-        run_config=EngineRunConfig(test_fraction=0.2, val_fraction=0.1)
-    )
-    engine.configure_from_dataset(dataset)
-    engine.prepare()
-    
-    # Create model spec
-    spec = ModelSpec(
-        key="torch.cnn",
-        name="test_cnn",
-        params={
-            "conv_channels": (32, 64),
-            "kernel_sizes": (3, 3),
-            "dropout": 0.1,
-            "fc_layers": (64,),
-            "epochs": 10,
-            "batch_size": 128,
-        },
-    )
-    
-    # Train
-    print("Training CNN model...")
-    results = engine.run([spec])
-    print(f"Validation R²: {results[0].val_metrics['r2']:.4f}")
-    print(f"Validation RMSE: {results[0].val_metrics['rmse']:.4f}")
+    from surge.model.registry import create_model
 
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(128, 8))
+    y = X[:, :2].sum(axis=1)
+    model = create_model(MODEL_KEY, n_epochs=20)
+    model.fit(X, y)
+    print("predictions:", model.predict(X[:3]).ravel())

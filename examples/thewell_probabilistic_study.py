@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """Probabilistic forecasting of the turbulent layer — CRPS, not RMSE.
 
-The seven-lever battery established that pointwise deterministic error
-on TRL-2D at dt=8 is chaos-limited. This study changes the question the
-way the weather-forecasting literature does: predict a calibrated
-DISTRIBUTION of future fields and score it with the Continuous Ranked
-Probability Score,
+Pointwise deterministic error on TRL-2D at dt=8 is limited by chaotic
+dynamics, so this study scores a calibrated DISTRIBUTION of future fields
+with the Continuous Ranked Probability Score,
 
     CRPS(F, y) = E|X - y| - 0.5 E|X - X'|,   X, X' ~ F,
 
@@ -17,6 +15,10 @@ inverse. Baselines: a deterministic forecast treated as a point mass
 
 Also reports the spread-skill relation (binned ensemble spread vs
 actual error) — the calibration diagnostic.
+
+Needs: the TheWell TRL-2D data and examples/viz_gallery_output/thewell_turbulence_preds.npz.
+Run first: examples/thewell_turbulence_study.py (writes that file).
+Writes: a CRPS / spread-skill figure under examples/viz_gallery_output/.
 
 Usage:
     SURGE_DEVICE=auto python examples/thewell_probabilistic_study.py
@@ -47,6 +49,12 @@ K = 64
 N_MEMBERS = 8
 
 
+def _load_inputs(path: Path, producer: str):
+    if not path.exists():
+        raise SystemExit(f"missing input {path}. Run first: {producer}")
+    return np.load(path)
+
+
 def crps_ensemble(members: np.ndarray, truth: np.ndarray) -> float:
     """Ensemble CRPS averaged over pixels+samples. members: (M, n, D)."""
     M = members.shape[0]
@@ -64,7 +72,8 @@ def main() -> None:
     from surge.model import MODEL_REGISTRY
 
     (Xtr, ytr), (Xte, yte) = load_trl2d(800, 100, seed=0, horizon=8)
-    npz = np.load(OUT / "thewell_turbulence_preds.npz")
+    npz = _load_inputs(OUT / "thewell_turbulence_preds.npz",
+                       "examples/thewell_turbulence_study.py")
     assert np.allclose(npz["yte"], yte, atol=1e-5)
     unet_pred = npz["pred__U-Net"].reshape(yte.shape)
     nte = len(yte)
@@ -89,9 +98,9 @@ def main() -> None:
     members = np.stack([
         pod_inverse(by, raw[m] * sd + mu) for m in range(N_MEMBERS)])
 
-    # raw deep-ensemble spread is underdispersed (same finding as the
-    # QLKNN UQ study) — inflate member deviations by a factor tuned on
-    # half the test set, evaluate everything on the held-out half
+    # raw deep-ensemble spread is underdispersed — inflate member
+    # deviations by a factor tuned on half the test set, evaluate
+    # everything on the held-out half
     cal, hold = slice(0, nte // 2), slice(nte // 2, nte)
     m_mean = members.mean(0)
     lams = np.linspace(1.0, 4.0, 13)

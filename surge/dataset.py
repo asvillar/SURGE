@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -12,6 +14,8 @@ import pandas as pd
 
 from .preprocessing import analyze_dataset_structure, get_dataset_statistics, print_dataset_analysis
 from .utils import posix_str
+
+logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - optional dependency
     import yaml
@@ -114,20 +118,20 @@ class SurrogateDataset:
         else:
             self.metadata = {}
 
-        # Build reader_kwargs; for xgc format, pass sample and hints
+        # Build reader_kwargs; for stacked_npy format, pass sample and hints
         _reader_kwargs = dict(reader_kwargs)
         fmt_lower = (format or "").lower()
-        is_xgc = fmt_lower == "xgc" or (fmt_lower in ("auto", "") and file_path.is_dir())
-        if is_xgc:
+        is_stacked_npy = fmt_lower == "stacked_npy" or (fmt_lower in ("auto", "") and file_path.is_dir())
+        if is_stacked_npy:
             _reader_kwargs.setdefault("sample", sample)
             if analyzer_kwargs and "hints" in analyzer_kwargs:
                 _reader_kwargs.update(analyzer_kwargs["hints"])
 
         self.df = self._read_file(file_path, format=format, **_reader_kwargs)
 
-        # Subsample only if not already done by format-specific loader (e.g. xgc)
+        # Subsample only if not already done by format-specific loader (e.g. stacked_npy)
         if sample is not None and 0 < sample < len(self.df):
-            if not is_xgc:
+            if not is_stacked_npy:
                 self.df = self.df.sample(n=sample, random_state=sample_random_state)
 
         self._analyze(
@@ -391,15 +395,16 @@ class SurrogateDataset:
         fmt = (format or "").lower()
         if fmt == "auto" or not fmt:
             if path.is_dir():
-                fmt = "xgc"
+                fmt = "stacked_npy"
             else:
                 fmt = path.suffix.lower().lstrip(".")
 
-        if fmt == "xgc":
-            return self._read_xgc(path, **reader_kwargs)
+        if fmt == "stacked_npy":
+            return self._read_stacked_npy(path, **reader_kwargs)
         if fmt == "csv":
             return pd.read_csv(path, **reader_kwargs)
         if fmt in ("pkl", "pickle"):
+            # Loads a pickle-based file: only load files you created or trust.
             _ensure_numpy_core_alias()
             return pd.read_pickle(path)
         if fmt in ("parquet", "pq"):
@@ -414,14 +419,14 @@ class SurrogateDataset:
             return self._read_netcdf(path, **reader_kwargs)
         raise ValueError(f"Unsupported dataset format '{fmt}' for file {path}")
 
-    def _read_xgc(self, path: Path, **reader_kwargs: Any) -> pd.DataFrame:
-        """Load stacked-directory .npy layout via XGCDataset (see ``surge.datasets.xgc``)."""
-        from .datasets.xgc import _load_stacked_npy
+    def _read_stacked_npy(self, path: Path, **reader_kwargs: Any) -> pd.DataFrame:
+        """Load stacked-directory .npy layout via StackedNpyDataset (see ``surge.datasets.stacked_npy``)."""
+        from .datasets.stacked_npy import _load_stacked_npy
 
         if not path.is_dir():
-            raise ValueError(f"XGC format requires a directory path, got: {path}")
+            raise ValueError(f"stacked_npy format requires a directory path, got: {path}")
 
-        set_name = reader_kwargs.get("set_name", "set1")
+        set_name = reader_kwargs.get("set_name")
         sample = reader_kwargs.get("sample")
         random_state = reader_kwargs.get("random_state", 42)
         row_range = reader_kwargs.get("row_range")
@@ -440,24 +445,50 @@ class SurrogateDataset:
             return pd.read_hdf(path, **reader_kwargs)
         if H5PY_AVAILABLE:
             with h5py.File(path, "r") as handle:  # type: ignore[var-annotated]
-                dataset = self._find_first_2d_dataset(handle)
+                found: List[Any] = []
+                dataset = self._find_first_2d_dataset(handle, collect=found)
                 if dataset is None:
                     raise ValueError("Could not auto-detect a 2D dataset inside HDF5 file.")
+                if len(found) > 1:
+                    logger.warning(
+                        "HDF5 file %s holds %d 2-D datasets (%s); using '%s'. "
+                        "Pass key=... to choose another.",
+                        path, len(found), ", ".join(d.name for d in found), dataset.name,
+                    )
+                limit_gb = _max_hdf5_gb()
+                n_bytes = 1
+                for dim in dataset.shape:
+                    n_bytes *= int(dim)
+                n_bytes *= int(dataset.dtype.itemsize)
+                size_gb = n_bytes / 1024**3
+                if size_gb > limit_gb:
+                    raise ValueError(
+                        f"HDF5 dataset '{dataset.name}' has shape {tuple(dataset.shape)} "
+                        f"and would need {size_gb:.2f} GB in memory (limit {limit_gb:g} GB). "
+                        "Tabulate a sample of the rows into a table (CSV/Parquet) first, "
+                        "or raise the limit with the SURGE_MAX_HDF5_GB environment variable."
+                    )
                 data = dataset[:]
                 columns = self._hdf5_columns(dataset)
                 return pd.DataFrame(data, columns=columns)
         # Fallback to pandas (will raise helpful error if key missing)
         return pd.read_hdf(path, **reader_kwargs)
 
-    def _find_first_2d_dataset(self, group):
+    def _find_first_2d_dataset(self, group, collect: Optional[List[Any]] = None):
+        """Return the first 2-D dataset; if ``collect`` is given, append all of them."""
+        first = None
         for key, item in group.items():
             if isinstance(item, h5py.Dataset) and item.ndim == 2:
-                return item
-            if isinstance(item, h5py.Group):
-                found = self._find_first_2d_dataset(item)
-                if found is not None:
+                if collect is None:
+                    return item
+                collect.append(item)
+                first = first or item
+            elif isinstance(item, h5py.Group):
+                found = self._find_first_2d_dataset(item, collect)
+                first = first or found
+                if found is not None and collect is None:
                     return found
-        return None
+        return first
 
     def _hdf5_columns(self, dataset) -> List[str]:
         if "column_names" in dataset.attrs:
@@ -491,6 +522,16 @@ class SurrogateDataset:
             with path.open("r", encoding="utf-8") as handle:
                 return json.load(handle)
         raise ValueError(f"Unsupported metadata format: {path.suffix}")
+
+
+def _max_hdf5_gb() -> float:
+    raw = os.environ.get("SURGE_MAX_HDF5_GB")
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            logger.warning("Ignoring invalid SURGE_MAX_HDF5_GB=%r", raw)
+    return 2.0
 
 
 def _ensure_numpy_core_alias() -> None:

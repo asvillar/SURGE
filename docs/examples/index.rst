@@ -1,60 +1,55 @@
 Examples
 ========
 
-This section contains practical examples demonstrating SURGE capabilities.
+Runnable scripts live in the ``examples/`` folder of the repository. Run each
+command from the repository root.
 
-.. toctree::
-   :maxdepth: 2
+Getting started
+---------------
 
-   hyperparameter_optimization
-   bayesian_optimization
-   model_comparison
+``examples/quickstart.py``
+   Train and evaluate a surrogate on a built-in scikit-learn dataset.
+   ``python -m examples.quickstart --dataset diabetes``
 
-Hyperparameter Optimization Examples
--------------------------------------
+``examples/run_workflow.py``
+   Run any workflow spec YAML through the Python API.
+   ``python examples/run_workflow.py --spec examples/configs/custom_dataset_tutorial.yaml``
 
-Basic Random Forest Optimization
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``examples/custom_dataset_tutorial.py``
+   Train on your own table (CSV, Parquet, pickle or HDF5); the code behind
+   :doc:`../BUILD_YOUR_OWN_SURROGATE`.
+   ``python examples/custom_dataset_tutorial.py``
 
-.. literalinclude:: ../../examples/simple_optuna_demo.py
-   :language: python
-   :caption: Simple hyperparameter optimization with Optuna
+``examples/qlknn_workflow.py``
+   Residual MLP on the QLKNN transport data, with optional hyperparameter search.
+   ``python examples/qlknn_workflow.py --epochs 20 --no-hpo``
 
-Comprehensive Optimization Comparison
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Leaderboards
+------------
 
-.. literalinclude:: ../../examples/comprehensive_optimization_demo.py
-   :language: python
-   :caption: Comparing TPE vs BoTorch samplers
+Each script compares several models on a group of benchmarks; the same runs
+are available from the CLI with ``surge bench``.
 
-Bayesian Optimization with BoTorch
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``examples/leaderboard_tabular.py``
+   Tabular regression and classification.
+   ``python examples/leaderboard_tabular.py``
 
-.. literalinclude:: ../../examples/bayesian_optimization_demo.py
-   :language: python
-   :caption: Advanced Bayesian optimization demo
+``examples/leaderboard_pde.py``
+   PDE and operator-learning benchmarks.
+   ``python examples/leaderboard_pde.py --quick``
 
-Interactive Notebooks
-----------------------
+``examples/leaderboard_plasma.py``
+   Plasma and fusion benchmarks.
+   ``python examples/leaderboard_plasma.py``
 
-The following Jupyter notebooks provide interactive examples:
+``examples/leaderboard_vision.py``
+   Image classification benchmarks.
+   ``python examples/leaderboard_vision.py``
 
-* `Botorch Performance Comparison <../../notebooks/Test_Botorch_Pe_NSTX_Compare.ipynb>`_
-* `Model Loading and Testing <../../notebooks/test_load.ipynb>`_
+Custom models
+-------------
 
-Visualization Examples
-----------------------
-
-The examples generate various plots and visualizations:
-
-.. figure:: ../../examples/comprehensive_optimization_analysis.png
-   :width: 600px
-   :alt: Comprehensive optimization analysis
-   
-   Comparison of different optimization strategies
-
-.. figure:: ../../examples/bayesian_optimization_comparison.png
-   :width: 600px
-   :alt: Bayesian optimization comparison
-   
-   TPE vs BoTorch sampler convergence comparison
+``examples/custom_cnn_adapter_template.py``
+   A small 1-D CNN adapter and its registration call; see
+   :doc:`../ADDING_NEW_MODEL_ADAPTER`.
+   ``python examples/custom_cnn_adapter_template.py``

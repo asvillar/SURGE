@@ -87,7 +87,7 @@ def spec_json_schema() -> dict:
     schema = _dataclass_schema(SurrogateWorkflowSpec)
     schema.update({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://github.com/S-Villar/SURGE/surge/workflow/spec.schema.json",
+        "$id": "https://github.com/asvillar/SURGE/surge/workflow/spec.schema.json",
         "title": "SURGE workflow spec",
         "description": ("Declarative surrogate workflow: load -> split -> "
                         "train -> HPO -> metrics -> artifacts."),
@@ -184,10 +184,7 @@ def validate_payload(payload: Any, *, check_models: bool = True) -> list[str]:
     if check_models:
         try:
             from surge.model.registry import MODEL_REGISTRY
-            known_keys = set(MODEL_REGISTRY.list_keys()) if hasattr(
-                MODEL_REGISTRY, "list_keys") else None
-            if known_keys is None:
-                known_keys = {k for k in getattr(MODEL_REGISTRY, "_registry", {})}
+            known_keys = set(MODEL_REGISTRY.keys())
         except Exception:  # noqa: BLE001 - validation must not hard-require torch
             known_keys = None
 

@@ -27,6 +27,13 @@ Figures (per mode, deterministic PNG/SVG/PDF):
     characterization  dataset EDA panel (distributions, SNR, PCA)
     mission_control   HPO campaign dashboard from run artifacts
     constellaration   stellarator boundary → 8 equilibrium metrics
+    scale             device speedups and parallel benchmark fan-out (scale_bench.json)
+    solpsnn           SOLPS-NN overview, parity, error CDF, profiles, fields
+                      (synthetic stand-in data)
+    disruption        density-limit classifier ROC (synthetic scores)
+    parity_singles    parity, one panel per figure
+    trio_singles      trio, one panel per figure
+    field2d_singles   field2d, one panel per figure
 """
 from __future__ import annotations
 
@@ -50,7 +57,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import CenteredNorm, LogNorm
 
-from surge.viz.campaign import (  # noqa: F401  (moved to the package)
+from surge.viz.campaign import (  # noqa: F401  (re-exported for the builders below)
     _is_loss_like,
     _load_split,
     _stat_chip,
@@ -648,8 +655,8 @@ _QLKNN_FEATURES = ["Ati", "Ate", "Ane", "Ani", "q", "smag", "x",
 
 
 def characterization_figure(mode: str):
-    """Pre-training dataset characterization (style of the RF-heating
-    input–output analysis): input violins, target distribution, SNR bars,
+    """Pre-training dataset characterization (input–output analysis
+    style): input violins, target distribution, SNR bars,
     input–target correlations, strongest relationship.
     """
     npz = _REPO / "data" / "datasets" / "benchmarks" / "plasma" / "qlknn_transport.npz"
@@ -1123,7 +1130,7 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
     X, Y_full = d["X"], d["Y"]
     metric_names = [str(s) for s in d["metric_names"]]
 
-    # Joint benchmark now trains on the 8 equilibrium-kind metrics only
+    # Joint benchmark targets are the 8 equilibrium-kind metrics
     # (surge.benchmarks.leaderboard._load_constellaration_multioutput).
     io_spec = get_benchmark_io("plasma.constellaration_multioutput")
     names = [o["name"] for o in io_spec["outputs"]]
@@ -1156,7 +1163,7 @@ def constellaration_figure(mode: str, seed: int = 0, n_epochs: int = 400):
 
     if pred is None:
         try:
-            # trained to saturation: 60-epoch caps left ~0.015 R2 on the table
+            # long schedule with patience: trains to saturation
             adapter = MODEL_REGISTRY.create(
                 "pytorch.residual_mlp", hidden_layers=hidden_layers,
                 n_epochs=n_epochs, patience=60, patience_window=10,
@@ -1448,7 +1455,7 @@ def solpsnn_figures(mode: str, seed: int = 0):
         "solpsnn_parity": scalar_parity_figure(
             preds, mode=mode, labels=labels, units=units),
         "solpsnn_error_cdf": error_cdf_figure(
-            rel, mode=mode, reference={"thesis median": 0.05}),
+            rel, mode=mode, reference={"reference median": 0.05}),
         "solpsnn_profiles": target_profile_figure(
             prof_t, prof_p, mode=mode, cases=[0, 1, 2]),
         "solpsnn_fields": field_figure(
@@ -1471,10 +1478,12 @@ def disruption_figure(mode: str, seed: int = 0):
 
     return roc_figure(
         {"MLP": (y, score(6.0)), "Transformer": (y, score(9.0))},
-        baseline=("Greenwald fraction n/n_G", y, score(5.0)), mode=mode)
+        baseline=("Greenwald fraction n/n_G", y, score(5.0)), mode=mode,
+        tpr_label="true positive rate (precursor slices caught)",
+        fpr_label="false positive rate (false alarms)")
 
 
-# -------------------------------------------------------------------- main\n
+# -------------------------------------------------------------------- main
 
 def main():
     ap = argparse.ArgumentParser()

@@ -1,4 +1,4 @@
-"""Tests for surge.viz.training (Phase 1 benchmark plan)."""
+"""Tests for surge.viz.training."""
 
 from __future__ import annotations
 

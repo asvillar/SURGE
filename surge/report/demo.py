@@ -9,7 +9,6 @@ from pathlib import Path
 
 from surge.benchmarks import paths
 
-DEFAULT_VIDEO = None
 DEFAULT_ANIM_DIR = None
 DEFAULT_DEMO_RUNS: dict[str, str] = {}
 

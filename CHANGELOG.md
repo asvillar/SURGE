@@ -3,11 +3,14 @@
 All notable changes to SURGE (`surge-ml`). Follows
 [Keep a Changelog](https://keepachangelog.com); versions follow PEP 440.
 
-## [0.1.0] — 2026-10-30 (first public PyPI release)
+## [0.1.0] — 2026-11-16 (first public PyPI release)
 
 ### Added
 
-- **Model portfolio**: 44-adapter registry across scikit-learn baselines,
+- **README**: states the open-source packages SURGE is built on, with their
+  logos (headline row and a table of what each is used for and which extra
+  installs it).
+- **Model portfolio**: 50-adapter registry across scikit-learn baselines,
   gradient boosting (XGBoost, LightGBM, CatBoost), PyTorch MLP families
   (MLP, residual, ensemble, classifier), operator learners (FNO 1D/2D,
   DeepONet, U-Net), sequence models (LSTM, GRU, CNN1D), vision models
@@ -126,11 +129,55 @@ All notable changes to SURGE (`surge-ml`). Follows
 - **ConvNeXt U-Net** backend, used for probabilistic turbulence
   forecasting (CRPS).
 - **Packaging**: PyPI-ready sdist/wheel (`uv build`), benchmark metadata
-  shipped as package data, Python 3.10–3.12, a PyPI-safe long description
+  shipped as package data, Python 3.10 to 3.13, a PyPI-safe long description
   (`README_PYPI.md`), a `SURGE_DATA_DIR` data-root resolver with a
   `~/.cache/surge` fallback for installed wheels, an sdist that no longer
   ships `tests/`, `docs/`, or `examples/`, an `all` extra, and a single
   version source (`surge/__init__.__version__`).
+
+### Fixed
+
+- **Docs**: a workflow run does not write an ONNX file. The README and the
+  quickstart now describe the real route (`torch.onnx.export`, then
+  `surge.inference.load_session` and `infer`); `NOTICE` names the laboratory
+  that holds the funding contract.
+- **Uncertainty in workflow runs**: a model with `request_uncertainty: true`
+  no longer aborts the run when its validation uncertainty is saved; the
+  file now holds `mean` and `std`. `surge init --goal uncertainty` writes a
+  Gaussian-process block with a normalised target.
+- **Column roles**: when a spec lists both inputs and outputs, those lists
+  are authoritative and other columns are left out. Text columns are never
+  picked up automatically, and listing one raises a clear error.
+- **HDF5 loading**: a dataset that would not fit in memory (default limit
+  2 GB, `SURGE_MAX_HDF5_GB`) is refused with a message naming it, and a
+  warning says which dataset was chosen when a file holds several.
+- **Wizard**: `surge init --yes` requires `--target`; the folder of `--out`
+  is created when missing.
+- **Engine**: rows dropped for missing values are reported.
+- **Benchmarks**: comparing several models on `tabular.covertype` and
+  `tabular.plasma_stability` now finds the dataset and saves under the key
+  the ledger reads.
+- Dataset downloads in the benchmark suite verify HTTPS certificates
+  (using `certifi` when present); `SURGE_INSECURE_SSL=1` turns
+  verification off explicitly.
+- `DataGenerator` replaces variables with its built-in routine by
+  default; an external script is used only when `bin_dir` or
+  `SURGE_DATAGEN_BIN` is set.
+- Plotting helpers take their labels and titles from arguments, with
+  neutral defaults; the stacked loader discovers the stack in a folder
+  instead of assuming a file name.
+- Maintainer notes, an internal development log and dead links removed
+  from the benchmark ledger and the documentation.
+- `surge init` writes valid YAML when column names or the data path
+  contain characters such as `:`, `#`, quotes or spaces.
+- Importing `surge.viz` no longer switches the matplotlib backend; the
+  command-line tools select a file backend themselves.
+- A run folder keeps a copy of the spec it was started from; `surge viz`
+  writes the HPO convergence figure.
+- `DataGenerator`: seeded Latin-hypercube sampling is reproducible,
+  `out_dir` is required, and nothing is written inside the package.
+- The helper that reads root certificates from the system keychain runs
+  only with `SURGE_USE_SYSTEM_CA=1`.
 
 ### Changed
 
@@ -164,10 +211,19 @@ All notable changes to SURGE (`surge-ml`). Follows
 
 - Legacy modules (`surge/legacy/`, `surge/models.py`,
   `surge/visualization.py`, duplicate `surge/registry.py`).
-- Editor-specific tooling (Cursor canvas dashboards and refresh scripts);
+- Editor-specific tooling (editor canvas dashboards and refresh scripts);
   the leaderboard is now artifact-driven HTML.
 - Generated artifacts from version control (MLflow state, benchmark
   report trees, backup files, tooling demos).
+- A simulation-code-specific batch reader, its spec options
+  (`dataset_source`, `batch_dir_*`) and its hidden sample benchmark; they
+  needed reader scripts that are not distributed with the package.
+- The stacked-directory `.npy` loader is now `StackedNpyDataset`
+  (`dataset_format: stacked_npy`), named for the layout it reads.
+- Conda environment files and `requirements.txt` (they contradicted
+  `pyproject.toml`), four Optuna demo scripts that did not use SURGE, a
+  guide for an API that no longer exists, and case generation tied to one
+  simulation code's input layout.
 
 [Unreleased]: https://github.com/asvillar/SURGE/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/asvillar/SURGE/releases/tag/v0.1.0

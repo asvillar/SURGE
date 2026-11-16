@@ -9,11 +9,10 @@ history, at full 128x384 resolution, scored with VRMSE
 
 (v̄ = per-sample-per-field spatial mean of the truth; averaged over
 fields then samples). Published validation baselines for this dataset:
-FNO 0.4906, TFNO 0.4938, U-Net 0.2394, ConvNeXt-U-Net 0.1247 — models
-at 15-20M parameters trained 12 h on an H100. This study trains
-laptop-scale models (minutes-hours on Apple GPU) under the same
-protocol so the numbers are directly comparable, with the compute gap
-stated honestly.
+FNO 0.4906, TFNO 0.4938, U-Net 0.2394, ConvNeXt-U-Net 0.1247 (models at
+15-20M parameters). This script trains smaller models under the same
+protocol so the numbers can be compared; the published models use far
+more compute.
 
 Also saves the trained ConvNeXt model + a held-out trajectory for the
 rollout/physics-statistics study.
@@ -79,8 +78,8 @@ class _StreamingWellPairs:
     """Lazy torch Dataset over WellDataset: 4-frame input -> 4-field target.
 
     HDF5 reads happen per item, so the pair count is bounded by disk and
-    epoch time — not RAM (the in-memory path caps at ~1.5k pairs on a
-    16 GB machine).
+    epoch time — not RAM (the in-memory path holds all pairs in memory,
+    about 1.5k pairs per 16 GB).
     """
 
     def __init__(self, split: str, n: int, mu, sd, seed: int = 0):
@@ -175,7 +174,7 @@ def main() -> None:
         OUT / "wellprotocol_preds.npz", yte=yte,
         norm_mu=f_mu, norm_sd=f_sd,
         **{f"pred__{k}": v for k, v in preds_store.items()})
-    summary = {"ours": results, "published_12h_H100": PUBLISHED,
+    summary = {"ours": results, "published": PUBLISHED,
                "protocol": "next-step, 4-frame history, 4 fields, "
                            "128x384, VRMSE"}
     (OUT / "wellprotocol_summary.json").write_text(
@@ -207,7 +206,7 @@ def _main_stream(args) -> None:
     model = ConvNeXtUNetModel(
         base_channels=40, depth=3, blocks_per_stage=2,
         n_epochs=args.epochs, batch_size=8, patience=0,
-        log_file="/tmp/cunet_stream_epochs.jsonl")
+        log_file=str(OUT / "cunet_stream_epochs.jsonl"))
     t0 = time.perf_counter()
     model.fit_from_loader(loader, in_channels=N_HIST * len(FIELDS),
                           out_channels=len(FIELDS))

@@ -30,10 +30,4 @@ fragment or a code snippet showing the call site is ideal. -->
 - Is this a breaking change to an existing public API?
 - Does it require a new optional dependency?
 - Does it interact with the resource policy (see
-  `surge/hpc/policy.py` and `docs/REFACTORING_PLAN.md` §2)?
-
-## Roadmap fit
-
-<!-- Link to the relevant section of docs/ROADMAP.md or
-docs/REFACTORING_PLAN.md if this is a scheduled item, or propose where
-it should be added. -->
+  `surge/hpc/policy.py`)?

@@ -1,4 +1,4 @@
-"""Phase 2 adapter and benchmark smoke tests.
+"""Adapter and benchmark smoke tests.
 
 Covers:
 - sklearn.gradient_boosting_regressor

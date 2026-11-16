@@ -118,12 +118,14 @@ class TestDatagenWindowsGuard:
         with pytest.raises(RuntimeError, match="not supported on Windows"):
             gen._call_replace("x", 1, "input.py")
 
-    def test_default_bin_dir_uses_path_home(self, monkeypatch):
+    def test_bin_dir_default_none_and_env_override(self, monkeypatch):
         from surge.datagen import DataGenerator
 
-        fake_home = Path("/fake/home")
-        monkeypatch.setattr(
-            "surge.datagen.generator.Path.home", staticmethod(lambda: fake_home)
-        )
+        monkeypatch.delenv("SURGE_DATAGEN_BIN", raising=False)
         gen = DataGenerator()
-        assert gen.bin_dir == str(fake_home / "HotPlasmaAI" / "bin")
+        assert gen.bin_dir is None
+        assert gen.use_python_replacement is True
+        monkeypatch.setenv("SURGE_DATAGEN_BIN", "/opt/tools/bin")
+        gen = DataGenerator()
+        assert gen.bin_dir == "/opt/tools/bin"
+        assert gen.use_python_replacement is False

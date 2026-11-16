@@ -1,4 +1,4 @@
-"""Standard benchmark registry and CLI (SURGE_BENCHMARKS_VIZ_PLAN)."""
+"""Standard benchmark registry and CLI."""
 
 from __future__ import annotations
 

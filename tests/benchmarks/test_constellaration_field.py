@@ -5,8 +5,7 @@ Skipped end-to-end if the VMEC wout subset cache
 (``data/datasets/constellaration/wout_nfp3_subset_parts/``) isn't present —
 this is a large, separately-downloaded dataset (see
 ``surge.benchmarks.loaders.constellaration.download_wout_subset``); works on
-however many rows are currently on disk (500 today, up to 26,897 once the
-download finishes) with no changes needed.
+however many rows are on disk, from a partial subset up to the full 26,897.
 """
 from __future__ import annotations
 
@@ -159,12 +158,11 @@ def test_run_constellaration_surfaces_smoke():
 
 
 # ---------------------------------------------------------------------------
-# (e) Registration consistency (no data dependency; runs even without the
-#     wout cache, but grouped here for locality — kept unskipped explicitly).
+# (e) Registration consistency (no data dependency, but covered by the
+#     module-level skip, so these run only when the wout cache is present).
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(False, reason="never skipped")
 class TestRegistrationConsistency:
     KEYS = ("plasma.constellaration_modb", "plasma.constellaration_surfaces")
 
@@ -205,8 +203,7 @@ class TestRegistrationConsistency:
     def test_in_thresholds(self):
         from surge.benchmarks import leaderboard
 
-        # _THRESHOLDS lives inside _check_pass's local scope; exercise it
-        # through the public pass/fail behaviour instead of reaching in.
+        # Exercise the gate through the public pass/fail behaviour.
         for key in self.KEYS:
             assert leaderboard._check_pass(key, {"test_relative_l2": 1e-6}) is True
             assert leaderboard._check_pass(key, {"test_relative_l2": 10.0}) is False

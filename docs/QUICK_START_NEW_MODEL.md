@@ -1,175 +1,62 @@
-# Quick Start: Adding a New Model to SURGE
+# Quick start: add a model
 
-> **Full policy and checklist:** [`BUILD_YOUR_OWN_SURROGATE.md`](BUILD_YOUR_OWN_SURROGATE.md) Part II
+Full guide: [ADDING_NEW_MODEL_ADAPTER.md](ADDING_NEW_MODEL_ADAPTER.md). Working
+code: [`examples/custom_cnn_adapter_template.py`](../examples/custom_cnn_adapter_template.py).
 
-## TL;DR - 3 Steps
+Three steps:
 
-1. **Create adapter class** inheriting from `BaseModelAdapter`
-2. **Implement `fit()` and `predict()` methods**
-3. **Register with `MODEL_REGISTRY.register()`**
-
----
-
-## Minimal Example
+1. Subclass `BaseModelAdapter`, set `name` and `backend`, and implement `_build_model`.
+2. Implement `fit(X, y)` and `predict(X)` (the defaults delegate to the estimator).
+3. Call `register_model(...)` once, at import time.
 
 ```python
-# File: surge/models/adapters/my_model_adapter.py
-
-from ...registry import BaseModelAdapter, MODEL_REGISTRY
 import numpy as np
+from sklearn.linear_model import Ridge
 
-class MyModelAdapter(BaseModelAdapter):
-    name = "MyModel"
-    backend = "my_backend"
-    supports_uq = False  # Set True if you implement uncertainty
-    supports_serialization = False  # Set True if you implement save/load
-    
-    def __init__(self, **params):
-        super().__init__(**params)
-        # Initialize your model here
-        self.model = None
-    
-    def fit(self, X, y):
-        # Train your model
-        # X: (n_samples, n_features) numpy array
-        # y: (n_samples,) or (n_samples, n_outputs) numpy array
-        self.model = ...  # Your training code
-        self.mark_fitted()  # REQUIRED!
-        return self
-    
-    def predict(self, X):
-        self.ensure_fitted()  # REQUIRED!
-        # X: (n_samples, n_features) numpy array
-        return self.model.predict(X)  # Return numpy array
+from surge.model.base import BaseModelAdapter
+from surge.model.registry import create_model, register_model
 
-# Register
-MODEL_REGISTRY.register(
-    MyModelAdapter,
-    key="my_backend.mymodel",
-    aliases=["mymodel"],
-)
+
+class MyRidge(BaseModelAdapter):
+    name = "custom.my_ridge"
+    backend = "sklearn"
+
+    def _build_model(self, **kwargs):
+        return Ridge(**kwargs)          # fit/predict are delegated to it
+
+
+register_model(MyRidge, key="custom.my_ridge", aliases=["my_ridge"])
+
+model = create_model("custom.my_ridge", alpha=0.5)
+X = np.random.default_rng(0).normal(size=(50, 4))
+model.fit(X, X.sum(axis=1))
+print(model.predict(X[:3]))
 ```
 
----
-
-## Required Methods
-
-### `fit(X, y) -> self`
-- Train the model
-- **Must call** `self.mark_fitted()` at the end
-- Return `self` for chaining
-
-### `predict(X) -> np.ndarray`
-- Make predictions
-- **Must call** `self.ensure_fitted()` first
-- Return numpy array of shape `(n_samples, n_outputs)`
-
----
-
-## Optional Methods
-
-### `predict_with_uncertainty(X) -> dict`
-Only if `supports_uq = True`:
-```python
-return {
-    "mean": np.array(...),      # (n_samples, n_outputs)
-    "variance": np.array(...),  # (n_samples, n_outputs)
-}
-```
-
-### `save(path: Path) -> None`
-Only if `supports_serialization = True`:
-```python
-# Save model state to path
-```
-
-### `load(path: Path) -> self`
-Only if `supports_serialization = True`:
-```python
-# Load model state from path
-self.mark_fitted()  # REQUIRED!
-return self
-```
-
----
-
-## Registration
-
-```python
-MODEL_REGISTRY.register(
-    YourAdapterClass,
-    key="backend.model_name",      # Primary key
-    name="Human Readable Name",    # Optional
-    backend="backend_name",        # Optional (from class)
-    description="Model description", # Optional
-    tags=["tag1", "tag2"],         # Optional
-    aliases=["alias1", "alias2"],  # Optional alternative keys
-    default_params={...},          # Optional default parameters
-)
-```
-
----
-
-## Usage
-
-After registration, use in code:
-
-```python
-from surge import SurrogateEngine, ModelSpec
-
-engine = SurrogateEngine(...)
-engine.configure_from_dataset(dataset)
-engine.prepare()
-
-spec = ModelSpec(
-    key="my_backend.mymodel",  # or use alias "mymodel"
-    params={"param1": value1, ...}
-)
-results = engine.run([spec])
-```
-
-Or in YAML:
+Use it from a spec after importing the module that registers it:
 
 ```yaml
 models:
-  - key: my_backend.mymodel
-    params:
-      param1: value1
+  - key: custom.my_ridge
+    params: {alpha: 0.5}
 ```
-
----
-
-## Class Attributes
 
 ```python
-class YourAdapter(BaseModelAdapter):
-    name = "ModelName"              # Required: Human-readable name
-    backend = "backend_name"        # Required: Backend identifier
-    supports_uq = False             # Optional: Can do uncertainty?
-    supports_serialization = False  # Optional: Can save/load?
+import yaml
+
+import my_models                      # runs register_model(...)
+from surge.workflow.run import run_surrogate_workflow
+from surge.workflow.spec import SurrogateWorkflowSpec
+
+payload = yaml.safe_load(open("spec.yaml"))
+run_surrogate_workflow(SurrogateWorkflowSpec.from_dict(payload))
 ```
 
----
+Adapters shipped inside SURGE are registered in `surge/model/__init__.py`.
 
-## Important Notes
+For a torch model, import `torch` inside `fit` and `predict` so the module
+imports without it; the template shows this, plus `save` and `load` (whose
+docstring notes that the file is pickle-based and must come from a trusted source).
 
-1. **Data is pre-processed**: SURGE provides standardized/scaled data to `fit()` and `predict()`
-2. **Handle multi-output**: `y` can be 1D or 2D
-3. **State management**: Always call `mark_fitted()` after training, `ensure_fitted()` before prediction
-4. **Auto-registration**: Import your adapter module to register it (add to `surge/models/adapters/__init__.py`)
-
----
-
-## Full Example: CNN Adapter
-
-See also [`BUILD_YOUR_OWN_SURROGATE.md`](BUILD_YOUR_OWN_SURROGATE.md) Part II for the
-full embedding policy and checklist.
-
----
-
-## Reference Implementations
-
-- **Simple**: `surge/models/adapters/sklearn_adapter.py` (RandomForest)
-- **PyTorch**: `surge/models/adapters/torch_adapter.py` (MLP)
-- **GPflow**: `surge/models/adapters/gpflow_adapter.py` (GPR)
-
+Test it the way `tests/unit/test_adapter_template.py` does: register, build from
+the registry, fit and predict on a tiny random array.

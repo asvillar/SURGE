@@ -50,9 +50,9 @@ from surge.viz.theme import (
 
 SPECIES = 1          # Gray-Scott channel: 0 = A (feed), 1 = B (pattern-forming)
 
-# --- direct-prediction anchor from the headline study (README, this file's
+# --- direct-prediction reference from the main study (this file's
 # --horizon 160 run): U-Net (residual) median rel-L2 at a single 160-step
-# jump, used as the honest comparison point for the rollout curve below.
+# jump, used as the comparison point for the rollout curve below.
 DIRECT_160_RELL2 = 0.206
 DIRECT_160_PERSISTENCE = 0.265
 
@@ -219,7 +219,7 @@ def run_study(n_train: int, n_test: int, side: int, epochs: int, seed: int = 0,
                                             horizon)
     print(f"[data] train {Xtr.shape}  test {Xte.shape}  horizon {horizon}")
 
-    # honesty anchor: every model must beat "predict no change"
+    # sanity check: every model must beat "predict no change"
     rel0 = (np.linalg.norm(Xte - yte, axis=1)
             / np.maximum(np.linalg.norm(yte, axis=1), 1e-12))
     results = [{
@@ -365,7 +365,7 @@ def study_figure(data, results, side: int, mode: str = "light",
 
 
 SETTLE_STEPS = 200  # stored steps before Gray-Scott is out of the pattern-
-                     # formation transient (see module docstring / task brief)
+                     # formation transient (see module docstring)
 
 
 def run_rollout_study(n_train: int, epochs: int, side: int, seed: int,
@@ -428,7 +428,7 @@ def run_rollout_study(n_train: int, epochs: int, side: int, seed: int,
     else:
         print(f"[chosen] dt={chosen_dt}: NO candidate Δt beat persistence "
               f"(model {model_med:.4f} vs persistence {persist_med:.4f} "
-              "— rolling out anyway, honestly flagged)")
+              "— rolling out anyway, flagged)")
 
     # 2. autoregressive rollout on n_traj held-out trajectories, each started
     #    from a settled-regime state (t_start in [SETTLE_STEPS, T -
@@ -502,7 +502,7 @@ def run_rollout_study(n_train: int, epochs: int, side: int, seed: int,
 def rollout_gif(rollout: dict, side: int, out_path: Path, mode: str = "dark",
                 fps: int = 10) -> Path:
     """Assemble the truth | rollout | signed-error GIF (see make_helmholtz_gif.py
-    for the retired pattern this follows: one PNG buffer per frame, palette
+    for the pattern this follows: one PNG buffer per frame, palette
     quantized, assembled with PIL)."""
     import io
 
@@ -776,7 +776,7 @@ def run_rollout_gif_cases(args) -> None:
 
 def identify_headline_case(side: int, seed: int, n_train: int, n_test: int,
                            epochs: int, horizon: int = 160, out_dir=None):
-    """Recover ``(file, traj_index, t0)`` of the README's headline sample.
+    """Recover ``(file, traj_index, t0)`` of the reference sample used in the gallery figure.
 
     Reproduces the headline study's test set and best model, picks the same
     median-difficulty sample as :func:`study_figure`, then brute-force
@@ -799,8 +799,8 @@ def identify_headline_case(side: int, seed: int, n_train: int, n_test: int,
     model.fit(Xtr, ytr - Xtr)
     print(f"[headline] U-Net (residual) trained @h={horizon} in "
           f"{fmt_metric(time.perf_counter() - t0, 'runtime')}")
-    # Identity of the README figure's sample must be DETERMINISTIC: prefer the
-    # headline run's own saved test set + predictions (thewell_grayscott_preds.npz),
+    # Identity of the figure's sample must be DETERMINISTIC: prefer the
+    # main run's own saved test set + predictions (thewell_grayscott_preds.npz),
     # which is exactly what study_figure rendered. Re-training and re-picking the
     # median sample lands on a different trajectory every run (training is not
     # bit-reproducible), so that path is only a fallback.
@@ -995,7 +995,7 @@ def shortstep_cases_gif(res: dict, out_path: Path, mode: str = "dark", fps: int 
 
 
 def run_rollout_longjump(args) -> None:
-    """``--rollout-longjump``: identify the README headline case, then roll
+    """``--rollout-longjump``: identify the reference case, then roll
     out (a) the headline 160-step U-Net recursively (160/320/480) and (b) a
     Δt = 20 U-Net (24 applications) on the headline case + the 4 regime
     cases of ``--rollout-gif``; persistence recorded but not plotted."""
@@ -1323,7 +1323,7 @@ def main():
                     help="multi-case (4 distinct regimes), 480-step rollout "
                          "grid GIF + curve, instead of the single-shot study")
     ap.add_argument("--rollout-longjump", action="store_true",
-                    help="identify the README headline case and roll out the "
+                    help="identify the reference case and roll out the "
                          "160-step U-Net recursively (160/320/480) vs a "
                          "dt=20 U-Net on 5 cases; persistence not plotted")
     ap.add_argument("--regime-split", action="store_true",

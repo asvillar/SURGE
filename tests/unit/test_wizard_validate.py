@@ -112,7 +112,8 @@ def test_init_writes_valid_spec(csv_file: Path, tmp_path: Path):
     from surge.wizard import main as wizard_main
 
     out = tmp_path / "spec.yaml"
-    rc = wizard_main(["--data", str(csv_file), "--goal", "accuracy",
+    rc = wizard_main(["--data", str(csv_file), "--target", "target",
+                      "--goal", "accuracy",
                       "--budget", "smoke", "--out", str(out), "--yes"])
     assert rc == 0
     assert validate_file(out) == []
@@ -128,7 +129,8 @@ def test_init_goal_changes_slate(csv_file: Path, tmp_path: Path):
     from surge.wizard import main as wizard_main
 
     out = tmp_path / "speed.yaml"
-    assert wizard_main(["--data", str(csv_file), "--goal", "speed",
+    assert wizard_main(["--data", str(csv_file), "--target", "target",
+                        "--goal", "speed",
                         "--budget", "standard", "--out", str(out),
                         "--yes"]) == 0
     keys = [m["key"] for m in yaml.safe_load(out.read_text())["models"]]
@@ -175,3 +177,23 @@ def test_wizard_pins_inputs_and_outputs(tmp_path: Path):
     hpo_blocks = [m["hpo"] for m in spec["models"] if "hpo" in m]
     if importlib.util.find_spec("torch") is not None:   # headline model needs torch
         assert hpo_blocks and hpo_blocks[0]["n_trials"] == 10
+
+
+def test_init_yes_without_target_errors(csv_file: Path, tmp_path: Path, capsys):
+    from surge.wizard import main as wizard_main
+
+    out = tmp_path / "spec.yaml"
+    assert wizard_main(["--data", str(csv_file), "--yes", "--out", str(out)]) == 2
+    err = capsys.readouterr().err
+    assert "--target is required" in err
+    assert "target" in err and "a" in err
+    assert not out.exists()
+
+
+def test_init_creates_out_parent(csv_file: Path, tmp_path: Path):
+    from surge.wizard import main as wizard_main
+
+    out = tmp_path / "specs" / "nested" / "x.yaml"
+    assert wizard_main(["--data", str(csv_file), "--target", "target",
+                        "--budget", "smoke", "--yes", "--out", str(out)]) == 0
+    assert out.is_file()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Animated Helmholtz rollout for the README.
+"""Animated Helmholtz rollout (truth, prediction, error).
 
 Trains a 2-in/2-out FNO-2D to advance the (Re, Im) acoustic pressure
 quadratures by 2/50 of the harmonic cycle, then rolls it out
@@ -7,7 +7,9 @@ autoregressively over a full cycle on one held-out trajectory. Each GIF
 frame shows truth | prediction | error side by side with the rolling
 rel-L2 — error accumulation is visible honestly, not hidden.
 
-Output: docs/assets/readme/helmholtz_rollout.gif (~25 frames)
+Needs: the TheWell helmholtz_staircase dataset under
+~/.surge/data/thewell/datasets/ and the `the_well` and torch packages.
+Writes: docs/assets/readme/helmholtz_rollout.gif (~25 frames) by default.
 
 Usage:
     SURGE_DEVICE=auto python examples/make_helmholtz_gif.py [--epochs 40]

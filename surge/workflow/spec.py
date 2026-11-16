@@ -50,7 +50,6 @@ class ModelConfig:
 class SurrogateWorkflowSpec:
     dataset_path: Union[str, Path]
     dataset_format: str = "auto"
-    dataset_source: Optional[str] = None  # "m3dc1_batch" or "m3dc1_batch_per_mode" = load from batch dir
     metadata_path: Optional[Union[str, Path]] = None
     models: List[ModelConfig] = field(default_factory=list)
     test_fraction: float = 0.2
@@ -58,7 +57,7 @@ class SurrogateWorkflowSpec:
     standardize_inputs: bool = True
     standardize_outputs: bool = False
     # Optional, reserved for a future k-fold path: k>0 is accepted but the unified
-    # workflow currently performs a single random split only (see docs/ROADMAP.md).
+    # workflow currently performs a single random split only.
     cv_folds: int = 0
     predictions_scope: Sequence[str] = field(default_factory=lambda: ("train", "val", "test"))
     predictions_format: str = "parquet"
@@ -68,13 +67,6 @@ class SurrogateWorkflowSpec:
     sample_rows: Optional[int] = None
     analyzer: Dict[str, Any] = field(default_factory=dict)
     metadata_overrides: Dict[str, Any] = field(default_factory=dict)
-    batch_dir_mode_step: Optional[int] = None
-    batch_dir_psi_step: Optional[int] = None
-    batch_dir_target_shape: Optional[tuple] = None  # (n_modes, n_psi) for fixed resolution
-    batch_dir_include_eigenmodes: bool = False
-    # HDF5 leaf name under run*/sparc_* (default: sdata_pertfields_grid_complex_v2.h5).
-    # Use sdata_complex_v2.h5 on CFS-style trees where that file holds nonsymmetric δp modes.
-    batch_dir_filename: Optional[str] = None
     notes: Optional[str] = None
     overwrite_existing_run: bool = False
     pretrained_run_dir: Optional[Union[str, Path]] = None

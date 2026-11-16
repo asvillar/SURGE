@@ -54,8 +54,6 @@ except ImportError:
     SHAP_AVAILABLE = False
 
 try:
-    import matplotlib
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
@@ -274,17 +272,32 @@ def shap_grouped_importance(
     return names, np.array(vals)
 
 
-def xgc_201_group_specs() -> List[Tuple[str, List[int]]]:
+def stage_group_specs(
+    n_features: int,
+    n_per_stage: int,
+    n_extra: int = 0,
+) -> List[Tuple[str, List[int]]]:
     """
-    Group spec for XGC 201 inputs: 14 stages of 14 vars + 5 extra.
+    Group spec for stacked layouts: consecutive stages of ``n_per_stage`` inputs,
+    optionally followed by ``n_extra`` trailing inputs as one extra group.
 
-    196 = 14 vars × 14 slots (stages/timesteps); 5 = extra (nprev=5).
+    ``n_features`` must equal ``n_stages * n_per_stage + n_extra``.
     """
+    if n_per_stage < 1 or n_extra < 0:
+        raise ValueError("n_per_stage must be >= 1 and n_extra >= 0")
+    n_stack = n_features - n_extra
+    if n_stack < 0 or n_stack % n_per_stage != 0:
+        raise ValueError(
+            f"n_features={n_features} is not n_stages * {n_per_stage} + {n_extra}"
+        )
     specs: List[Tuple[str, List[int]]] = []
-    for s in range(14):
-        start, end = s * 14, (s + 1) * 14
+    for s in range(n_stack // n_per_stage):
+        start, end = s * n_per_stage, (s + 1) * n_per_stage
         specs.append((f"stage_{s} (inputs {start}-{end-1})", list(range(start, end))))
-    specs.append(("extra_5 (inputs 196-200)", list(range(196, 201))))
+    if n_extra:
+        specs.append(
+            (f"extra_{n_extra} (inputs {n_stack}-{n_features-1})", list(range(n_stack, n_features)))
+        )
     return specs
 
 
@@ -292,7 +305,7 @@ def plot_shap_grouped_bar(
     shap_values: np.ndarray,
     group_specs: Optional[List[Tuple[str, List[int]]]] = None,
     *,
-    title: str = "SHAP importance by group (A_parallel)",
+    title: str = "SHAP importance by group",
     save_path: Optional[Union[str, Path]] = None,
     dpi: int = 150,
     figsize: Tuple[float, float] = (8, 8),
@@ -300,16 +313,12 @@ def plot_shap_grouped_bar(
     """
     Bar plot of mean |SHAP| per feature group.
 
-    For XGC 201 inputs, use xgc_201_group_specs().
+    ``group_specs`` is required; build it with ``stage_group_specs`` for stacked layouts.
     """
     if not MATPLOTLIB_AVAILABLE:
         raise ImportError("matplotlib required for plot_shap_grouped_bar")
     if group_specs is None:
-        n_features = shap_values.shape[1]
-        if n_features == 201:
-            group_specs = xgc_201_group_specs()
-        else:
-            group_specs = [(f"input_{i}", [i]) for i in range(min(20, n_features))]
+        raise ValueError("group_specs is required for plot_shap_grouped_bar")
     names, importance = shap_grouped_importance(shap_values, group_specs)
     order = np.argsort(importance)[::-1]
     names = [names[i] for i in order]
@@ -660,6 +669,7 @@ def run_shap_analysis(
     dependence_features: Optional[List[Union[int, str]]] = None,
     waterfall_sample: int = 0,
     force_sample: int = 0,
+    group_specs: Optional[List[Tuple[str, List[int]]]] = None,
 ) -> Dict[str, Any]:
     """
     Run SHAP analysis with TreeExplainer and/or KernelExplainer.
@@ -680,6 +690,9 @@ def run_shap_analysis(
     data_source : object, optional
         Engine, dataset, or object with input_columns/_input_columns/input_feature_names
         to infer feature names when feature_names is None.
+    group_specs : list of (label, indices), optional
+        If given, also save a grouped importance bar plot for the tree explainer
+        (see ``stage_group_specs``). Not drawn by default.
     use_tree : bool, optional
         Use TreeExplainer if model is tree-based. If None, auto-detect.
     use_kernel : bool, default=True
@@ -764,15 +777,15 @@ def run_shap_analysis(
                             results["tree_error"] = str(results.get("tree_error", "")) + f"; dot plot: {e}"
                         else:
                             raise
-                # Grouped SHAP for XGC 201 inputs (14 stages of 14 + 5 extra)
-                n_feat = int(shap_tree.shape[1]) if hasattr(shap_tree, "shape") and shap_tree.ndim >= 2 else 0
-                if n_feat == 201:
+                # Grouped SHAP only when the caller supplies a grouping
+                if group_specs is not None:
                     try:
                         grouped_path = save_dir / "shap_summary_tree_grouped.png"
+                        out_name = f"output_{output_index if output_index is not None else 0}"
                         plot_shap_grouped_bar(
                             shap_tree,
-                            group_specs=xgc_201_group_specs(),
-                            title="SHAP importance by group (A_parallel, output_1)",
+                            group_specs=group_specs,
+                            title=f"SHAP importance by group ({out_name})",
                             save_path=grouped_path,
                             dpi=dpi,
                         )

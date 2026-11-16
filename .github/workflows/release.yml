@@ -11,6 +11,9 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -66,12 +69,28 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read
       id-token: write   # OIDC for Trusted Publishing
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Check the tag matches the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import glob, os, sys
+          wheels = glob.glob("dist/*.whl")
+          if len(wheels) != 1:
+              sys.exit(f"expected one wheel in dist/, found {wheels}")
+          version = os.path.basename(wheels[0]).split("-")[1]
+          tag = os.environ["TAG"]
+          if tag != "v" + version:
+              sys.exit(f"tag {tag} does not match package version v{version}")
+          print(f"tag {tag} matches wheel version {version}")
+          PY
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # release/v1
         with:
           skip-existing: true

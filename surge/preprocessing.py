@@ -1,7 +1,7 @@
 """
 Dataset analysis utilities used by the refactored SURGE stack.
 
-This module supersedes the legacy `surge.preprocessing` helpers and adds:
+This module analyses a dataset and infers input/output columns. It provides:
   * Metadata-aware input/output overrides (YAML or dict)
   * Multi-profile grouping hints for scientific surrogate targets
   * Optional sampling knobs for large datasets
@@ -9,6 +9,7 @@ This module supersedes the legacy `surge.preprocessing` helpers and adds:
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -16,6 +17,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 PROFILE_HINTS = (
     "gamma",
@@ -132,6 +135,11 @@ def analyze_dataset_structure(
 
     input_candidates = set(manual_inputs) | hint_inputs
     output_candidates = set(manual_outputs) | hint_outputs
+    explicit_inputs = set(input_candidates)
+    explicit_outputs = set(output_candidates)
+    # When both lists are supplied they are authoritative: unlisted columns are
+    # excluded from inputs and outputs (no heuristics).
+    authoritative = bool(explicit_inputs) and bool(explicit_outputs)
 
     grouped = _group_repeating_columns(df.columns)
 
@@ -180,6 +188,8 @@ def analyze_dataset_structure(
 
     # Heuristic classification for remaining columns
     for col in df.columns:
+        if authoritative:
+            break
         if col in input_candidates or col in output_candidates:
             continue
         if _apply_prefix_hints(col, OUTPUT_PREFIXES):
@@ -191,6 +201,37 @@ def analyze_dataset_structure(
         else:
             # Default to inputs when unsure
             input_candidates.add(col)
+
+    if authoritative:
+        input_candidates = set(explicit_inputs)
+        output_candidates = set(explicit_outputs) | {
+            c for cols in output_groups.values() for c in cols
+        }
+
+    # Non-numeric columns: error if explicitly listed, else skip with one warning
+    skipped_non_numeric: list[str] = []
+    for col in list(input_candidates | output_candidates):
+        if col not in df.columns or pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        if col in explicit_inputs or col in explicit_outputs:
+            role = "input" if col in explicit_inputs else "output"
+            raise ValueError(
+                f"Column '{col}' is listed as an {role} but is not numeric "
+                f"(dtype {df[col].dtype}); it must be numeric (encode it first)."
+            )
+        input_candidates.discard(col)
+        output_candidates.discard(col)
+        skipped_non_numeric.append(str(col))
+    if skipped_non_numeric:
+        skipped_non_numeric.sort()
+        logger.warning(
+            "Skipping non-numeric columns (not used as inputs or outputs): %s",
+            ", ".join(skipped_non_numeric),
+        )
+    for name, cols in list(output_groups.items()):
+        output_groups[name] = [c for c in cols if c not in skipped_non_numeric]
+    for name, cols in list(profile_groups.items()):
+        profile_groups[name] = [c for c in cols if c not in skipped_non_numeric]
 
     # Ensure columns are classified exactly once
     overlap = input_candidates & output_candidates

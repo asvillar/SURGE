@@ -4,10 +4,9 @@
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](./pyproject.toml)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![MLflow](https://img.shields.io/badge/MLflow-integrated-0194E2?logo=mlflow&logoColor=white)](docs/GETTING_STARTED.md)
 [![DOE CODE](https://img.shields.io/badge/DOE%20CODE-179819-1e4d2e?labelColor=0d2818)](https://www.osti.gov/doecode/biblio/179819)
 [![DOI](https://img.shields.io/badge/DOI-10.11578%2Fdc.20260422.5-00758f?labelColor=004466)](https://doi.org/10.11578/dc.20260422.5)
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asvillar/SURGE/blob/release/0.1.0/examples/notebooks/surge_fusion_quickstart.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asvillar/SURGE/blob/v0.1.0/examples/notebooks/surge_fusion_quickstart.ipynb)
 
 **Surrogate Unified Robust Generation Engine** — train, tune, evaluate, and
 export scientific surrogate models from a single declarative workflow.
@@ -20,6 +19,18 @@ databases lead the benchmark suite — on a pipeline that is domain-agnostic.
 
 **v0.1.0** · [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819) ·
 [DOI 10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
+
+<p align="center"><sub>Built on</sub><br/>
+<a href="https://numpy.org"><img src="https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white" alt="NumPy" height="28"/></a>
+<a href="https://scipy.org"><img src="https://img.shields.io/badge/SciPy-8CAAE6?style=for-the-badge&logo=scipy&logoColor=white" alt="SciPy" height="28"/></a>
+<a href="https://pandas.pydata.org"><img src="https://img.shields.io/badge/pandas-150458?style=for-the-badge&logo=pandas&logoColor=white" alt="pandas" height="28"/></a>
+<a href="https://scikit-learn.org"><img src="https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikitlearn&logoColor=white" alt="scikit-learn" height="28"/></a>
+<a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch" height="28"/></a>
+<a href="https://www.tensorflow.org"><img src="https://img.shields.io/badge/TensorFlow-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white" alt="TensorFlow" height="28"/></a>
+<a href="https://optuna.org"><img src="https://img.shields.io/badge/Optuna-002C76?style=for-the-badge&logo=optuna&logoColor=white" alt="Optuna" height="28"/></a>
+<a href="https://mlflow.org"><img src="https://img.shields.io/badge/MLflow-0194E2?style=for-the-badge&logo=mlflow&logoColor=white" alt="MLflow" height="28"/></a>
+<a href="https://onnx.ai"><img src="https://img.shields.io/badge/ONNX-005CED?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX" height="28"/></a>
+</p>
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/dark/architecture.png"><img src="docs/assets/readme/architecture.png"
@@ -47,7 +58,7 @@ parity, and the leaderboard gaining models against the published gate.
 - **One workflow, many sciences.** Tabular scalars, multi-output targets,
   1D/2D fields, sequences, and images move through the same pipeline —
   models plug in through a registry, not through per-project scripts.
-- **40+ registered model adapters across four ML backends** —
+- **50 registered model adapters across four ML backends** —
   **scikit-learn** (RF, GBM, ridge, logistic, GPR), boosted trees
   (**XGBoost / LightGBM / CatBoost**), **PyTorch** (MLP families,
   FNO / DeepONet / U-Net operator learners, LSTM/GRU,
@@ -63,11 +74,13 @@ parity, and the leaderboard gaining models against the published gate.
   comparable.
 - **Automated HPO** (Optuna TPE / BoTorch) with per-epoch training logs
   and starred-best convergence plots.
-- **Deployment path**: trained PyTorch surrogates export to **ONNX**
-  with `onnxruntime` numeric-parity tests in CI — the route used for
-  real-time inference in the ICRF surrogate publications; Keras models
-  serialize to the portable `.keras` format, sklearn to joblib.
-- **Benchmarks with receipts** (the *model-bench* suite): 30+ curated
+- **Deployment path**: a PyTorch network exports to **ONNX** with
+  `torch.onnx.export`, and `surge.inference` loads and runs the exported
+  file with `onnxruntime`; CI checks that round trip for numeric parity —
+  the route used for real-time inference in the ICRF surrogate
+  publications. Keras models serialize to the portable `.keras` format,
+  sklearn to joblib.
+- **Benchmarks with receipts** (the *model-bench* suite): 29 curated
   benchmarks from UCI/OpenML to PDEBench, TheWell, MNIST/CIFAR-10, and
   fusion datasets (QLKNN transport, ConStellaration stellarator design),
   each with citation, threshold, and machine-readable results.
@@ -80,12 +93,12 @@ parity, and the leaderboard gaining models against the published gate.
 
 ## Model benchmarking
 
-SURGE ships a curated suite of 30+ benchmarks, each with a citation, a published pass threshold and mandatory baselines, and every run writes machine-readable `result.json` artifacts (repeated seeds, mean ± std, runtime). Not every benchmark is equally mature, so the ledger states per-benchmark status plainly.
+SURGE ships a curated suite of 29 benchmarks, each with a citation, a published pass threshold and mandatory baselines, and every run writes machine-readable `result.json` artifacts (repeated seeds, mean ± std, runtime). Not every benchmark is equally mature, so the ledger states per-benchmark status plainly.
 
 **[Full benchmark ledger with per-benchmark status → docs/benchmarks/README.md](docs/benchmarks/README.md)**
 
-The ledger documents 28 benchmark cards in five tiers (ready, in progress, needs rerun,
-tutorial, sanity); 21 are public in the HTML report and 7 stay hidden while their data
+The suite defines 29 benchmark cards in five tiers (3 ready, 5 in progress, 3 needs rerun,
+17 tutorial, 1 sanity); 22 are public in the HTML report and 7 stay hidden while their data
 pipeline or gate is still being established. Every card carries its data citation and
 the published state-of-the-art line it is scored against — the sources are collected in
 [References](#references) below. The fusion benchmarks are the point of the
@@ -164,8 +177,8 @@ only the members a task needs from the 17.6 GB archive by HTTP byte ranges
 (about 290 MB). The in-progress `plasma.solpsnn_exhaust_scalars` benchmark
 is the first SURGE task where an in-context tabular foundation model
 (`kumo.tabular_regressor`, NVIDIA Kumo Tabular, no training) beats the
-published tuned five-fold networks: **median relative error 9.3 % on the
-peak target heat flux against the published 13 %**, in 25 s on a laptop
+published tuned five-fold networks: **median relative error 8.4 % on the
+peak target heat flux against the published 13 %**, in about 80 s on a
 CPU; a tuned residual MLP reaches 18 %:
 
 <p align="center">
@@ -278,7 +291,7 @@ surge report --out leaderboard.html                       # interactive dashboar
 
 ## Install
 
-**Requirements:** Python **3.10 – 3.12**. Package name: **`surge-ml`** ·
+**Requirements:** Python **3.10 to 3.13**. Package name: **`surge-ml`** ·
 import name: **`surge`**.
 
 With [uv](https://docs.astral.sh/uv/) (recommended):
@@ -414,7 +427,7 @@ Full guide: [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.m
 ### 6 · Benchmarks
 
 ```bash
-surge-benchmark --list                                        # 30+ curated benchmarks
+surge-benchmark --list                                        # 29 curated benchmarks
 surge-benchmark -b synthetic.regression_1d -m sklearn.random_forest --no-save
 surge-benchmark -b tabular.california_housing -m all --seeds 5   # leaderboard, mean±std
 surge-benchmark -b pde.burgers_1d --compare-models pytorch.fno1d,pytorch.residual_mlp
@@ -446,9 +459,10 @@ runs/<tag>/
 └── plots/                    # parity, HPO convergence, training dashboards
 ```
 
-ONNX export (`pip install -e ".[onnx]"`) round-trips PyTorch surrogates
-through `onnxruntime` with numeric-parity tests — the path used for
-real-time inference deployments.
+A workflow run does not write an ONNX file. With the `onnx` extra
+(`pip install -e ".[onnx]"`), export a PyTorch network with
+`torch.onnx.export` and run it through `surge.inference.load_session` and
+`infer`; CI checks that round trip for numeric parity.
 
 ---
 
@@ -506,7 +520,7 @@ from pathlib import Path; log_surge_run(Path('runs/qlknn_multi_hpo'))"
 ```
 
 <p align="center">
-  <img src="docs/assets/readme/mlflow_tracking.png" width="820"
+  <img src="docs/assets/readme/mlflow_tracking.png" width="620"
        alt="A SURGE QLKNN run in the MLflow UI: 24 per-model train/val/test metrics, parameters, and artifacts logged"/>
 </p>
 <p align="center"><sub><em>A real SURGE run in the MLflow UI — per-model
@@ -540,9 +554,35 @@ surge bench -b plasma.qlknn_transport -m all --seeds 3 --parallel 4
 Device selection is deliberately conservative: the default stays
 cuda→cpu, and the Apple GPU is **opt-in** (`SURGE_DEVICE=auto`) because
 not every architecture is MPS-safe — convolutional and spectral models
-are (identical R² to CPU), recurrent models are not. The safety table
-lives in,
-with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
+are (identical R² to CPU), recurrent models are not. Model parallelism inside a workflow and multi-GPU training (DDP) are not
+supported yet.
+
+## Built on open-source software
+
+SURGE does not re-implement numerics, model families, search or tracking. It wires established, widely tested open-source packages into one workflow.
+
+| Software | What SURGE uses it for | Distribution | Installed with |
+|---|---|---|---|
+| [![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy&logoColor=white)](https://numpy.org) | Array and numerical core | `numpy` | core |
+| [![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white)](https://scipy.org) | Scientific routines in analysis figures and benchmark tasks | `scipy` | core |
+| [![pandas](https://img.shields.io/badge/pandas-150458?logo=pandas&logoColor=white)](https://pandas.pydata.org) | Tabular data loading and per-split parquet predictions | `pandas` | core |
+| [![Apache Arrow](https://img.shields.io/badge/Apache%20Arrow-000000?logo=apachearrow&logoColor=white)](https://arrow.apache.org) | Parquet reading and writing through pandas | `pyarrow` | core |
+| [![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org) | Baseline model families, preprocessing and metrics | `scikit-learn` | core |
+| [joblib](https://joblib.readthedocs.io) | Persisting fitted scalers and models | `joblib` | core |
+| [![PyYAML](https://img.shields.io/badge/PyYAML-CB171E?logo=yaml&logoColor=white)](https://pyyaml.org) | Reading and writing workflow specs | `pyyaml` | core |
+| [Matplotlib](https://matplotlib.org) | Figures and the visualization theme | `matplotlib` | core |
+| [![Optuna](https://img.shields.io/badge/Optuna-002C76?logo=optuna&logoColor=white)](https://optuna.org) | Hyperparameter search | `optuna` | core |
+| [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org) | Neural-network model families and training | `torch` | `torch` |
+| [![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?logo=tensorflow&logoColor=white)](https://www.tensorflow.org) / [![Keras](https://img.shields.io/badge/Keras-D00000?logo=keras&logoColor=white)](https://keras.io) | The `keras.mlp` adapter and user-supplied `build_fn` models | `tensorflow`, `tf-keras` | `tensorflow` |
+| [![ONNX](https://img.shields.io/badge/ONNX-005CED?logo=onnx&logoColor=white)](https://onnx.ai) / [ONNX Runtime](https://onnxruntime.ai) | Inference helpers that load and run exported models; the packages `torch.onnx.export` needs | `onnx`, `onnxscript`, `onnxruntime` | `onnx` |
+| [![MLflow](https://img.shields.io/badge/MLflow-0194E2?logo=mlflow&logoColor=white)](https://mlflow.org) | Optional experiment tracking | `mlflow` | `mlflow` |
+| [SHAP](https://shap.readthedocs.io) | Feature-importance figures | `shap` | `shap` |
+| [h5py](https://www.h5py.org) | HDF5 datasets and benchmark loaders | `h5py` | `benchmarks` |
+| [TabPFN](https://github.com/PriorLabs/TabPFN) | The TabPFN model adapter | `tabpfn` | `tabpfn` |
+| [The Well](https://github.com/PolymathicAI/the_well) | The Well benchmark loader | `the-well` | `thewell` |
+| [GPflow](https://gpflow.github.io/GPflow/) | Gaussian-process adapter; installed separately, see the `gpflow` extra | not a declared dependency | `gpflow` |
+
+Names and logos are trademarks of their respective projects; they appear here to state a dependency and do not imply endorsement of SURGE by those projects.
 
 ## Documentation
 
@@ -551,7 +591,6 @@ with the roadmap for in-workflow model parallelism and multi-GPU (DDP).
 | **Getting started (one page)** | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
 | Build your own surrogate | [`docs/BUILD_YOUR_OWN_SURROGATE.md`](docs/BUILD_YOUR_OWN_SURROGATE.md) |
 | Install reference | [`docs/setup/INSTALLATION.md`](docs/setup/INSTALLATION.md) |
-| Codebase tour | [`docs/SURGE_OVERVIEW.md`](docs/SURGE_OVERVIEW.md) |
 | Benchmark definitions & citations | [ledger](docs/benchmarks/README.md), [`surge/benchmarks/metadata.yaml`](surge/benchmarks/metadata.yaml), [References](#references) |
 | Release notes | [`CHANGELOG.md`](CHANGELOG.md), [`docs/RELEASING.md`](docs/RELEASING.md) |
 | Colab notebook | [`examples/notebooks/surge_fusion_quickstart.ipynb`](examples/notebooks/surge_fusion_quickstart.ipynb) |
