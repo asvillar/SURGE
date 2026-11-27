@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
+import types
+from pathlib import Path
 
 import pytest
 
@@ -44,8 +47,14 @@ def test_optin_runs_keychain_read(clean_env, monkeypatch):
     class _R:
         stdout = "ROOTS\n"
 
+    # certifi is not a declared dependency, so stand in for it: the helper
+    # only needs ``where()`` to name a readable bundle.
+    base = clean_env / "base.pem"
+    base.write_text("BASE\n")
+    monkeypatch.setitem(sys.modules, "certifi", types.SimpleNamespace(where=lambda: str(base)))
     monkeypatch.setattr(cl.subprocess, "run", lambda *a, **k: calls.append(a) or _R())
     monkeypatch.setenv("SURGE_USE_SYSTEM_CA", "1")
     cl._ensure_hf_ssl_env()
     assert len(calls) == 1
     assert os.environ["SSL_CERT_FILE"].endswith(".ca_bundle.pem")
+    assert Path(os.environ["SSL_CERT_FILE"]).read_text() == "BASE\nROOTS\n"
