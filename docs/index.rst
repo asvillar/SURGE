@@ -11,20 +11,19 @@ SURGE
 *Surrogate Unified Robust Generation Engine*
 
 **Current status (v0.1.0):** the code is open source on
-`GitHub <https://github.com/S-Villar/SURGE>`__, registered in
+`GitHub <https://github.com/asvillar/SURGE>`__, registered in
 `U.S. DOE OSTI / DOE Code <https://www.osti.gov/doecode/biblio/179819>`__
 (``179819``, DOI |doi_surge|), with continuous integration on
 ``main`` and a `documented
-<https://github.com/S-Villar/SURGE/blob/main/README.md>`__ install +
+<https://github.com/asvillar/SURGE/blob/main/README.md>`__ install +
 quickstart (``uv``, ``.[torch,onnx,dev]``, including ``h5py`` for
-HDF5/MHD-code tests). The test suite: **52 passed, 1 skipped** in a full
-dev environment (see :doc:`citation` for the formal cite).
+HDF5 tests). See :doc:`citation` for the formal cite.
 
 **SURGE** is a scientific surrogate-modeling library: a single
 **declarative pipeline** (``run_surrogate_workflow``,
 ``SurrogateWorkflowSpec``) that covers data ingest, train/val/test
 splits, model adapters (scikit-learn, PyTorch MLP, optional GPflow), Optuna
-HPO, **artifact lineage** (``runs/<tag>/``), optional ONNX export, and
+HPO, **artifact lineage** (``runs/<tag>/``), ONNX Runtime inference helpers, and
 diagnostic plots (``surge.viz``).
 
 .. _surge-pipeline:
@@ -36,11 +35,11 @@ SURGE provides a fully automated AI/ML-powered pipeline for surrogate generation
 
 1. **Dataset Ingest** – ``SurrogateDataset`` auto-detects inputs/outputs, applies metadata overrides, drops NaNs, and summarizes stats/memory/missingness.
 2. **Splitting & Scaling** – ``SurrogateEngine`` builds deterministic train/val/test splits and applies ``StandardScaler`` bundles (stored per run).
-3. **Model Registry** – RFR (scikit-learn), Torch MLP with MC-Dropout, and GPflow GPR are registered adapters with unified ``fit/predict/predict_with_uncertainty`` APIs.
-4. **Hyperparameter Optimization** – Optuna-driven sweeps (TPE or BoTorch) can be toggled per model via YAML or ``HPOConfig``; trials export to JSON.
+3. **Model Registry** – RFR (scikit-learn), ``pytorch.mlp`` (MC-Dropout), and GPflow GPR are registered adapters with unified ``fit/predict/predict_with_uncertainty`` APIs.
+4. **Hyperparameter Optimization** – Optuna-driven sweeps (for example TPE) can be toggled per model via YAML or ``HPOConfig``; trials export to JSON.
 5. **Training & Validation** – Metrics (R², RMSE, MAE, MAPE) and timings (train/inference per sample) are recorded for train/val/test.
 6. **Artifacts** – Models, scalers, predictions, metrics, spec, environment snapshot, and git revision land under ``runs/<tag>/``.
-7. **Visualization** – ``surge.viz`` exposes density scatter, violin/SNR, correlation heatmaps, and per-mode scatter utilities; the MHD-code notebook demonstrates them end-to-end.
+7. **Visualization** – ``surge.viz`` exposes density scatter, violin/SNR, correlation heatmaps, and and per-mode scatter utilities.
 
 This vertical "code → automation → surrogate inference" flow means you can move from raw simulation code to deployable, uncertainty-aware surrogate models with minimal boilerplate.
 
@@ -67,11 +66,11 @@ SURGE has been designed to support a wide range of scientific and engineering us
 Core Functionalities
 --------------------
 
-- **Workflow-first API** – use ``run_surrogate_workflow`` with YAML specs (see ``configs/``).  
+- **Workflow-first API** – use ``run_surrogate_workflow`` with YAML specs (see ``examples/configs/``).  
 - **Dataset analysis** – ``surge.dataset`` handles multi-format loads (CSV, HDF5, NetCDF, pickle) and enforces clean numeric frames before scaling.  
 - **Optuna integration** – per-model search spaces defined inline, supporting categorical lists (e.g., hidden layer templates) and loguniform ranges.  
 - **Artifact standardization** – consistent directory layout for reproducibility + notebooks/tests.  
-- **Notebook parity** – CLI runs and ``notebooks/MHD-code_demo.ipynb`` share the same configs/specs.  
+- **Spec parity** – CLI runs and Python API calls share the same YAML specs.  
 
 .. toctree::
    :maxdepth: 2
@@ -84,8 +83,6 @@ Core Functionalities
    BUILD_YOUR_OWN_SURROGATE
    CUSTOM_DATASET_TUTORIAL
    citation
-   SURGE_OVERVIEW
-   comparison
    api_reference/index
 
 Quick Start

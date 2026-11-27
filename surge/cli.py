@@ -109,6 +109,9 @@ def _models_main(argv: list[str]) -> int:
 
 
 def _report_main(argv: list[str]) -> int:
+    import matplotlib
+
+    matplotlib.use("Agg")
     from surge.report.leaderboard import main as report_main
 
     sys.argv = ["surge report", *argv]
@@ -119,6 +122,9 @@ def _report_main(argv: list[str]) -> int:
 def _viz_main(argv: list[str]) -> int:
     import argparse
 
+    import matplotlib
+
+    matplotlib.use("Agg")
     from surge.viz.campaign import FIGURE_NAMES, render_run
 
     parser = argparse.ArgumentParser(

@@ -148,6 +148,12 @@ class SurrogateEngine:
         required_cols = list(input_columns) + list(output_columns)
         # Drop rows with NaNs in required columns to prevent downstream errors
         cleaned_df = df.dropna(subset=required_cols)
+        n_dropped = len(df) - len(cleaned_df)
+        if n_dropped:
+            self.logger.warning(
+                "Dropped %d of %d rows with missing values in the selected columns",
+                n_dropped, len(df),
+            )
         self._dataset_df = cleaned_df.copy(deep=False)
         self._input_columns = list(input_columns)
         self._output_columns = list(output_columns)

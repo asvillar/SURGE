@@ -85,21 +85,18 @@ ipython_config.py
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
 #   intended to run in multiple environments; otherwise, check them in:
-# .python-version
 
 # pipenv
 #   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
 #   However, in case of collaboration, if having platform-specific dependencies or dependencies
 #   having no cross-platform support, pipenv may install dependencies that don't work, or not
 #   install all needed dependencies.
-#Pipfile.lock
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
 #   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
 
 # pdm
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
@@ -187,11 +184,8 @@ Temporary Items
 .apdisk
 
 # Project specific
-# NOTE: originally a blanket `models/` rule; narrowed 2026-04-21 to only
-# ignore runtime artifact trees (runs/<tag>/models/, data/**/models/), not
-# the tracked `surge/model*` source packages. A bare `models/` here caused
-# CI on a fresh clone to pick up `surge/models.py` while local checkouts
-# loaded an untracked `surge/models/` package — see commit 6f33d89.
+# Ignore runtime artifact trees (runs/<tag>/models/, data/**/models/), not
+# the tracked `surge/model*` source packages.
 runs/**/models/
 data/**/models/
 *.joblib
@@ -201,11 +195,7 @@ results.json
 results/*/
 !results/.gitkeep
 
-# Internal / project-local trees (data-generation runbooks, per-experiment
-# configs, Slurm launchers, investigative notebooks, internal design docs).
-# Kept on local disks for reference; not shipped in the public v0.1.0 tree.
-# Lessons extracted from these live in docs/internal/ (also ignored, but
-# maintained as a separate local-only reference — back it up yourself).
+# Local-only subtrees (not distributed).
 docs/internal/
 scripts/**/internal/
 configs/internal/
@@ -231,24 +221,12 @@ catboost_info/
 mlflow.db
 mlruns/
 
-# Editor tool configuration stays local (.tools/skills IS tracked:
-# shared maintainer playbooks)
-.editor/
-
-# Local scientific datasets live under data/datasets/ but are never
-# tracked: distribute via external storage, fetch on demand.
-data/datasets/a tokamak/
-data/datasets/device-2/
-data/datasets/example-data/
+# Editor configuration (local)
 
 # Backup and scratch files
 *.backup
 *.nohup.out
 nohup.out
-
-# Cached HuggingFace / processed plasma datasets (large, re-downloadable)
-data/datasets/constellaration/
-data/datasets/solpsnn/
 
 # Benchmark runtime data cache (downloaded or generated on first run).
 # Directory skeleton (subdirs + .gitkeep files) IS tracked; data files are not.
@@ -256,19 +234,13 @@ data/datasets/benchmarks/**
 !data/datasets/benchmarks/**/
 !data/datasets/benchmarks/**/.gitkeep
 
-# Conda environment backup files
-env_backup.yml
-pip_requirements.txt
-
-# Reference runs archive (local only, not committed)
+# Local run archives
 data/runs/
 
-# internal/ is the local sandbox for proprietary datasets, Slurm templates,
-# and anything else we don't redistribute. Nothing under it is tracked.
+# Local sandbox folder (not distributed).
 internal/
-# Local Slurm launch logs (job IDs, tmp copies)
+# Local launch logs
 logs/
-pscratch/
 
 # Exclude all PNGs (research plots, run figures, etc.) except the
 # design-system logos we ship in data/logos/ and the curated README
@@ -280,26 +252,11 @@ pscratch/
 !docs/assets/readme/dark/*.png
 !docs/assets/gallery/*.png
 
-# MHD-code interface/visualization outputs (explicitly excluded)
 comprehensive_eigenmode*.png
 test_*.png
 eigenmode_*.png
 field_reconstruction*.png
 2d_field_*.png
-
-# MHD-code interface artifacts directory (generated outputs)
-scripts/mhd_code/interfaces/artifacts/
-
-# MHD-code Python support code (pulled from external repo; see docs/dev/MHD-code_PYTHON_CODE.md)
-notebooks/mhd_code/mhd_code_python_code/
-
-# RF pickles: not shipped in public releases; keep local only under policy.
-data/datasets/example-data/*.pkl
-
-# Specific notebook files
-notebooks/Test_Botorch_Pe_Compare.ipynb
-# Ignore HPO result pickles (heavy)
-data/datasets/example-data/hpo_results
 
 # Notebook outputs and checkpoints
 .ipynb_checkpoints/
@@ -314,63 +271,17 @@ REFACTORING_SUMMARY.md
 *_REFACTORING*.md
 *_CHANGES*.md
 
-# OS files
-.DS_Store
-
 # Test artifacts and outputs
 test_outputs/
-test_hhfw*.py
 
-# Documentation files (keep local only)
-RUN_RF_TEST.md
-TRAINER_COMPARISON_REPORT.md
-UNIFIED_FRAMEWORK_SUMMARY.md
-BRANCH_STRATEGY.md
-
-# Slurm tee logs from scripts/mhd_code/train_*_augstyle.slurm
 slurm_logs/
-
-
-# Local HPC scratch links / accidental staging dirs (never public)
-pscratch/
-/src/
-slurm_logs/
-/mhd_code/
-
-# Slurm batch logs accumulate in logs/ — already ignored via runs/ but
-# logs/ is a separate convention used by scripts/mhd_code/internal/launch_*.sh
-logs/
-
-# Vendored external simulator python packages (e.g. mhd_code unstructured)
-# should never be in the public tree; users with HPC access set
-# MHD-code_PYTHON_PATH if they need eigenmode_features' optional import.
-notebooks/**/mhd_code_python_code/
 
 # Sphinx autosummary regenerates these on every build.
-docs/_build/
 docs/api_reference/generated/
 
-# Legacy / shadow `surge/models/` package directory. The canonical
-# module is the tracked `surge/models.py`; the local `surge/models/`
-# directory is an older/alternative layout kept on some checkouts.
-# Keeping it ignored is what avoids the CI vs local collision (see
-# commits 6f33d89 and ead0177 for the bug and fix).
-/surge/models/
 examples/viz_gallery_output/
 dist_test/
 
-# AI-assistant working files and internal planning notes stay local (never
-# part of the public tree); internal/ already holds the archived material.
-/.tools/
-/NOTES.md
-/*_PLAN.md
-/docs/plan.md
-/docs/status.md
-/docs/agents/
-/docs/smart/
-/docs/design/
-/docs/dev/
-/scripts/mhd_code/
-/scripts/datagen/
-/scripts/hpc/
-/templates/
+# Local datasets are never tracked; benchmark caches are handled by the rules above
+/data/datasets/*/
+!/data/datasets/benchmarks/

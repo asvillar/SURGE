@@ -44,7 +44,10 @@ def _apply_sklearn_compat_patch() -> None:
 def _load_torch_model(
     path: Path, model_entry: dict, *, for_finetune: bool = False
 ) -> Optional[Any]:
-    """Load a PyTorch model saved with torch.save (avoids joblib/pickle protocol 0 issues)."""
+    """Load a PyTorch model saved with torch.save (avoids joblib/pickle protocol 0 issues).
+
+    Loads a pickle-based file: only load files you created or trust.
+    """
     try:
         import torch
         import torch.nn as nn  # noqa: F401  (availability probe)
@@ -252,7 +255,10 @@ _RESIDUAL_MLP_KEYS = {"state_dict", "scaler_X", "scaler_y", "config"}
 
 def _load_residual_mlp(path: Path) -> Any:
     """Rebuild a ``pytorch.residual_mlp`` adapter from its joblib payload
-    (``state_dict`` + scalers + ``config``), which is not a torch checkpoint."""
+    (``state_dict`` + scalers + ``config``), which is not a torch checkpoint.
+
+    Loads a pickle-based file: only load files you created or trust.
+    """
     from ..model import MODEL_REGISTRY
 
     adapter = MODEL_REGISTRY.create("pytorch.residual_mlp")
@@ -272,6 +278,7 @@ def load_model_compat(
 
     For PyTorch models (backend pytorch or for_finetune), tries torch.load first to avoid
     joblib "persistent IDs in protocol 0" errors. Falls back to joblib for sklearn models.
+    Loads a pickle-based file: only load files you created or trust.
     When for_finetune=True, returns a full PyTorchMLPAdapter (with fit) for torch models.
     """
     _apply_sklearn_compat_patch()

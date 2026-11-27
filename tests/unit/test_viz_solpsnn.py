@@ -63,7 +63,7 @@ def test_scalar_parity(tmp_path):
 def test_error_cdf(tmp_path):
     rng = np.random.default_rng(1)
     errs = {"a": rng.lognormal(-3, 1, 100), "b": rng.lognormal(-2, 1, 100)}
-    fig = error_cdf_figure(errs, reference={"thesis": 0.05},
+    fig = error_cdf_figure(errs, reference={"reference": 0.05},
                            out_stem=tmp_path / "cdf")
     assert len(fig.axes) == 1
     assert (tmp_path / "cdf.png").exists()

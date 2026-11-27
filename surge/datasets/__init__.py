@@ -1,14 +1,12 @@
-"""Application-specific dataset loaders for SURGE."""
+"""Dataset loaders for SURGE."""
 
 from __future__ import annotations
 
 from ..dataset import SurrogateDataset
 
-from .mhd_code import MHD-codeDataset
-from .stacked import XGCDataset
+from .stacked_npy import StackedNpyDataset
 
 __all__ = [
     "SurrogateDataset",
-    "MHD-codeDataset",
-    "XGCDataset",
+    "StackedNpyDataset",
 ]

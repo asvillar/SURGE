@@ -7,7 +7,7 @@ login node.
 
 ## 1. Pick an environment
 
-SURGE targets **Python 3.10 or 3.11**. CI tests both. You can use any
+SURGE targets **Python 3.10 to 3.13**. CI tests all four. You can use any
 environment manager you like; the two we test routinely are [`uv`](https://github.com/astral-sh/uv)
 and `venv`+`pip`.
 
@@ -23,10 +23,10 @@ source .venv/bin/activate
 
 ## 2. Install SURGE
 
-From a clone (recommended while `0.1.0` is still pre-release on PyPI):
+From a clone (recommended for development; `pip install surge-ml` installs the release):
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git
+git clone https://github.com/asvillar/SURGE.git
 cd SURGE
 pip install -e ".[torch,onnx]"
 ```
@@ -47,7 +47,7 @@ SURGE keeps heavy dependencies opt-in. The extras are additive.
 | `torch` | `torch>=1.9`                                     | train the PyTorch MLP surrogate             |
 | `onnx`  | `onnx`, `onnxscript`, `onnxruntime`              | export trained models for deployment        |
 | `dev`   | `pytest`, `pytest-cov`, `ruff`                   | run the test suite + lint locally           |
-| `docs`  | `sphinx`, `furo`, `myst-parser`                  | build the documentation                     |
+| `docs`  | `sphinx`, `sphinx-rtd-theme`, `myst-parser`, plus autodoc/bibtex helpers | build the documentation                     |
 
 The full developer install used by CI is:
 
@@ -101,17 +101,14 @@ with `.[torch,onnx]`.
 **`Warning: GPflow not available or incompatible`** — cosmetic. GPflow is an
 optional backend that requires a legacy TensorFlow; the warning is emitted
 once at import and the sklearn / torch / onnx paths are unaffected. If you
-do need GPflow, uncomment its extra in `pyproject.toml` and install.
+do need GPflow, install `pip install "surge-ml[gpflow]"` and then `pip install gpflow --no-deps`: GPflow's published metadata pins `numpy<2`, so the extra installs its TensorFlow stack and leaves GPflow itself to the second command.
 
-**Running on NERSC / Perlmutter** — create the venv on `$SCRATCH` rather than
-`$HOME` (quota pressure); see `docs/internal/SURGE_SLURM_BEST_PRACTICES.md` for
-worked examples if you have access.
+**Running on a shared cluster** — create the venv on scratch storage rather
+than your home directory (quota pressure).
 
 ## Next steps
 
 - `python -m examples.quickstart --dataset california` — a bigger public
   regression benchmark (20k samples, typically R² > 0.8).
-- [`docs/RUNBOOK.md`](../RUNBOOK.md) — what each file under
-  `runs/<tag>/` means and how to consume it downstream.
 - The README's *Quickstart* section for a verbatim output transcript and a
   full artifact listing.

@@ -1,4 +1,4 @@
-"""Optional MLflow integration for SURGE run tracking (auditing)."""
+"""Optional MLflow integration for SURGE run tracking (run auditing)."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def log_surge_run(
     Log a SURGE run to MLflow: params, metrics, and artifacts.
 
     Args:
-        run_dir: Path to the run directory (e.g. runs/xgc_target_set1_v2)
+        run_dir: Path to the run directory (e.g. runs/my_run)
         experiment_name: MLflow experiment name
         run_name: MLflow run name (default: run_dir.stem)
 
@@ -38,7 +38,7 @@ def log_surge_run(
         import mlflow
     except ImportError:
         LOG.warning(
-            "MLflow not installed. Install with: pip install surge[mlflow]"
+            "MLflow not installed. Install with: pip install \"surge-ml[mlflow]\""
         )
         return False
 

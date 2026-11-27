@@ -1,4 +1,4 @@
-"""Standard benchmark registry and CLI (benchmark plan)."""
+"""Standard benchmark registry and CLI."""
 
 from __future__ import annotations
 

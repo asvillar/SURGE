@@ -43,7 +43,6 @@ def _bench_data_root() -> Path:
             tabular/
                 sklearn_cache/  ← sklearn/OpenML downloads
             plasma/          ← QLkNN NPZ, C-Mod NPZ, Constellaration NPZ
-            fusion/mhd_code/    ← MHD-code HDF5
             pde/             ← Burgers 1-D generated NPZ
             sequence/        ← Lorenz-63 generated NPZ
             classification/  ← UCI-downloaded classification NPZ files
@@ -185,7 +184,7 @@ _BENCHMARK_MODEL_OVERRIDES: dict[str, list[str]] = {
     # SOLPS-NN exhaust: the scalar benchmark uses the default tabular regression
     # sweep (incl. kumo.tabular_regressor when installed); the 5200-output field
     # excludes tree ensembles (an RF stores n_nodes x 5200 values per tree and
-    # exhausted a laptop).
+    # can exhaust the memory of a laptop).
     "plasma.solpsnn_te_field": ["pytorch.mlp", "pytorch.residual_mlp", "sklearn.ridge"],
     # Sequence / time-series benchmarks — include temporal models
     "sequence.lorenz63":         _SEQUENCE_MODELS,
@@ -366,6 +365,14 @@ def _reset_gpu_peak_memory() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Registry keys whose metadata / loader / gate key differs (the sklearn task
+# runners already save under the metadata key; the generic path must match).
+_METADATA_KEY: dict[str, str] = {
+    "tabular.covertype": "classification.covertype",
+    "tabular.plasma_stability": "classification.plasma_stability",
+}
+
+
 def run_leaderboard(
     benchmark_keys: list[str],
     *,
@@ -443,6 +450,9 @@ def run_leaderboard(
 
     for key in benchmark_keys:
         info = benchmark_info(key)
+        # Run, gate and save under the metadata key so every model's result
+        # lands where the dataset loader, the gate table and the ledger look.
+        key = _METADATA_KEY.get(key, key)
         task_type = info["task_type"]
         candidates = model_keys if model_keys is not None else _default_models_for(task_type, key)
         results[key] = []
@@ -941,8 +951,7 @@ def _dataset_loaders() -> dict[str, Any]:
         "ctr23.diamonds": lambda: _load_ctr23_diamonds(),
         "ctr23.house_sales": lambda: _load_ctr23_house_sales(),
         "ctr23.brazilian_houses": lambda: _load_ctr23_brazilian_houses(),
-        # DOE fusion plasma benchmarks
-        "fusion.mhd_sample":        lambda: _load_fusion_mhd_sample(),
+        # Fusion plasma benchmarks
         "plasma.cmod_density_limit":  lambda: _concat_fixed(_load_cmod_density_limit()),
         "plasma.qlknn_transport":     lambda: _load_qlknn_transport(),
         "plasma.qlknn10d":            lambda: _load_qlknn10d(),
@@ -1351,7 +1360,7 @@ def _load_ctr23_brazilian_houses():
 
 
 # ---------------------------------------------------------------------------
-# DOE Fusion plasma dataset loaders
+# Fusion plasma dataset loaders
 # ---------------------------------------------------------------------------
 
 _CMOD_URL = ("https://raw.githubusercontent.com/MIT-PSFC/"
@@ -1423,41 +1432,6 @@ def _load_cmod_density_limit():
     np.savez_compressed(cache, X_train=Xtr, y_train=ytr, X_test=Xte, y_test=yte,
                         groups_train=gtr, groups_test=gte)
     return Xtr, ytr, Xte, yte
-
-
-def _load_fusion_mhd_sample():
-    """MHD-code equilibrium surrogate — 13 MHD params → stability metric.
-
-    Searches for the HDF5 file in two locations (in order):
-      1. data/datasets/benchmarks/fusion/mhd_code/mhd_sample.hdf5  (unified cache)
-      2. data/datasets/MHD-code/mhd_sample.hdf5                    (legacy path)
-
-    Raises FileNotFoundError if neither location contains the file.
-    There is no synthetic fallback — results from this benchmark must
-    come from real MHD-code data.
-    """
-    candidate_paths = [_bench_data_root() / "fusion" / "mhd_code" / "mhd_sample.hdf5"]
-    if paths.repo_root() is not None:
-        candidate_paths.append(paths.datasets_root() / "MHD-code" / "mhd_sample.hdf5")
-    h5_path = next((p for p in candidate_paths if p.exists()), None)
-    if h5_path is None:
-        raise FileNotFoundError(
-            "MHD-code HDF5 not found.  Place the file at:\n"
-            f"  {candidate_paths[0]}\n"
-            "or obtain it from the PPPL MHD-code team.  "
-            "No synthetic fallback is provided — benchmark results must use real data."
-        )
-    try:
-        import h5py
-        with h5py.File(h5_path, "r") as f:
-            keys = list(f.keys())
-            X_key = next(k for k in keys if "X" in k or "input" in k.lower())
-            y_key = next(k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower())
-            X = np.asarray(f[X_key], dtype=float)
-            y = np.asarray(f[y_key], dtype=float).ravel()
-        return X, y
-    except Exception as exc:
-        raise RuntimeError(f"Failed to read MHD-code HDF5 at {h5_path}: {exc}") from exc
 
 
 def _load_qlknn_transport():
@@ -2064,7 +2038,7 @@ _GATE_THRESHOLDS: dict[str, tuple[str, float]] = {
     # CIFAR-10: ResNet-20 paper result is 91.25% (He et al. 2016).
     # Threshold set at 91.0% to allow ±0.25% seed variance.
     "vision.cifar10": ("test_accuracy", 0.910),
-    # DOE fusion plasma benchmarks
+    # Fusion plasma benchmarks
     "plasma.cmod_density_limit": ("test_auroc", 0.99),  # Greenwald scaling gives 0.973 on this split
     "plasma.qlknn_transport": ("test_r2", 0.90),
     "plasma.qlknn10d": ("test_r2", 0.95),

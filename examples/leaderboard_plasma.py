@@ -16,7 +16,7 @@ Usage
     python examples/leaderboard_plasma.py --benchmarks constellaration_paper
 
     # Via the surge CLI:
-    surge run --category plasma -m all
+    surge bench --category plasma -m all
 
 Benchmarks
 ----------
@@ -41,8 +41,8 @@ plasma.constellaration_multioutput  (aliases: constellaration_multi, constellara
     metrics; score is sklearn uniform-average test R². Works with residual_mlp,
     mlp, sklearn, boosting models, and Optuna HPO::
 
-        surge run -b constellaration_multi -m pytorch.residual_mlp
-        surge run -b constellaration_multi -m pytorch.residual_mlp --hpo --hpo-trials 40
+        surge bench -b constellaration_multi -m pytorch.residual_mlp
+        surge bench -b constellaration_multi -m pytorch.residual_mlp --hpo --hpo-trials 40
 
 plasma.cmod_density_limit
     Alcator C-Mod density limit disruption classification.

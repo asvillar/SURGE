@@ -5,7 +5,7 @@ One row per *visible* benchmark (maintainer-hidden benchmarks are excluded
 upstream, in :func:`surge.report.leaderboard.build_report`, before this
 module ever sees them). Row data is embedded as a small JS array
 (``BENCH_INDEX``) so the live search/filter/"cards follow table" behaviour
-needs no server and no framework — vanilla JS only, per project policy.
+needs no server and no framework — vanilla JS only.
 """
 from __future__ import annotations
 

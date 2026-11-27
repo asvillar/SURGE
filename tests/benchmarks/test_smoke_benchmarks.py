@@ -1,4 +1,4 @@
-"""Smoke tests for surge.benchmarks registry — Phase 1 expansion."""
+"""Smoke tests for surge.benchmarks registry."""
 
 from __future__ import annotations
 
@@ -87,17 +87,10 @@ def test_benchmark_default_model_passes(key: str):
 # ---------------------------------------------------------------------------
 
 
-def test_regression_with_logistic_regression_raises_or_runs():
-    """Regression benchmarks should reject classification-only model gracefully."""
-    # We don't enforce task compatibility in Phase 1 (that's Phase 2),
-    # but the call should not crash the process — it may fail at predict.
-    # This test just documents current behavior.
-    try:
-        res = run_benchmark("tabular.diabetes", seed=0, model_key="sklearn.logistic_regression")
-        # If it ran, it should have metrics
-        assert "test_r2" in res.metrics or "test_accuracy" in res.metrics
-    except Exception:
-        pass  # acceptable — mismatch may raise
+def test_regression_with_classifier_model_is_rejected():
+    """A classification-only model on a regression benchmark fails fast."""
+    with pytest.raises(ValueError, match="is a classifier"):
+        run_benchmark("tabular.diabetes", seed=0, model_key="sklearn.logistic_regression")
 
 
 def test_breast_cancer_with_gradient_boosting():

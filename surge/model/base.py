@@ -215,6 +215,10 @@ class BaseModelAdapter(ABC):
         return self._model.save(filepath)
 
     def load(self, filepath: str) -> Any:
+        """Load a saved model.
+
+        Loads a pickle-based file: only load files you created or trust.
+        """
         if self._model is None or not hasattr(self._model, "load"):
             raise NotImplementedError("load not implemented for this model")
         return self._model.load(filepath)

@@ -7,10 +7,15 @@ tabular models, reconstruct, and compare against the neural operators —
 whose predictions are reused from the saved study artifacts
 (``thewell_*_preds.npz``), so nothing expensive is retrained.
 
-Tasks (identical splits to the published studies — verified against the
-stored test fields):
+Tasks (same splits as the turbulence and Helmholtz studies, checked against
+the stored test fields):
 * turbulent radiative layer 2D, horizon 8 (log density, 64x192)
 * Helmholtz staircase, horizon 12 (Re pressure from Re+Im, 128x32)
+
+Needs: examples/viz_gallery_output/thewell_turbulence_preds.npz and
+thewell_helmholtz_preds.npz.
+Run first: examples/thewell_turbulence_study.py and
+examples/thewell_helmholtz_study.py (each writes its file).
 
 Usage:
     SURGE_DEVICE=auto python examples/thewell_pod_study.py
@@ -50,16 +55,25 @@ def _rel_l2(pred, truth):
             / np.maximum(np.linalg.norm(t, axis=1), 1e-12))
 
 
+def _load_preds(name: str, producer: str):
+    path = OUT / name
+    if not path.exists():
+        raise SystemExit(f"missing input {path}. Run first: {producer}")
+    return np.load(path)
+
+
 def load_task(name: str):
     """(Xtr, ytr, Xte, yte, baselines{label: median rel-L2}, npz yte check)."""
     if name == "turbulence":
         from examples.thewell_turbulence_study import load_trl2d
         (Xtr, ytr), (Xte, yte) = load_trl2d(800, 100, seed=0, horizon=8)
-        npz = np.load(OUT / "thewell_turbulence_preds.npz")
+        npz = _load_preds("thewell_turbulence_preds.npz",
+                          "examples/thewell_turbulence_study.py")
     elif name == "helmholtz":
         from examples.thewell_helmholtz_study import load_helmholtz
         (Xtr, ytr), (Xte, yte) = load_helmholtz(800, 100, seed=0, horizon=12)
-        npz = np.load(OUT / "thewell_helmholtz_preds.npz")
+        npz = _load_preds("thewell_helmholtz_preds.npz",
+                          "examples/thewell_helmholtz_study.py")
     else:
         raise ValueError(name)
 

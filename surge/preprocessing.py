@@ -1,7 +1,7 @@
 """
 Dataset analysis utilities used by the refactored SURGE stack.
 
-This module supersedes the legacy `surge.preprocessing` helpers and adds:
+This module analyses a dataset and infers input/output columns. It provides:
   * Metadata-aware input/output overrides (YAML or dict)
   * Multi-profile grouping hints for scientific surrogate targets
   * Optional sampling knobs for large datasets
@@ -9,6 +9,7 @@ This module supersedes the legacy `surge.preprocessing` helpers and adds:
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -16,6 +17,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 PROFILE_HINTS = (
     "gamma",
@@ -132,20 +135,29 @@ def analyze_dataset_structure(
 
     input_candidates = set(manual_inputs) | hint_inputs
     output_candidates = set(manual_outputs) | hint_outputs
+    explicit_inputs = set(input_candidates)
+    explicit_outputs = set(output_candidates)
+    # When both lists are supplied they are authoritative: unlisted columns are
+    # excluded from inputs and outputs (no heuristics).
+    authoritative = bool(explicit_inputs) and bool(explicit_outputs)
 
     grouped = _group_repeating_columns(df.columns)
 
     output_groups: dict[str, list[str]] = {}
     profile_groups: dict[str, list[str]] = {}
 
+    declared_group_cols: set[str] = set()
+
     # Apply metadata-defined groups first
     for group_name, cols in metadata.get("output_groups", {}).items():
         output_groups[group_name] = [col for col in cols if col in df.columns]
         output_candidates.update(output_groups[group_name])
+        declared_group_cols.update(output_groups[group_name])
 
     for group_name, cols in metadata.get("profile_groups", {}).items():
         profile_groups[group_name] = [col for col in cols if col in df.columns]
         output_candidates.update(profile_groups[group_name])
+        declared_group_cols.update(profile_groups[group_name])
 
     # Merge runtime hints
     for group_name, cols in hints.get("output_groups", {}).items():
@@ -154,6 +166,7 @@ def analyze_dataset_structure(
             if col in df.columns and col not in existing:
                 existing.append(col)
                 output_candidates.add(col)
+                declared_group_cols.add(col)
 
     for group_name, cols in hints.get("profile_groups", {}).items():
         existing = profile_groups.setdefault(group_name, [])
@@ -161,6 +174,7 @@ def analyze_dataset_structure(
             if col in df.columns and col not in existing:
                 existing.append(col)
                 output_candidates.add(col)
+                declared_group_cols.add(col)
 
     # Pattern-based grouping: only treat as output groups if base matches output-like prefixes
     for base, cols in grouped.items():
@@ -180,6 +194,8 @@ def analyze_dataset_structure(
 
     # Heuristic classification for remaining columns
     for col in df.columns:
+        if authoritative:
+            break
         if col in input_candidates or col in output_candidates:
             continue
         if _apply_prefix_hints(col, OUTPUT_PREFIXES):
@@ -191,6 +207,45 @@ def analyze_dataset_structure(
         else:
             # Default to inputs when unsure
             input_candidates.add(col)
+
+    if authoritative:
+        input_candidates = set(explicit_inputs)
+        # pattern-derived groups must not re-admit columns the user listed
+        # as inputs; only explicit outputs and declared groups count
+        output_candidates = set(explicit_outputs) | declared_group_cols
+        output_groups = {
+            n: kept for n, cols in output_groups.items()
+            if (kept := [c for c in cols if c in output_candidates])
+        }
+        profile_groups = {
+            n: kept for n, cols in profile_groups.items()
+            if (kept := [c for c in cols if c in output_candidates])
+        }
+
+    # Non-numeric columns: error if listed or in a declared group, else skip with one warning
+    skipped_non_numeric: list[str] = []
+    for col in list(input_candidates | output_candidates):
+        if col not in df.columns or pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        if col in explicit_inputs or col in explicit_outputs or col in declared_group_cols:
+            role = "input" if col in explicit_inputs else "output"
+            raise ValueError(
+                f"Column '{col}' is listed as an {role} but is not numeric "
+                f"(dtype {df[col].dtype}); it must be numeric (encode it first)."
+            )
+        input_candidates.discard(col)
+        output_candidates.discard(col)
+        skipped_non_numeric.append(str(col))
+    if skipped_non_numeric:
+        skipped_non_numeric.sort()
+        logger.warning(
+            "Skipping non-numeric columns (not used as inputs or outputs): %s",
+            ", ".join(skipped_non_numeric),
+        )
+    for name, cols in list(output_groups.items()):
+        output_groups[name] = [c for c in cols if c not in skipped_non_numeric]
+    for name, cols in list(profile_groups.items()):
+        profile_groups[name] = [c for c in cols if c not in skipped_non_numeric]
 
     # Ensure columns are classified exactly once
     overlap = input_candidates & output_candidates

@@ -123,7 +123,7 @@ class ResidualMLPModel:
     min_delta:
         Minimum decrease of the (smoothed) validation loss that counts
         as an improvement for the patience counter.
-        Default 20.  Set to 0 to disable.
+        Default 0.0 (any decrease counts).
     device:
         ``"cpu"``, ``"cuda"``, or ``None`` (auto-detect).
     random_state:

@@ -273,6 +273,31 @@ def _model_is_all(model_arg: str | None) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _collect_parallel_results(save_dir: Path, bm_keys, since: float) -> dict:
+    """Read result.json files written at/after ``since`` by parallel workers.
+
+    Workers save under the mapped key (``leaderboard._METADATA_KEY``), so the
+    directory is looked up by that key and results are filed under it too.
+    """
+    import dataclasses
+    import json
+    from collections import defaultdict
+
+    from .base import BenchmarkResult
+    from .leaderboard import _METADATA_KEY
+
+    field_names = {f.name for f in dataclasses.fields(BenchmarkResult)}
+    collected: dict[str, list[BenchmarkResult]] = defaultdict(list)
+    for key in bm_keys:
+        mapped = _METADATA_KEY.get(key, key)
+        for rj in sorted((Path(save_dir) / mapped).glob("*/result.json")):
+            if rj.stat().st_mtime >= since:
+                d = json.loads(rj.read_text())
+                collected[mapped].append(BenchmarkResult(
+                    **{k: v for k, v in d.items() if k in field_names}))
+    return dict(collected)
+
+
 def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
     """Fan (benchmark, model) jobs out to subprocesses, then aggregate.
 
@@ -281,12 +306,9 @@ def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
     re-reading result.json files written after the fan-out started. BLAS /
     OpenMP threads are split evenly so workers do not oversubscribe cores.
     """
-    import dataclasses
-    import json
     import os
     import subprocess
     import time
-    from collections import defaultdict
     from concurrent.futures import ThreadPoolExecutor
 
     from .base import BenchmarkResult
@@ -339,16 +361,9 @@ def _run_parallel_leaderboard(bm_keys, custom_models, args) -> int:
         codes = list(ex.map(_one, jobs))
 
     # aggregate everything the workers just wrote
-    field_names = {f.name for f in dataclasses.fields(BenchmarkResult)}
-    collected: dict[str, list[BenchmarkResult]] = defaultdict(list)
-    for key in bm_keys:
-        for rj in sorted((args.save_dir / key).glob("*/result.json")):
-            if rj.stat().st_mtime >= t0 - 1:
-                d = json.loads(rj.read_text())
-                collected[key].append(BenchmarkResult(
-                    **{k: v for k, v in d.items() if k in field_names}))
+    collected = _collect_parallel_results(args.save_dir, bm_keys, t0 - 1)
     if collected:
-        print_leaderboard(dict(collected))
+        print_leaderboard(collected)
 
     # Honest verdict on whether the fan-out earned its overhead. Every job
     # pays a fresh interpreter + import cost and the workers share cores, so

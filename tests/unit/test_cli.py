@@ -80,3 +80,7 @@ def test_run_workflow_from_yaml(tmp_path: Path, capfd):
     assert (run_dir / "spec.yaml").exists()
     metrics = json.loads((run_dir / "metrics.json").read_text())
     assert metrics["sklearn.ridge"]["test"]["r2"] > 0.9  # near-linear toy data
+    # the invoked YAML is copied (comments preserved) next to the run outputs
+    copied = run_dir / "inputs" / "spec.yaml"
+    assert copied.exists()
+    assert copied.read_text() == spec_path.read_text()

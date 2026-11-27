@@ -8,8 +8,8 @@ the README but with a bit more narrative and a Sphinx-friendly layout.
 Prerequisites
 -------------
 
-* Python 3.10 or 3.11
-* SURGE installed in editable mode (see :doc:`setup/INSTALLATION`)::
+* Python 3.10 to 3.13
+* SURGE installed in editable mode (see :doc:`installation`)::
 
     pip install -e ".[torch,onnx]"
 
@@ -114,12 +114,12 @@ the original target units:
    model.load(f"{run_dir}/models/pytorch.mlp.joblib")
    y_hat = model.predict(scaler.transform(df.values))   # original units
 
-For PyTorch-backed models trained with the ``onnx`` extra installed, the
-same run directory also contains ``models/<key>.onnx`` that
-``onnxruntime`` can load without a Python dependency on SURGE or
-PyTorch.
+A workflow run does not write an ONNX file. With the ``onnx`` extra
+installed, export a PyTorch network yourself with ``torch.onnx.export``
+and run the file through ``surge.inference.load_session`` and ``infer``;
+``onnxruntime`` then needs neither SURGE nor PyTorch.
 
-Both round-trips are implemented end-to-end in
+The reload shown above is implemented end-to-end in
 ``examples/quickstart.py`` under ``--infer``; read the
 ``_demo_inference`` helper there for a working reference.
 
@@ -128,7 +128,7 @@ Configuration-driven runs (YAML)
 
 For anything beyond a quick experiment you'll typically author a YAML spec
 and invoke ``run_surrogate_workflow`` with it. The schema matches
-``SurrogateWorkflowSpec`` one-for-one; see ``configs/`` for worked examples.
+``SurrogateWorkflowSpec`` one-for-one; see ``examples/configs/`` for worked examples.
 
 .. code-block:: python
 
@@ -138,7 +138,7 @@ and invoke ``run_surrogate_workflow`` with it. The schema matches
    from surge.workflow.run import run_surrogate_workflow
 
    spec = SurrogateWorkflowSpec.from_dict(
-       yaml.safe_load(Path("configs/my_experiment.yaml").read_text())
+       yaml.safe_load(Path("examples/configs/my_experiment.yaml").read_text())
    )
    summary = run_surrogate_workflow(spec)
 
@@ -147,4 +147,3 @@ Next steps
 
 * :doc:`BUILD_YOUR_OWN_SURROGATE` — train on your data and embed new model adapters
 * :doc:`api_reference/index` — class and method reference
-* :doc:`comparison` — how SURGE compares to neighbouring tools

@@ -1,6 +1,6 @@
 """Classification diagnostic plots (ROC, PR, confusion, calibration).
 
-Follows benchmark plan §3.1. Uses matplotlib + scikit-learn only.
+Uses matplotlib + scikit-learn only.
 """
 
 from __future__ import annotations
@@ -11,9 +11,6 @@ from typing import Any, Sequence
 import numpy as np
 
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.figure import Figure
 

@@ -284,7 +284,6 @@ class GPflowGPRModel:
 class GPflowMultiKernelGPR:
     """
     Advanced GPflow GP model that can test multiple kernel types and select the best one.
-    Based on a kernel-comparison pattern used in earlier project prototypes.
     """
 
     def __init__(self, kernel_types=None, lengthscales_range=(0.25, 2.0),

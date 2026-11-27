@@ -65,9 +65,25 @@ def robust_hpo_ylim(
     return float(lo), float(hi), float(pad), masks
 
 
+def _detect_hpo_metric(hpo_data_list: List[dict], default: str = "r2") -> str:
+    """Metric name recorded with the trials, else ``default``."""
+    for data in hpo_data_list:
+        if not isinstance(data, dict):
+            continue
+        for key in ("metric", "metric_name", "objective"):
+            val = data.get(key)
+            if isinstance(val, str) and val.strip():
+                name = val.strip().lower()
+                for prefix in ("train_", "val_", "test_"):
+                    if name.startswith(prefix):
+                        return name[len(prefix):]
+                return name
+    return default
+
+
 def plot_hpo_convergence(
     hpo_files: Union[str, Path, List[Union[str, Path]]],
-    metric: str = "r2",
+    metric: Optional[str] = None,
     method_names: Optional[List[str]] = None,
     reference_value: Optional[float] = None,
     reference_label: str = "Reference",
@@ -77,6 +93,8 @@ def plot_hpo_convergence(
     show_best_markers: bool = True,
     colors: Optional[Dict[str, str]] = None,
     linestyles: Optional[Dict[str, str]] = None,
+    title: Optional[str] = None,
+    model_name: Optional[str] = None,
 ) -> Tuple[object, object, Dict[str, Dict[str, float]]]:
     """
     Plot HPO convergence curves matching publication style.
@@ -89,9 +107,11 @@ def plot_hpo_convergence(
     hpo_files : str, Path, or list
         Path(s) to HPO JSON file(s). If multiple files, assumes different methods.
         Or can be list of paths for multiple methods.
-    metric : str, default="r2"
-        Metric to plot: "r2", "rmse", "mse". Note: HPO files use "val_rmse" by default.
-        Will auto-detect from file if possible.
+    metric : str, optional
+        Metric to plot: "r2", "rmse", "mse". ``None`` (default) auto-detects:
+        the metric recorded in the HPO file (``metric``/``metric_name``/
+        ``objective`` key, with any ``train_``/``val_``/``test_`` prefix removed)
+        if present, else "r2".
     method_names : list, optional
         Names for each method (e.g., ["Random", "Optuna TPE", "Optuna BoTorch"]).
         If None, tries to infer from filenames or uses generic names.
@@ -113,6 +133,10 @@ def plot_hpo_convergence(
     linestyles : dict, optional
         Dictionary mapping method names to the running-best step line style.
         Default: {'Random': '--', 'TPE': '--', 'BoTorch': '--'}
+    title : str, optional
+        Axes title. If None, built from the metric (and ``model_name``).
+    model_name : str, optional
+        Model name appended to the default title.
         
     Returns
     -------
@@ -172,6 +196,9 @@ def plot_hpo_convergence(
     if linestyles is None:
         linestyles = {name: '--' for name in method_names}
     
+    if metric is None:
+        metric = _detect_hpo_metric(hpo_data_list)
+
     # Determine metric direction
     if metric.lower() == "r2":
         higher_is_better = True
@@ -334,13 +361,15 @@ def plot_hpo_convergence(
     # Set labels
     if metric.lower() == "r2":
         ylabel = "R² Score"
-        title = "Hyperparameter Optimization - RFR (P_e)"
+        title_default = "Hyperparameter optimization"
     elif metric.lower() == "rmse":
         ylabel = "RMSE"
-        title = "Hyperparameter Optimization - Validation RMSE"
+        title_default = "Hyperparameter optimization - validation RMSE"
     else:
         ylabel = metric.upper()
-        title = f"Hyperparameter Optimization - {metric.upper()}"
+        title_default = f"Hyperparameter optimization - {metric.upper()}"
+    if title is None:
+        title = f"{title_default} ({model_name})" if model_name else title_default
     
     ax.set_xlabel("Iteration", fontsize=12)
     ax.set_ylabel(ylabel, fontsize=12)

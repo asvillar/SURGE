@@ -5,13 +5,20 @@ integrates Scientific Machine Learning (SciML) and AutoML features,
 uncertainty quantification (UQ), and MLOps-style provenance in a single
 declarative pipeline. One YAML spec (or Python API) covers
 **load → schema → split → train → HPO → metrics → UQ → artifacts → figures**,
-backed by an extensible registry of 40+ model adapters across scikit-learn,
+backed by an extensible registry of 50 model adapters across scikit-learn,
 PyTorch, TensorFlow/Keras, and Gaussian-process backends — with every run
 reproducible from its own `runs/<tag>/` directory.
 
 **v0.1.0** · License: BSD-3-Clause · [DOE CODE 179819](https://www.osti.gov/doecode/biblio/179819) · DOI [10.11578/dc.20260422.5](https://doi.org/10.11578/dc.20260422.5)
 
 ![SURGE architecture: ingest & characterize, model & optimize, evaluate & quantify, report & deploy](https://raw.githubusercontent.com/asvillar/SURGE/v0.1.0/docs/assets/readme/architecture.png)
+
+**Built on**
+
+[![NumPy](https://img.shields.io/badge/NumPy-013243?style=flat&logo=numpy&logoColor=white)](https://numpy.org) [![SciPy](https://img.shields.io/badge/SciPy-8CAAE6?style=flat&logo=scipy&logoColor=white)](https://scipy.org) [![pandas](https://img.shields.io/badge/pandas-150458?style=flat&logo=pandas&logoColor=white)](https://pandas.pydata.org) [![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat&logo=scikitlearn&logoColor=white)](https://scikit-learn.org) [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)](https://pytorch.org) [![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?style=flat&logo=tensorflow&logoColor=white)](https://www.tensorflow.org) [![Optuna](https://img.shields.io/badge/Optuna-002C76?style=flat&logo=optuna&logoColor=white)](https://optuna.org) [![MLflow](https://img.shields.io/badge/MLflow-0194E2?style=flat&logo=mlflow&logoColor=white)](https://mlflow.org) [![ONNX](https://img.shields.io/badge/ONNX-005CED?style=flat&logo=onnx&logoColor=white)](https://onnx.ai)
+
+Names and logos are trademarks of their respective projects; they appear here to state a dependency and do not imply endorsement of SURGE by those projects.
+
 
 ## Install
 
@@ -29,7 +36,7 @@ pip install surge-ml
 | `gpflow` | TF stack for GPflow GPs — finish with `pip install gpflow --no-deps` (its published metadata pins numpy<2, unresolvable next to the TF floor above, though GPflow itself runs fine on NumPy 2.x) | `pip install "surge-ml[gpflow]"` |
 | `all` | torch + onnx + shap + mlflow + benchmarks + tensorflow (not gpflow — see the no-deps note above) | `pip install "surge-ml[all]"` |
 
-Requires Python 3.10–3.12.
+Requires Python 3.10 to 3.13.
 
 ## Quickstart
 
@@ -79,7 +86,7 @@ artifacts. Headline numbers from the fusion benchmarks:
   MIT-PSFC open database on the natural 1.4 % imbalance: random forest AUROC
   0.9999 against 0.973 for the Greenwald-fraction scaling (gate AUROC ≥ 0.99).
 - **SOLPS-NN divertor exhaust** (in progress) — an in-context tabular
-  foundation model (`kumo.tabular_regressor`) reaches 9.3 % median relative
+  foundation model (`kumo.tabular_regressor`) reaches 8.4 % median relative
   error on the peak target heat flux with no training, against the
   published 13 % from tuned five-fold networks.
 
@@ -89,7 +96,7 @@ Full ledger with per-benchmark status: [docs/benchmarks/README.md](https://githu
 
 ## Learn more
 
-- [Full README](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md) — architecture, highlights, visualization system, all 40+ model adapters
+- [Full README](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md) — architecture, highlights, visualization system, all 50 model adapters
 - [Getting started](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/GETTING_STARTED.md)
 - [Benchmark ledger](https://github.com/asvillar/SURGE/blob/v0.1.0/docs/benchmarks/README.md) — status, gates and data citations per benchmark
 - [References](https://github.com/asvillar/SURGE/blob/v0.1.0/README.md#references) — the datasets, architectures and software behind the suite

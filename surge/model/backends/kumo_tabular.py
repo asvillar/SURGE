@@ -52,7 +52,7 @@ class KumoTabularModel:
         # cell and the query-context attention scales with query_batch_size x
         # context rows. rows x columns is capped so a 90-column table does not
         # get the 60k rows a 9-column table can afford (a 60k x 90 context
-        # exhausted a laptop).
+        # can exhaust the memory of a laptop).
         self.max_context_cells = int(max_context_cells)
         self.random_state = random_state
         self.device = device

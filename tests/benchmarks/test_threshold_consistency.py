@@ -19,11 +19,11 @@ FOCUS_KEYS = [
     "classification.covertype",
     "classification.plasma_stability",
 ]
-# Pre-existing drift outside this work-unit; shrink this set, never grow it.
+# Known differences between code gates and ledger thresholds, kept explicit until they are aligned.
 KNOWN_DRIFT = {
     "tabular.airfoil_noise", "tabular.yacht_dynamics", "tabular.diabetes",
     "tabular.breast_cancer", "tabular.digits", "tabular.iris",
-    "fusion.mhd_sample", "plasma.cmod_density_limit",
+    "plasma.cmod_density_limit",
 }
 
 

@@ -1,9 +1,9 @@
 """Tests for surge.workflow.run HPO param reconstruction.
 
-Covers the bug where `variable_list` search-space entries (e.g. per-layer
-`hidden_layers` with `logint` elements) were not replayed after
-`study.optimize`, so the refit spec got raw Optuna keys like
-`n_blocks`/`hidden_layers_0_log` instead of a resolved `hidden_layers` list.
+Covers `variable_list` search-space entries (e.g. per-layer `hidden_layers`
+with `logint` elements): after `study.optimize`, the refit spec must hold a
+resolved `hidden_layers` list rather than raw Optuna keys such as
+`n_blocks`/`hidden_layers_0_log`.
 """
 
 from __future__ import annotations
@@ -45,8 +45,7 @@ def test_sample_hpo_params_variable_list_logint_custom_num_layers_name():
 
 
 def test_fixed_trial_replay_reproduces_hidden_layers():
-    """This is the fix under test: replaying trial.params through FixedTrial
-    must reconstruct the exact same `hidden_layers` list that _run_hpo needs
+    """Replaying trial.params through FixedTrial must reconstruct the exact same `hidden_layers` list that _run_hpo needs
     for the refit spec, instead of leaving raw n_blocks/hidden_layers_i_log keys.
     """
     from optuna.trial import FixedTrial
@@ -55,7 +54,7 @@ def test_fixed_trial_replay_reproduces_hidden_layers():
     trial = study.ask()
     sampled = _sample_hpo_params(trial, VARIABLE_LIST_SPACE)
 
-    # Simulate what _run_hpo now does with study.best_trial.params after optimize().
+    # Simulate what _run_hpo does with study.best_trial.params after optimize().
     replayed = _sample_hpo_params(FixedTrial(dict(trial.params)), VARIABLE_LIST_SPACE)
 
     assert replayed["hidden_layers"] == sampled["hidden_layers"]

@@ -1,4 +1,4 @@
-"""Group A — bug-fix regression tests.
+"""Regression tests for specific bug fixes.
 
 Verifies specific bugs that were fixed:
 - CNN1D: scalar-target error message

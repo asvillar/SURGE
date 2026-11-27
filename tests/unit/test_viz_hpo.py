@@ -117,3 +117,13 @@ def test_plot_hpo_convergence_small_campaign_autoscales(tmp_path: Path):
     lo, _hi = ax.get_ylim()
     assert lo <= 0.1
     assert best_values["small"]["value"] == pytest.approx(0.97)
+
+
+@pytest.mark.parametrize(
+    "recorded,expected",
+    [("train_r2", "r2"), ("val_r2", "r2"), ("test_r2", "r2"), ("test_rmse", "rmse")],
+)
+def test_detect_hpo_metric_strips_split_prefix(recorded, expected):
+    from surge.viz.hpo import _detect_hpo_metric
+
+    assert _detect_hpo_metric([{"metric": recorded}]) == expected

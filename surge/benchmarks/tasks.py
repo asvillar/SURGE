@@ -1,21 +1,41 @@
-"""Tier 0 and Tier 1 benchmark implementations (CPU, sklearn-only)."""
+"""Benchmark implementations: tabular, sequence, PDE, vision, TheWell and ConStellaration tasks."""
 
 from __future__ import annotations
 
+import os
 import ssl
 import time
+import warnings
 from typing import Any
 
 import numpy as np
 
-# macOS conda environments do not bundle CA certificates, causing SSL failures
-# when sklearn tries to download datasets from figshare/UCI.  This patch makes
-# urllib use an unverified context for those internal dataset fetches.
-# It has no effect when certificates are already correctly configured.
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
+def _configure_https() -> None:
+    """Choose the default HTTPS context used by dataset downloads.
+
+    Some macOS Python installs ship without CA certificates.  If ``certifi`` is
+    available it supplies the trust store; verification stays on.  Setting
+    ``SURGE_INSECURE_SSL=1`` disables verification explicitly (not recommended).
+    """
+    if os.environ.get("SURGE_INSECURE_SSL") == "1":
+        warnings.warn(
+            "SURGE_INSECURE_SSL=1: HTTPS certificate verification is disabled "
+            "for this process.",
+            stacklevel=2,
+        )
+        ssl._create_default_https_context = ssl._create_unverified_context  # noqa: SLF001
+        return
+    try:
+        import certifi
+    except ImportError:
+        return
+    cafile = certifi.where()
+    ssl._create_default_https_context = lambda *a, **k: ssl.create_default_context(  # noqa: SLF001
+        cafile=cafile
+    )
+
+
+_configure_https()
 
 from .base import BenchmarkResult, capture_predictions
 
@@ -43,7 +63,6 @@ _DEFAULTS: dict[str, str] = {
     "classification.covertype": "sklearn.random_forest_classifier",
     "vision.mnist": "pytorch.lenet5",
     "vision.cifar10": "pytorch.resnet20",
-    "fusion.mhd_sample": "sklearn.random_forest",
     "plasma.qlknn_transport": "sklearn.random_forest",
     "plasma.cmod_density_limit": "sklearn.random_forest_classifier",
     "thewell.gray_scott": "sklearn.random_forest",
@@ -75,7 +94,6 @@ _TASK_TYPE: dict[str, str] = {
     "classification.covertype": "classification",
     "vision.mnist": "classification",
     "vision.cifar10": "classification",
-    "fusion.mhd_sample": "regression",
     "thewell.gray_scott": "regression",
     "thewell.turbulence_2d": "regression",
     "thewell.mhd": "regression",
@@ -596,7 +614,7 @@ def run_tabular_digits(*, seed: int = 42, model_key: str | None = None) -> Bench
 
 
 # ---------------------------------------------------------------------------
-# Sequence benchmarks (Phase C)
+# Sequence benchmarks
 # ---------------------------------------------------------------------------
 
 
@@ -860,7 +878,7 @@ def run_sequence_lorenz63(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# PDE benchmarks (Phase D1)
+# PDE benchmarks
 # ---------------------------------------------------------------------------
 
 
@@ -1078,7 +1096,7 @@ def run_pde_burgers_1d(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Phase F — SURGE-native Scientific Benchmarks (early part)
+# SURGE-native scientific benchmarks (early part)
 # ---------------------------------------------------------------------------
 
 
@@ -1418,7 +1436,7 @@ def run_classification_plasma_stability(*, seed: int = 42, model_key: str | None
 
 
 # ---------------------------------------------------------------------------
-# Phase D2 — PDEBench benchmarks (Tier 3, requires HDF5 download)
+# PDEBench benchmarks (Tier 3, requires HDF5 download)
 # ---------------------------------------------------------------------------
 
 _PDEBENCH_DEFAULTS = {
@@ -1563,7 +1581,7 @@ def run_pdebench_shallow_water_2d(*, seed: int = 42, model_key: str | None = Non
 
 
 # ---------------------------------------------------------------------------
-# Phase E — Vision Benchmarks (Tier 2, torchvision)
+# Vision benchmarks (Tier 2, torchvision)
 # ---------------------------------------------------------------------------
 
 
@@ -1703,89 +1721,7 @@ def run_vision_cifar10(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Phase F late — Fusion benchmark
-# ---------------------------------------------------------------------------
-
-
-def run_fusion_mhd_sample(*, seed: int = 42, model_key: str | None = None,
-    model_kwargs: dict | None = None) -> "BenchmarkResult":
-    """MHD-code equilibrium surrogate sample (Tier 2).
-
-    Data
-    ----
-    Tries the unified benchmark cache (``<bench_data_root>/fusion/mhd_code/
-    mhd_sample.hdf5``), then the legacy ``<repo>/data/datasets/MHD-code/
-    mhd_sample.hdf5`` path inside a checkout.  Falls back to a synthetic
-    inline fixture (same shape / difficulty) if neither is present, so that
-    CI and tests run without the large dataset.
-
-    Shape: 13 input features → 1 stability metric (R²).
-    Pass threshold: R² ≥ 0.70.
-    """
-    from sklearn.model_selection import train_test_split
-    from surge.benchmarks import paths  # local import avoids an import cycle
-
-    PRIMARY_H5_PATH = paths.bench_data_root() / "fusion" / "mhd_code" / "mhd_sample.hdf5"
-    if PRIMARY_H5_PATH.exists():
-        H5_PATH = PRIMARY_H5_PATH
-    else:
-        H5_PATH = paths.datasets_root() / "MHD-code" / "mhd_sample.hdf5"
-
-    X, y = None, None
-
-    # Attempt real HDF5 load.
-    if H5_PATH.exists():
-        try:
-            import h5py
-            with h5py.File(H5_PATH, "r") as f:
-                keys = list(f.keys())
-                X_key = [k for k in keys if "X" in k or "input" in k.lower()][0]
-                y_key = [k for k in keys if "y" in k or "target" in k.lower() or "output" in k.lower()][0]
-                X = np.asarray(f[X_key], dtype=float)
-                y = np.asarray(f[y_key], dtype=float).ravel()
-        except Exception:
-            X, y = None, None
-
-    # Synthetic fallback: linear combination + noise, 13 → 1.
-    if X is None or y is None:
-        rng = np.random.default_rng(seed)
-        n = 2000
-        X = rng.standard_normal((n, 13))
-        coefs = rng.uniform(-1.0, 1.0, 13)
-        y = X @ coefs + 0.1 * rng.standard_normal(n)
-        # Hint in the result that synthetic data was used.
-        _is_synthetic = True
-    else:
-        _is_synthetic = False
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
-
-    key = model_key or "sklearn.random_forest"
-    from surge.model.registry import MODEL_REGISTRY
-    adapter = MODEL_REGISTRY.create(key)
-
-    t0 = time.perf_counter()
-    adapter.fit(X_train, y_train)
-    y_pred = np.asarray(adapter.predict(X_test)).ravel()
-    elapsed = time.perf_counter() - t0
-
-    metrics = _reg_metrics(y_test, y_pred)
-    metrics["runtime_s"] = elapsed
-    note = f"(synthetic inline fixture — place real data at {PRIMARY_H5_PATH})" if _is_synthetic else ""
-    return BenchmarkResult(
-        benchmark_key="fusion.mhd_sample",
-        model_key=adapter.name,
-        tier="2",
-        task_type="regression",
-        metrics=metrics,
-        passed=metrics["test_r2"] >= 0.70,
-        message=f"MHD-code equilibrium surrogate 13→1 {note}".strip(),
-        extra={"n_train": len(X_train), "n_test": len(X_test), "synthetic": _is_synthetic},
-    )
-
-
-# ---------------------------------------------------------------------------
-# Phase G — TheWell benchmarks (Tier 4, manual trigger, requires the-well)
+# TheWell benchmarks (Tier 4, manual trigger, requires the-well)
 # ---------------------------------------------------------------------------
 
 
@@ -1874,13 +1810,12 @@ def run_thewell_mhd(*, seed: int = 42, model_key: str | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Phase H — ConStellaration field benchmarks (boundary -> |B|, flux surfaces)
+# ConStellaration field benchmarks (boundary -> |B|, flux surfaces)
 #
 # Requires the downloaded VMEC wout subset cache (see
 # surge.benchmarks.loaders.constellaration.download_wout_subset); works on
-# whatever rows are present (today: 500 in wout_nfp3_subset_parts/) and
-# scales unchanged to the full ~26,897-row dataset once the download
-# finishes.
+# whatever rows are present (partial wout_nfp3_subset_parts/ or the merged
+# npz) and scales unchanged to the full ~26,897-row dataset.
 # ---------------------------------------------------------------------------
 
 
@@ -2064,9 +1999,8 @@ def run_constellaration_modb(*, seed: int = 42, model_key: str | None = None,
     predicted vs true). ``extra`` carries a mean-field baseline and a
     POD+ridge baseline (both median relative-L2).
 
-    Threshold PROVISIONAL: rel-L2 <= 0.05 — set from the first full-cache
-    (26,897-row) leaderboard, not yet run; today's 500-row cache is a smoke
-    test only.
+    Provisional threshold: rel-L2 <= 0.05; no full-data (26,897-row) run is
+    on file, and a 500-row subset is a smoke test only.
     """
     from surge.benchmarks.loaders.constellaration_fields import constellaration_modb_dataset
 
@@ -2096,8 +2030,7 @@ def run_constellaration_surfaces(*, seed: int = 42, model_key: str | None = None
     radius). ``extra`` carries the same mean-field / POD+ridge baselines as
     ``plasma.constellaration_modb``.
 
-    Threshold PROVISIONAL: rel-L2 <= 0.02 — set from the first full-cache
-    leaderboard, not yet run.
+    Provisional threshold: rel-L2 <= 0.02; no full-data run is on file.
     """
     from surge.benchmarks.loaders.constellaration_fields import constellaration_surfaces_dataset
 

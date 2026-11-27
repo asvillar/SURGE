@@ -1,7 +1,7 @@
 SURGE Overview
 ==============
 
-This page summarizes the key building blocks in SURGE after the earlier refactor.
+This page summarizes the key building blocks in SURGE and how they fit together.
 Use it as a map when deciding which entry point (CLI, notebook, or Python API)
 best suits your workflow.
 
@@ -12,15 +12,14 @@ High-Level Architecture
 
   - ``surge/dataset.py`` – dataset ingestion + auto-detection
   - ``surge/engine.py`` – splitting, standardization, metrics, timing
-  - ``surge/registry.py`` – unified model registry + adapter metadata
+  - ``surge/model/registry.py`` – unified model registry + adapter metadata
   - ``surge/workflow/`` – YAML spec + orchestration runner
   - ``surge/io/`` – artifact writers (models, scalers, metrics, predictions)
   - ``surge/viz/`` – reusable plotting helpers (density scatter, violin/SNR, etc.)
 
 * **Entry points**
 
-  - CLI: ``python -m examples.mhd_code_workflow --spec configs/mhd_code_demo.yaml``
-  - Notebook: ``notebooks/MHD-code_demo.ipynb`` (mirrors CLI spec + adds plots)
+  - CLI: ``surge run spec.yaml`` (see :doc:`quickstart`)
   - Python API: import ``SurrogateWorkflowSpec`` + ``run_surrogate_workflow``
 
 Dataset Handling
@@ -50,7 +49,7 @@ Model Registry & Adapters
 Adapters register themselves in ``surge.model.MODEL_REGISTRY``:
 
 * ``sklearn.random_forest`` – scikit-learn RandomForestRegressor with tree-based UQ
-* ``torch.mlp`` – PyTorch FNN (flexible hidden layers, MC-Dropout UQ)
+* ``pytorch.mlp`` – PyTorch FNN (flexible hidden layers, MC-Dropout UQ)
 * ``gpflow.gpr`` – GPflow Gaussian Process Regressor with mean/variance output
 
 Each adapter implements ``fit``, ``predict``, ``predict_with_uncertainty`` (optional),
@@ -101,33 +100,21 @@ Each run creates a reproducible bundle:
      metrics.json
      workflow_summary.json
      spec.yaml
-     environment.txt           # pip freeze
-     git.txt                   # git describe output
+     env.txt                   # pip freeze
+     git_rev.txt               # git revision
      hpo/<model>_hpo.json      # Optuna trials (if enabled)
 
-Visualization & Notebooks
--------------------------
+Visualization
+-------------
 
 * ``surge.viz`` provides reusable plotting utilities (density scatter, profile bands, violin/SNR, etc.)
-* ``notebooks/MHD-code_demo.ipynb`` demonstrates:
-
-  - Dataset auto-analysis
-  - Workflow execution (baseline spec; easy to swap in augmented spec)
-  - GT vs. prediction plots, per-mode scatter, violin/SNR panels, timing tables
-
-Baseline vs. Augmented Configs
-------------------------------
-
-* ``configs/mhd_code_demo.yaml`` – 1k-row smoke workflow (fast Optuna sweeps)
-* ``configs/mhd_code_demo_augmented.yaml`` – all 9,981 samples + 50-trial Optuna sweeps/model
-
-Use the CLI or notebook with either spec depending on how comprehensive you need the run to be.
+* ``examples/viz_theme_gallery.py`` shows the GT vs. prediction plots, per-mode scatter and violin/SNR panels.
 
 Next Steps
 ----------
 
 * Jump to :doc:`quickstart` for step-by-step installation and execution instructions
-* Explore ``examples/mhd_code_workflow.py`` (CLI) and ``notebooks/MHD-code_demo.ipynb`` (visual)
+* Explore ``examples/viz_theme_gallery.py`` (visual)
 * Inspect ``tests/test_workflow_new.py`` for lightweight examples of the new API
 
 

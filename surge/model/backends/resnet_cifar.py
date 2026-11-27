@@ -202,8 +202,7 @@ class ResNetCIFARModel:
                     img = (img - self._mean) / self._std
                     return img, int(self._y[idx])
 
-            h = w = int(X_arr.shape[1] // self.in_channels) ** (1 / 2)
-            # More robust: infer spatial dim from known channel count
+            # Infer the spatial size from the channel count
             spatial = int((X_arr.shape[1] / self.in_channels) ** 0.5)
             train_dataset = _AugDataset(X_arr, y_arr, spatial, spatial, self.in_channels)
             loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)

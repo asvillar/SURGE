@@ -60,18 +60,18 @@ def plot_inference_comparison_grid(
     Create a grid of inference comparison plots matching publication style.
     
     Creates a grid layout comparing multiple models across train/test sets
-    and different outputs. Similar to the Reference vs Surrogate comparison plots.
+    and different outputs. Each panel plots reference values against surrogate predictions.
     
     Parameters
     ----------
     results_dict : dict
         Nested dictionary structure:
         {
-            'Pe': {
-                'RFR': {'train': (y_true, y_pred), 'test': (y_true, y_pred)},
-                'MLP': {'train': (y_true, y_pred), 'test': (y_true, y_pred)}
+            'output_a': {
+                'model_a': {'train': (y_true, y_pred), 'test': (y_true, y_pred)},
+                'model_b': {'train': (y_true, y_pred), 'test': (y_true, y_pred)}
             },
-            'PII': {...}
+            'output_b': {...}
         }
     output_names : list, optional
         List of output names in order. If None, uses keys from results_dict.
@@ -88,7 +88,7 @@ def plot_inference_comparison_grid(
     dpi : int, default=150
         Resolution for saved figures.
     units : dict, optional
-        Dictionary mapping output names to unit strings (e.g., {'Pe': '[a.u.]'})
+        Dictionary mapping output names to unit strings (e.g., {'output_a': '[m/s]'})
     show_colorbar : bool, default=True
         Whether to show colorbar on each subplot.
     xlabel_prefix : str, default="Reference"
@@ -366,8 +366,8 @@ def plot_mse_comparison(
     mse_model1: np.ndarray,
     mse_model2: np.ndarray,
     output_names: Optional[List[str]] = None,
-    model1_name: str = "RFR",
-    model2_name: str = "MLP",
+    model1_name: str = "Model 1",
+    model2_name: str = "Model 2",
     figsize: Optional[Tuple[float, float]] = None,
     save_path: Optional[Union[str, Path]] = None,
     dpi: int = 150,
@@ -390,9 +390,9 @@ def plot_mse_comparison(
         MSE values for model 2. Shape should match mse_model1.
     output_names : list, optional
         Names for outputs if multi-output. Length should match n_outputs.
-    model1_name : str, default="RFR"
+    model1_name : str, default="Model 1"
         Name of first model (x-axis).
-    model2_name : str, default="MLP"
+    model2_name : str, default="Model 2"
         Name of second model (y-axis).
     figsize : tuple, optional
         Figure size. Auto-calculated if None.

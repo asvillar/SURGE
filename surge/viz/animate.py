@@ -7,8 +7,8 @@ so they play as a smooth animation, and returns the list of paths.
 
 CLI::
 
-    python -m surge.viz.animate --run runs/qlknn_hpo_200_best \
-        --reports benchmark_reports --out audit/presentation/assets/anim --mode dark
+    python -m surge.viz.animate --run runs/my_run \
+        --reports benchmark_reports --out out/anim --mode dark
 """
 
 from __future__ import annotations
@@ -26,8 +26,6 @@ from pathlib import Path
 from typing import Callable
 
 import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.cm import ScalarMappable  # noqa: E402
@@ -216,14 +214,21 @@ def _load_parity(run_dir: Path, model: str | None):
     return yt, yp
 
 
+def _model_from_predictions(run_dir: Path) -> str | None:
+    """Model name taken from the first ``predictions/<model>_test.parquet``."""
+    files = sorted((Path(run_dir) / "predictions").glob("*_test.parquet"))
+    return files[0].name[: -len("_test.parquet")] if files else None
+
+
 def mission_control_frames(run_dir: Path, out_dir: Path, mode: str,
-                           n_frames: int = 60) -> list[Path]:
+                           n_frames: int = 60, target_unit: str = "") -> list[Path]:
     """Mission-control dashboard building up trial by trial; the parity panel
-    fades in over the last ~10 % of frames."""
+    fades in over the last ~10 % of frames. ``target_unit`` (e.g. "[m/s]") is
+    appended to the parity x-axis label when supplied."""
     from scipy.stats import spearmanr
 
     c = _Campaign(run_dir)
-    model = _find_model(run_dir) or "qlknn_residual_mlp"
+    model = _find_model(run_dir) or _model_from_predictions(run_dir)
     try:
         metrics = json.loads((Path(run_dir) / "metrics.json").read_text()).get(model, {})
     except (OSError, ValueError):
@@ -364,7 +369,7 @@ def mission_control_frames(run_dir: Path, out_dir: Path, mode: str,
             ax.set_xlim(*lims)
             ax.set_ylim(*lims)
             ax.set_aspect("equal")
-            ax.set_xlabel("ground truth [gB]")
+            ax.set_xlabel(f"ground truth {target_unit}".strip())
             ax.set_ylabel("prediction")
             alpha = max(0.0, min(1.0, (k - (n_frames - fade_n - 1)) / fade_n))
             if alpha > 0:
@@ -515,14 +520,14 @@ def training_frames(history_json: Path, out_dir: Path, mode: str,
 # ----------------------------------------------------------------- encoding
 
 def _ffmpeg() -> str | None:
-    return shutil.which("ffmpeg") or (
-        "/opt/homebrew/bin/ffmpeg" if Path("/opt/homebrew/bin/ffmpeg").exists() else None)
+    return shutil.which("ffmpeg")
 
 
 def _run_ffmpeg(args: list[str]) -> None:
     exe = _ffmpeg()
     if exe is None:
-        raise RuntimeError("ffmpeg not found")
+        raise RuntimeError(
+            "ffmpeg was not found on PATH; install ffmpeg to encode video or GIF output")
     subprocess.run([exe, "-y", "-loglevel", "error", *args], check=True)
 
 
@@ -606,6 +611,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--fps", type=int, default=12)
     ap.add_argument("--no-frames", action="store_true", help="delete frame dirs afterwards")
     a = ap.parse_args(argv)
+    matplotlib.use("Agg")
     render_all(a.run, a.reports, a.out, a.mode, a.benchmark, a.fps, not a.no_frames)
 
 

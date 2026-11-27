@@ -9,14 +9,13 @@ from ...hpc import ResourceProfile
 
 _CGAN_INFO = ModelInfo(
     architecture=(
-        "Conditional Generative Adversarial Network (CGAN) for 1D field prediction: "
-        "a generator G(z, x) maps a latent noise vector z concatenated with "
-        "conditioning input x to a predicted output field; a discriminator D(y, x) "
-        "distinguishes real (y, x) pairs from generated ones. Training alternates "
-        "between maximising the discriminator's cross-entropy and minimising the "
-        "generator's adversarial loss. The generator is a 1D transposed-convolution "
-        "network; the discriminator uses strided convolutions with spectral "
-        "normalisation for training stability."
+        "Conditional GAN for 1D field prediction using fully connected networks: "
+        "a generator G(z, x) maps a latent noise vector z concatenated with the "
+        "conditioning input x to an output field through an MLP with LeakyReLU "
+        "activations; a discriminator D(x, y) is an MLP that scores (condition, "
+        "field) pairs. Both are trained with binary cross-entropy loss, alternating "
+        "discriminator and generator updates. predict() returns the mean of several "
+        "generator samples."
     ),
     use_cases=[
         "Stochastic 1D field generation conditioned on input parameters",

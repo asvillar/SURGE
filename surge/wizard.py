@@ -3,7 +3,8 @@
 Inspects a data file with the existing loader/schema-inference, asks
 three questions (target, goal, budget), suggests a model slate by task
 shape, and writes a fully commented ``spec.yaml``. Non-interactive flags
-(``--data --target --goal --budget --yes``) cover scripting and tests.
+(``--data --target --goal --budget --yes``) cover scripting and tests;
+``--target`` is required in non-interactive mode (no silent default column).
 
 YAML stays the source of truth — the wizard only generates it.
 """
@@ -21,7 +22,7 @@ BUDGETS = ("smoke", "standard", "thorough")
 _BUDGET_NOTES = {
     "smoke": "~1 min: subsampled data, few epochs, no HPO",
     "standard": "~10 min: full data, HPO 10 trials on the headline model",
-    "thorough": "hours: HPO 40 trials; rerun with --seeds 3 for error bars",
+    "thorough": "hours: HPO 40 trials on the headline model",
 }
 
 
@@ -33,8 +34,8 @@ def _ask(prompt: str, default: str, choices: tuple[str, ...] | None = None) -> s
         print(f"  please choose one of: {', '.join(choices)}")
 
 
-def _inspect(data_path: Path, sample_rows: int = 5000) -> dict[str, Any]:
-    """Load (a sample of) the dataset and characterize its columns."""
+def _inspect(data_path: Path) -> dict[str, Any]:
+    """Load the full dataset and characterize its columns."""
     from surge.dataset import SurrogateDataset
 
     ds = SurrogateDataset.from_path(data_path)
@@ -46,7 +47,7 @@ def _inspect(data_path: Path, sample_rows: int = 5000) -> dict[str, Any]:
 
 def _target_candidates(info: dict[str, Any]) -> list[str]:
     """Plausible target columns: known names first, then the last numeric."""
-    hints = ("target", "y", "label", "output", "efe", "gamma", "growth")
+    hints = ("target", "y", "label", "output", "gamma", "growth")
     numeric = info["numeric"]
     named = [c for c in numeric if any(h in c.lower() for h in hints)]
     tail = [c for c in reversed(numeric) if c not in named]
@@ -55,7 +56,7 @@ def _target_candidates(info: dict[str, Any]) -> list[str]:
 
 def _model_slate(goal: str, budget: str, n_rows: int,
                  available: set[str]) -> list[dict[str, Any]]:
-    """Model blocks by goal/size — mirrors goal and dataset size."""
+    """Model blocks by goal and dataset size."""
     def have(key: str, fallback: str | None = None) -> str | None:
         if key in available:
             return key
@@ -74,7 +75,11 @@ def _model_slate(goal: str, budget: str, n_rows: int,
                       "comment": "robust baseline"})
         if n_rows <= 5000 and "sklearn.gpr" in available:
             slate.append({"key": "sklearn.gpr", "name": "gp",
-                          "comment": "exact GP — calibrated bands (n <= 5k)",
+                          "comment": "exact GP (n <= 5k): mean and standard "
+                                     "deviation per point; check the coverage "
+                                     "on held-out data. alpha is the noise "
+                                     "level on the normalised target",
+                          "params": {"normalize_y": True, "alpha": 0.01},
                           "request_uncertainty": True})
         elif have("pytorch.mlp_ensemble"):
             slate.append({"key": "pytorch.mlp_ensemble", "name": "ensemble",
@@ -113,6 +118,19 @@ def _model_slate(goal: str, budget: str, n_rows: int,
     return slate
 
 
+def _scalar(value: Any) -> str:
+    """One YAML scalar, quoted only when plain style would alter it."""
+    import yaml
+
+    text = yaml.safe_dump(value, default_flow_style=True, width=10**9,
+                          allow_unicode=True).strip()
+    if text.endswith("\n..."):
+        text = text[:-4].strip()
+    elif text.endswith("..."):
+        text = text[:-3].strip()
+    return text
+
+
 def _render_yaml(data_path: Path, target: str, goal: str, budget: str,
                  info: dict[str, Any], slate: list[dict[str, Any]],
                  run_tag: str) -> str:
@@ -125,8 +143,8 @@ def _render_yaml(data_path: Path, target: str, goal: str, budget: str,
         f"({_BUDGET_NOTES[budget]})",
         "# validate: surge validate <this file> · run: surge run <this file>",
         "",
-        f"dataset_path: {data_path.resolve()}",
-        f"run_tag: {run_tag}",
+        f"dataset_path: {_scalar(str(data_path.resolve()))}",
+        f"run_tag: {_scalar(run_tag)}",
         "",
         "# hold-out fractions (train gets the remainder)",
         "test_fraction: 0.2",
@@ -147,9 +165,9 @@ def _render_yaml(data_path: Path, target: str, goal: str, budget: str,
         "# column is an input (edit these lists to drop or add columns)",
         "metadata_overrides:",
         "  inputs:",
-        *[f"    - {c}" for c in inputs],
+        *[f"    - {_scalar(c)}" for c in inputs],
         "  outputs:",
-        f"    - {target}",
+        f"    - {_scalar(target)}",
         "",
         "# every model trains on the same splits -> directly comparable",
         "models:",
@@ -174,13 +192,14 @@ def main(argv: Optional[list[str]] = None) -> int:
                     "commented workflow spec.")
     ap.add_argument("--data", help="path to the data file (CSV/Parquet/PKL/"
                                    "HDF5/NetCDF)")
-    ap.add_argument("--target", help="target column to predict")
+    ap.add_argument("--target", help="target column to predict (required with --yes or "
+                         "when stdin is not a TTY)")
     ap.add_argument("--goal", choices=GOALS, help="what matters most")
     ap.add_argument("--budget", choices=BUDGETS, help="time budget")
     ap.add_argument("--out", default="spec.yaml", help="output spec path")
     ap.add_argument("--yes", "-y", action="store_true",
-                    help="non-interactive: accept defaults for anything "
-                         "not given via flags")
+                    help="non-interactive: accept defaults for goal/budget; "
+                         "--data and --target are required")
     args = ap.parse_args(argv)
 
     interactive = not args.yes and sys.stdin.isatty()
@@ -209,9 +228,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     candidates = _target_candidates(info)
     target = args.target
     if not target:
-        target = (candidates[0] if not interactive else
-                  _ask(f"Target column (candidates: {', '.join(candidates)})",
-                       candidates[0]))
+        if not interactive:
+            print("error: --target is required in non-interactive mode "
+                  "(--yes or no TTY); candidate columns: "
+                  f"{', '.join(candidates)}", file=sys.stderr)
+            return 2
+        target = _ask(f"Target column (candidates: {', '.join(candidates)})",
+                      candidates[0])
     if target not in info["df"].columns:
         print(f"error: column '{target}' not in the data", file=sys.stderr)
         return 2
@@ -225,9 +248,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     try:
         from surge.model.registry import MODEL_REGISTRY
-        available = set(MODEL_REGISTRY.list_keys()) if hasattr(
-            MODEL_REGISTRY, "list_keys") else set(
-            getattr(MODEL_REGISTRY, "_registry", {}))
+        available = set(MODEL_REGISTRY.keys())
     except Exception:  # noqa: BLE001
         available = {"sklearn.ridge", "sklearn.random_forest", "sklearn.mlp"}
 
@@ -240,6 +261,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if _ask(f"{out} exists — overwrite? (y/n)", "n") != "y":
             print("aborted")
             return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text)
 
     from surge.workflow.schema import validate_file

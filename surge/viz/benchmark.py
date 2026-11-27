@@ -1,4 +1,4 @@
-"""Benchmark comparison visualizations (benchmark plan §3.3).
+"""Benchmark comparison visualizations.
 
 Reads from :class:`~surge.benchmarks.base.BenchmarkResult` objects or
 ``benchmark_reports/*/result.json`` files on disk.
@@ -17,9 +17,6 @@ from typing import Any
 import numpy as np
 
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.figure import Figure
 

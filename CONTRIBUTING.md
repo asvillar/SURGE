@@ -1,9 +1,8 @@
 # Contributing to SURGE
 
 Thank you for your interest in contributing. SURGE is in an early
-pre-1.0 phase; the goal for the `0.1.0` DOE open-source release is a
-small, well-tested, well-documented core. Contributions that keep the
-public surface narrow and the release docs honest are especially
+pre-1.0 phase; the goal is a small, well-tested, well-documented core. Contributions that keep the
+public surface narrow and the docs accurate are especially
 welcome.
 
 For security-sensitive issues, please use the private channel described
@@ -12,16 +11,15 @@ in [`SECURITY.md`](./SECURITY.md) rather than a public issue.
 ## Quickstart for developers
 
 ```bash
-git clone https://github.com/S-Villar/SURGE.git
+git clone https://github.com/asvillar/SURGE.git
 cd SURGE
 python -m pip install -e ".[dev]"
 pytest -q tests/
 ```
 
-The test suite should report `N passed, M skipped, 0 failed`. The
-skipped tests are legacy pre-refactor tests tracked in
-[`docs/REFACTORING_PLAN.md`](./docs/REFACTORING_PLAN.md) §1.9; they are
-out of scope for `0.1.0`.
+The test suite should report `N passed, M skipped, 0 failed`. Skipped
+tests are those that need an optional backend or dataset that is not
+installed.
 
 ## What "ready to merge" looks like
 
@@ -29,10 +27,8 @@ out of scope for `0.1.0`.
 2. New user-visible behaviour is documented in `docs/` and, when
    relevant, in the `README.md`.
 3. New public APIs carry docstrings and type hints.
-4. No new absolute NERSC-style paths (`/path/to/data`,
-   `/path/to/scratch`) land in tracked source. Use relative paths or
-   environment variables. See [`docs/AUDIT_NIGHT1.md`](./docs/AUDIT_NIGHT1.md)
-   for the disclosure-safety rationale.
+4. No new absolute cluster paths (home or scratch directories) land in
+   tracked source. Use relative paths or environment variables.
 5. The `[surge.fit] ...` banner still appears exactly once per model
    train. If a PR changes that, the reason belongs in the commit
    message.
@@ -49,8 +45,6 @@ out of scope for `0.1.0`.
    `refactor: ...`, `docs: ...`, `chore: ...`, `ci: ...`, `test: ...`).
    The template at `.github/pull_request_template.md` will walk you
    through the rest.
-4. Reference the relevant section of `docs/ROADMAP.md` or
-   `docs/REFACTORING_PLAN.md` when the change is a scheduled item.
 
 ## Coding style
 

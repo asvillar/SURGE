@@ -10,7 +10,7 @@ import re
 import sys
 import warnings
 from dataclasses import asdict, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -175,7 +175,7 @@ def run_surrogate_workflow(
         if getattr(spec, "cv_folds", 0) and int(spec.cv_folds) > 0:
             warnings.warn(
                 f"spec.cv_folds={spec.cv_folds} is not yet implemented in the unified "
-                "workflow (k-fold training and aggregated fold metrics; see docs/ROADMAP.md). "
+                "workflow (k-fold training and aggregated fold metrics). "
                 "This run uses the usual single random train/val/test split; cv_folds is ignored.",
                 UserWarning,
                 stacklevel=2,
@@ -185,48 +185,13 @@ def run_surrogate_workflow(
                 spec.cv_folds,
             )
         next_step("Loading dataset...")
-        if spec.dataset_source == "mhd_code_batch":
-            from ..datasets import MHD-codeDataset
-            batch_dir = Path(spec.dataset_path)
-            if not batch_dir.is_dir():
-                raise FileNotFoundError(f"dataset_source=mhd_code_batch requires a directory: {batch_dir}")
-            _batch_kw = {}
-            if spec.batch_dir_filename:
-                _batch_kw["filename"] = spec.batch_dir_filename
-            dataset = MHD-codeDataset.from_batch_dir(
-                batch_dir,
-                mode_step=spec.batch_dir_mode_step,
-                psi_step=spec.batch_dir_psi_step,
-                target_shape=spec.batch_dir_target_shape,
-                include_eigenmodes=spec.batch_dir_include_eigenmodes,
-                verbose=True,
-                **_batch_kw,
-            )
-        elif spec.dataset_source == "mhd_code_batch_per_mode":
-            from ..datasets import MHD-codeDataset
-            batch_dir = Path(spec.dataset_path)
-            if not batch_dir.is_dir():
-                raise FileNotFoundError(
-                    f"dataset_source=mhd_code_batch_per_mode requires a directory: {batch_dir}"
-                )
-            _batch_kw = {}
-            if spec.batch_dir_filename:
-                _batch_kw["filename"] = spec.batch_dir_filename
-            dataset = MHD-codeDataset.from_batch_dir_per_mode(
-                batch_dir,
-                verbose=True,
-                **_batch_kw,
-            )
-            if spec.sample_rows:
-                dataset.df = dataset.df.sample(n=min(spec.sample_rows, len(dataset.df)), random_state=spec.seed)
-        else:
-            dataset = SurrogateDataset.from_path(
-                spec.dataset_path,
-                format=spec.dataset_format,
-                metadata_path=spec.metadata_path,
-                sample=spec.sample_rows,
-                analyzer_kwargs={"hints": spec.metadata_overrides, **spec.analyzer},
-            )
+        dataset = SurrogateDataset.from_path(
+            spec.dataset_path,
+            format=spec.dataset_format,
+            metadata_path=spec.metadata_path,
+            sample=spec.sample_rows,
+            analyzer_kwargs={"hints": spec.metadata_overrides, **spec.analyzer},
+        )
 
         next_step("Preparing splits and scalers...")
         engine = SurrogateEngine(
@@ -293,12 +258,13 @@ def run_surrogate_workflow(
         sys.stderr = TeeText(_real_err, log_fp)
         if invocation:
             save_run_invocation(paths, invocation)
-            spec_src = invocation.get("spec_path")
+            spec_src = (invocation.get("config_source")
+                        or invocation.get("spec_path"))
             if spec_src:
                 copy_invoked_config_source(paths, Path(spec_src))
         save_spec(spec.to_dict(), paths)
 
-        # Save training data min/max for in-distribution checks on new datastreamsets
+        # Save training data min/max for in-distribution checks on new datasets
         proc = engine.get_processed_splits()
         save_train_data_ranges(
             proc.X_train,
@@ -418,7 +384,7 @@ def run_surrogate_workflow(
     }
         save_workflow_summary(summary, paths)
 
-        # Optional MLflow logging (tracking)
+        # Optional MLflow logging (run tracking)
         if spec.mlflow_tracking:
             try:
                 from ..integrations.mlflow_logger import log_surge_run
@@ -429,7 +395,7 @@ def run_surrogate_workflow(
                 )
             except ImportError:
                 LOGGER.warning(
-                    "MLflow not installed. pip install surge[mlflow]"
+                    "MLflow not installed. pip install \"surge-ml[mlflow]\""
                 )
 
         _progress_step(total_steps, total_steps, f"Done. Artifacts in {paths.root}")
@@ -449,7 +415,7 @@ def run_surrogate_workflow(
 # ---------------------------------------------------------------------------
 def _default_run_tag(file_path: Optional[Path]) -> str:
     prefix = file_path.stem if file_path else "dataset"
-    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     return f"{prefix}_{timestamp}"
 
 
@@ -914,12 +880,21 @@ def _extract_metric(result: ModelRunResult, metric_key: str) -> float:
     return float(split_metrics[metric])
 
 
-def _ensure_serializable(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
-    for key, value in payload.items():
-        if isinstance(value, np.ndarray):
-            result[key] = value.tolist()
-        else:
-            result[key] = value
-    return result
+def _ensure_serializable(payload: Any) -> Any:
+    """JSON-ready form of a payload; a top-level ``(mean, std)`` pair becomes a keyed dict."""
+    if isinstance(payload, (tuple, list)) and len(payload) == 2:
+        payload = {"mean": payload[0], "std": payload[1]}
+    return _jsonable(payload)
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, (tuple, list)):
+        return [_jsonable(v) for v in value]
+    return value
 

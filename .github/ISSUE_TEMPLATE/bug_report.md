@@ -38,7 +38,7 @@ output when relevant. -->
 
 - SURGE version: `python -c "import surge; print(surge.__version__)"`
 - Python version: `python --version`
-- OS: (e.g. `Linux 6.1`, `macOS 14`, `Cray shasta_c`)
+- OS: (e.g. `Linux (distribution and version)`, `macOS 14`)
 - Install method: `pip install -e .`, `pip install surge-ml`, wheel, ...
 - Relevant optional deps: `torch`, `gpflow`, `optuna`, `onnxruntime` (and
   their versions)

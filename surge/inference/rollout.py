@@ -23,7 +23,7 @@ from ..metrics import relative_l2
 __all__ = [
     "autoregressive_rollout", "persistence_rel_l2",
     "sample_rollout_starts", "choose_dt", "regime_masks",
-    "layout_case_grid_frames", "stack_case_panel_frames", "match_frame",
+    "layout_case_grid_frames", "stack_case_panels", "match_frame",
     "valid_prediction_time", "climate_histogram_error",
 ]
 

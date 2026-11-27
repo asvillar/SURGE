@@ -17,14 +17,14 @@ from .engine import (
 from .model.base import BaseModelAdapter
 from .model.registry import ModelRegistry, registry_summary
 from .dataset import SurrogateDataset
-from .datasets import MHD-codeDataset, XGCDataset
-from .utils import get_data_path, setup_surge_path
+from .datasets import StackedNpyDataset
+from .utils import get_data_path
 from .datagen import DataGenerator
 from .workflow.run import run_surrogate_workflow
 from .workflow.spec import HPOConfig, ModelConfig, SurrogateWorkflowSpec
 
-# Adapter registration happens eagerly inside `surge.model.__init__`
-# (see line 10 above); no extra import is required.
+# Adapter registration happens eagerly inside `surge.model.__init__`;
+# no extra import is required.
 
 
 def __getattr__(name: str):  # PEP 562: lazy GPflow probe (keeps lightweight CLIs quiet)
@@ -47,22 +47,10 @@ try:
 except ImportError:
     DATASET_UTILS_AVAILABLE = False
 
-# MHD-code HDF5 loaders are facility-specific and are NOT part of the
-# installable wheel or the public tree (see surge.datasets.mhd_code and the
-# SURGE_MHD-code_SCRIPTS environment variable).
-# `MHD-codeDataset` (exported below) imports them lazily when a dataset is
-# actually constructed, so pip-installed users get a clean `import surge`
-# and a clear ImportError only if they try to use the MHD-code loader
-# without the scripts/ tree on sys.path. Prior versions attempted an
-# eager sys.path injection here; that silently failed for wheel installs
-# and polluted sys.path from import time, so it was removed.
-MHD-code_LOADER_AVAILABLE = False
-
 __all__ = [
     "SurrogateEngine",
     "SurrogateDataset",
-    "MHD-codeDataset",
-    "XGCDataset",
+    "StackedNpyDataset",
     "EngineRunConfig",
     "ModelSpec",
     "ModelRunResult",
@@ -75,7 +63,6 @@ __all__ = [
     "ModelConfig",
     "HPOConfig",
     "summarize",
-    "setup_surge_path",
     "get_data_path",
     "DataGenerator",
     "__version__",
@@ -93,27 +80,3 @@ if DATASET_UTILS_AVAILABLE:
         "print_validation_report",
     ])
 
-# MHD-code HDF5 loader functions are intentionally NOT exported: they are
-# facility-specific (SURGE_MHD-code_SCRIPTS). Use `MHD-codeDataset`
-# from `surge.datasets.mhd_code` (exported below) which imports them lazily.
-
-# Print availability status when package is imported
-def _print_availability():
-    """Print information about available model backends."""
-    print("🚀 SURGE - Surrogate Unified Robust Generation Engine")
-    print(f"📦 Version: {__version__}")
-    print(f"👨‍💻 Author: {__author__}")
-    print()
-    print("Available Model Backends:")
-    print("  🔹 Scikit-learn: ✅ (RFR, MLP, GPR)")
-    print(f"  🔹 PyTorch: {'✅' if PYTORCH_AVAILABLE else '❌'} (Enhanced MLP)")
-    print(f"  🔹 GPflow: {'✅' if GPFLOW_AVAILABLE else '❌'} (Advanced GP)")
-    print()
-    if not PYTORCH_AVAILABLE:
-        print("💡 Install PyTorch for enhanced MLP models: pip install torch")
-    if not GPFLOW_AVAILABLE:
-        print("💡 Install GPflow for advanced GP models: pip install gpflow")
-    print()
-
-# Uncomment the line below to show availability on import
-# _print_availability()
