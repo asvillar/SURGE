@@ -140,3 +140,13 @@ def test_declared_output_group_survives_authoritative_mode() -> None:
     )
     assert {"target", "g_0", "g_1"} <= set(res["output_variables"])
     assert res["output_groups"]["g"] == ["g_0", "g_1"]
+
+
+def test_text_column_in_declared_output_group_raises() -> None:
+    df = _frame()
+    with pytest.raises(ValueError, match=r"label.*numeric"):
+        analyze_dataset_structure(
+            df,
+            metadata={"output_groups": {"targets": ["target", "label"]}},
+            hints={"inputs": ["a"], "outputs": ["target"]},
+        )

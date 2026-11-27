@@ -222,12 +222,12 @@ def analyze_dataset_structure(
             if (kept := [c for c in cols if c in output_candidates])
         }
 
-    # Non-numeric columns: error if explicitly listed, else skip with one warning
+    # Non-numeric columns: error if listed or in a declared group, else skip with one warning
     skipped_non_numeric: list[str] = []
     for col in list(input_candidates | output_candidates):
         if col not in df.columns or pd.api.types.is_numeric_dtype(df[col]):
             continue
-        if col in explicit_inputs or col in explicit_outputs:
+        if col in explicit_inputs or col in explicit_outputs or col in declared_group_cols:
             role = "input" if col in explicit_inputs else "output"
             raise ValueError(
                 f"Column '{col}' is listed as an {role} but is not numeric "

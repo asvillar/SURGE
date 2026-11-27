@@ -25,11 +25,15 @@ pytest -q -rs tests/
 # Single file
 pytest -q tests/test_e2e_release_smoke.py
 
-# Include tests marked slow
+# Run only tests marked slow
 pytest -q tests/ -m slow
+
+# Leave out tests marked slow
+pytest -q tests/ -m "not slow"
 ```
 
-Tests marked `slow` are deselected by default; select them with `-m slow`.
+Tests marked `slow` run by default. `-m "not slow"` leaves them out and
+`-m slow` runs only them.
 Some tests skip when an optional dependency (for example `h5py`, `torch`,
 `onnxruntime`) or a local dataset is not installed; `-rs` lists the reasons.
 
