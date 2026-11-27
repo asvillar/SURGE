@@ -106,3 +106,37 @@ def test_hdf5_small_file_loads(tmp_path: Path, monkeypatch) -> None:
     ds = SurrogateDataset()
     df = ds._read_hdf5(path)
     assert df.shape == (10, 3)
+
+
+def test_pattern_group_does_not_reclaim_listed_input() -> None:
+    n = 20
+    df = pd.DataFrame(
+        {
+            "x": np.arange(n, dtype=float),
+            "out_0": np.arange(n, dtype=float),
+            "out_1": np.arange(n, dtype=float),
+            "target": np.arange(n, dtype=float),
+        }
+    )
+    res = analyze_dataset_structure(
+        df, hints={"inputs": ["x", "out_0"], "outputs": ["target"]}
+    )
+    assert res["input_variables"] == ["out_0", "x"]
+    assert res["output_variables"] == ["target"]
+    assert "out" not in res["output_groups"]
+
+
+def test_declared_output_group_survives_authoritative_mode() -> None:
+    df = _frame()
+    df["g_0"] = df["a"] * 2
+    df["g_1"] = df["b"] * 2
+    res = analyze_dataset_structure(
+        df,
+        metadata={
+            "inputs": ["a", "b"],
+            "outputs": ["target"],
+            "output_groups": {"g": ["g_0", "g_1"]},
+        },
+    )
+    assert {"target", "g_0", "g_1"} <= set(res["output_variables"])
+    assert res["output_groups"]["g"] == ["g_0", "g_1"]

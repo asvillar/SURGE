@@ -74,7 +74,10 @@ def _detect_hpo_metric(hpo_data_list: List[dict], default: str = "r2") -> str:
             val = data.get(key)
             if isinstance(val, str) and val.strip():
                 name = val.strip().lower()
-                return name[4:] if name.startswith("val_") else name
+                for prefix in ("train_", "val_", "test_"):
+                    if name.startswith(prefix):
+                        return name[len(prefix):]
+                return name
     return default
 
 
@@ -107,7 +110,8 @@ def plot_hpo_convergence(
     metric : str, optional
         Metric to plot: "r2", "rmse", "mse". ``None`` (default) auto-detects:
         the metric recorded in the HPO file (``metric``/``metric_name``/
-        ``objective`` key, with any ``val_`` prefix removed) if present, else "r2".
+        ``objective`` key, with any ``train_``/``val_``/``test_`` prefix removed)
+        if present, else "r2".
     method_names : list, optional
         Names for each method (e.g., ["Random", "Optuna TPE", "Optuna BoTorch"]).
         If None, tries to infer from filenames or uses generic names.

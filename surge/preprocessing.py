@@ -146,14 +146,18 @@ def analyze_dataset_structure(
     output_groups: dict[str, list[str]] = {}
     profile_groups: dict[str, list[str]] = {}
 
+    declared_group_cols: set[str] = set()
+
     # Apply metadata-defined groups first
     for group_name, cols in metadata.get("output_groups", {}).items():
         output_groups[group_name] = [col for col in cols if col in df.columns]
         output_candidates.update(output_groups[group_name])
+        declared_group_cols.update(output_groups[group_name])
 
     for group_name, cols in metadata.get("profile_groups", {}).items():
         profile_groups[group_name] = [col for col in cols if col in df.columns]
         output_candidates.update(profile_groups[group_name])
+        declared_group_cols.update(profile_groups[group_name])
 
     # Merge runtime hints
     for group_name, cols in hints.get("output_groups", {}).items():
@@ -162,6 +166,7 @@ def analyze_dataset_structure(
             if col in df.columns and col not in existing:
                 existing.append(col)
                 output_candidates.add(col)
+                declared_group_cols.add(col)
 
     for group_name, cols in hints.get("profile_groups", {}).items():
         existing = profile_groups.setdefault(group_name, [])
@@ -169,6 +174,7 @@ def analyze_dataset_structure(
             if col in df.columns and col not in existing:
                 existing.append(col)
                 output_candidates.add(col)
+                declared_group_cols.add(col)
 
     # Pattern-based grouping: only treat as output groups if base matches output-like prefixes
     for base, cols in grouped.items():
@@ -204,8 +210,16 @@ def analyze_dataset_structure(
 
     if authoritative:
         input_candidates = set(explicit_inputs)
-        output_candidates = set(explicit_outputs) | {
-            c for cols in output_groups.values() for c in cols
+        # pattern-derived groups must not re-admit columns the user listed
+        # as inputs; only explicit outputs and declared groups count
+        output_candidates = set(explicit_outputs) | declared_group_cols
+        output_groups = {
+            n: kept for n, cols in output_groups.items()
+            if (kept := [c for c in cols if c in output_candidates])
+        }
+        profile_groups = {
+            n: kept for n, cols in profile_groups.items()
+            if (kept := [c for c in cols if c in output_candidates])
         }
 
     # Non-numeric columns: error if explicitly listed, else skip with one warning
